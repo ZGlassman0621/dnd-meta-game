@@ -10,7 +10,7 @@ import MetaGameDashboard from './components/MetaGameDashboard'
 import CompanionsPage from './components/CompanionsPage'
 import CampaignsPage from './components/CampaignsPage'
 import BackstoryParserPage from './components/BackstoryParserPage'
-import NavigationMenu from './components/NavigationMenu'
+import NavigationMenu, { PLAY_LOCKED_REASON } from './components/NavigationMenu'
 
 // Lazy-loaded pages (loaded on demand to reduce initial bundle)
 const DMSession = lazy(() => import('./components/DMSession'))
@@ -118,6 +118,10 @@ function App() {
   // longer surfaced to users.)
 
   // Navigation helper
+  // S1 campaign gate (2026-11-17): play needs a campaign. The server refuses a
+  // campaign-less session too; this keeps the player from reaching that wall.
+  const playLocked = !!selectedCharacter && !selectedCharacter.campaign_id
+
   const navigateTo = (view) => {
     setActiveView(view)
     setShowLevelUp(false)
@@ -214,11 +218,10 @@ function App() {
   const handleCharacterCreated = (character) => {
     setCharacters([character, ...characters])
     setSelectedCharacter(character)
-    // A brand-new character has no campaign, and without one they engage
-    // almost none of the world — no chronicle, no weather, no living world
-    // (see CLAUDE.md, "characters.campaign_id is the single point of failure").
-    // Landing them on the dashboard made campaign creation something you had
-    // to go looking for under a nav dropdown. Now it is the next screen.
+    // A brand-new character has no campaign, and play requires one (S1,
+    // 2026-11-17; CLAUDE.md "Play requires a campaign"). Campaign setup is the
+    // next screen — and now the required path: Play stays closed until the
+    // character joins a campaign.
     setPendingCampaignSetup(true)
     setActiveView('showCampaigns')
   }
@@ -381,6 +384,7 @@ function App() {
           activeView={activeView}
           onNavigate={navigateTo}
           hasCharacter={!!selectedCharacter}
+          playLocked={playLocked}
           onHome={goHome}
         />
       </header>
@@ -409,6 +413,15 @@ function App() {
           onLevelUp={handleShowLevelUp}
           onEditInCreator={(character) => setEditCharacterId(character.id)}
         />
+      ) : activeView === 'showDMSession' && selectedCharacter && playLocked ? (
+        <div style={{ maxWidth: 560, margin: '3rem auto', textAlign: 'center' }} data-testid="play-gate">
+          <h2 style={{ marginBottom: '0.75rem' }}>{PLAY_LOCKED_REASON}</h2>
+          <p style={{ marginBottom: '1.25rem', lineHeight: 1.5 }}>
+            {selectedCharacter.name} isn&apos;t in a campaign yet. A campaign is what remembers your sessions,
+            stocks the shops and keeps the world&apos;s calendar, so play opens once this character joins one.
+          </p>
+          <button type="button" onClick={() => navigateTo('showCampaigns')}>Go to Campaign</button>
+        </div>
       ) : activeView === 'showDMSession' && selectedCharacter ? (
         <DMSession
           character={selectedCharacter}
@@ -498,8 +511,10 @@ function App() {
           allCharacters={characters}
           autoOpenCreate={pendingCampaignSetup}
           onCharacterUpdated={() => loadCharacters()}
-          onNavigateToPlay={() => {
-            loadCharacters()
+          onNavigateToPlay={async () => {
+            // Wait for the refreshed character (now with its campaign) so Play
+            // opens straight into the session, not the campaign gate.
+            await loadCharacters()
             navigateTo('showDMSession')
           }}
         />
@@ -606,7 +621,9 @@ function App() {
                 { key: 'showCampaigns', label: 'Campaigns', desc: 'Create campaigns with auto-generated world plans', color: '#9b59b6' },
                 { key: 'showCampaignPlan', label: 'Campaign Plan', desc: 'View your campaign world, NPCs, factions, and quests', color: '#e91e63' },
                 { key: 'showPlayerJournal', label: 'Player Journal', desc: 'NPCs met, places visited, faction standings, and quests', color: '#10b981' },
-                { key: 'showDMSession', label: 'AI Dungeon Master', desc: 'Play through your campaign with an AI DM', color: '#2ecc71' },
+                playLocked
+                  ? { key: 'showDMSession', label: 'AI Dungeon Master', desc: `${PLAY_LOCKED_REASON} — opens the Campaign page`, color: '#7f8c8d', target: 'showCampaigns', locked: true }
+                  : { key: 'showDMSession', label: 'AI Dungeon Master', desc: 'Play through your campaign with an AI DM', color: '#2ecc71' },
                 { key: 'showDowntime', label: 'Downtime & Stats', desc: 'Rest, train, generate adventures, and track progress', color: '#f39c12' },
                 { key: 'showMythicProgression', label: 'Mythic Progression', desc: 'Mythic tiers, paths, piety, epic boons, and legendary items', color: '#ff6b35' },
                 { key: 'showPartyBase', label: 'Stronghold', desc: 'Manage your base, upgrades, staff, projects, and notoriety', color: '#b45309' },
@@ -619,7 +636,8 @@ function App() {
               ].map(card => (
                 <div
                   key={card.key}
-                  onClick={() => navigateTo(card.key)}
+                  onClick={() => navigateTo(card.target || card.key)}
+                  aria-disabled={card.locked ? 'true' : undefined}
                   style={{
                     padding: '1.25rem',
                     background: 'rgba(255, 255, 255, 0.05)',

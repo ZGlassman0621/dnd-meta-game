@@ -52,7 +52,11 @@ const NAV_ITEMS = [
  * It now sits in the header's flow, which is what lets the paper band size
  * itself to its contents instead of overlapping them.
  */
-export default function NavigationMenu({ activeView, onNavigate, hasCharacter, onHome }) {
+// S1 campaign gate (2026-11-17): Play needs a campaign. Shown to the player
+// in plain words wherever Play appears; the server refuses too.
+export const PLAY_LOCKED_REASON = 'Create or join a campaign to play'
+
+export default function NavigationMenu({ activeView, onNavigate, hasCharacter, onHome, playLocked = false }) {
   const isAnyViewActive = activeView !== null
 
   return (
@@ -65,17 +69,33 @@ export default function NavigationMenu({ activeView, onNavigate, hasCharacter, o
         // Everything in the spine acts on a selected character, so without one
         // the links are inert rather than hidden — the shape of the app stays
         // legible instead of rearranging itself.
-        const disabled = !hasCharacter
+        // S1: a character with no campaign sees Play, closed, with the reason
+        // beside it — visible-but-disabled, never hidden. The reason is itself
+        // the way in: it opens the existing Campaign (New Campaign / attach) page.
+        const lockedPlay = item.key === 'showDMSession' && hasCharacter && playLocked
+        const disabled = !hasCharacter || lockedPlay
         return (
-          <button
-            key={item.key}
-            type="button"
-            className={activeView === item.key ? 'is-active' : undefined}
-            onClick={() => !disabled && onNavigate(item.key)}
-            disabled={disabled}
-          >
-            {item.label}
-          </button>
+          <span key={item.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <button
+              type="button"
+              className={activeView === item.key ? 'is-active' : undefined}
+              onClick={() => !disabled && onNavigate(item.key)}
+              disabled={disabled}
+              title={lockedPlay ? PLAY_LOCKED_REASON : undefined}
+              data-play-locked={lockedPlay ? 'true' : undefined}
+            >
+              {item.label}
+            </button>
+            {lockedPlay && (
+              <button
+                type="button"
+                onClick={() => onNavigate('showCampaigns')}
+                style={{ fontSize: '0.8em', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', opacity: 0.85 }}
+              >
+                {PLAY_LOCKED_REASON}
+              </button>
+            )}
+          </span>
         )
       })}
     </nav>

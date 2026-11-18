@@ -307,24 +307,29 @@ async function run() {
     )
 
     // ============================================================
-    console.log('\n=== Test 7: a character with no campaign ends cleanly and does not tick ===\n')
+    console.log('\n=== Test 7: a character with no campaign cannot end a session, and its time moves only itself ===\n')
     // ============================================================
+    // S1 (2026-11-17): play requires a campaign. Before S1 this character's
+    // session ended normally, and its time advance moved the shared fallback
+    // clock, which was copied onto EVERY character in the database.
 
     const f3 = await seedTurnFixture(dbRun, { prefix: 'TEST_TICK_3', playerTurns: 2 })
     fixtures.push(f3)
     await dbRun('UPDATE characters SET campaign_id = NULL WHERE id = ?', [f3.characterId])
 
+    const othersBefore = await dbAll('SELECT id, game_day, game_year FROM characters WHERE id != ? ORDER BY id', [f3.characterId])
     await passThreeDays(f3, null)
-
-    scriptSessionEnd(llm)
-    const orphanRes = await endSession(server, f3)
-
-    assertEqual(orphanRes.status, 200, 'the session ends')
-    assertEqual(orphanRes.body.worldTick, undefined, 'with no campaign there is no world to tick')
     const orphanChar = await dbGet('SELECT game_day FROM characters WHERE id = ?', [f3.characterId])
-    assertEqual(Number(orphanChar.game_day), 103, 'the game date still advanced')
+    assertEqual(Number(orphanChar.game_day), 103, "the campaign-less character's own date advanced (per-character clock)")
+    const othersAfter = await dbAll('SELECT id, game_day, game_year FROM characters WHERE id != ? ORDER BY id', [f3.characterId])
+    assertEqual(JSON.stringify(othersAfter), JSON.stringify(othersBefore), "no other character's date moved")
+
+    const orphanRes = await endSession(server, f3)
+    assertEqual(orphanRes.status, 409, 'session end is refused: the character is not in a campaign')
+    assertEqual(orphanRes.body?.code, 'CAMPAIGN_REQUIRED', 'the refusal carries CAMPAIGN_REQUIRED')
+    assertEqual(orphanRes.body?.worldTick, undefined, 'no world tick')
     const orphanSession = await dbGet('SELECT status FROM dm_sessions WHERE id = ?', [f3.sessionId])
-    assertEqual(orphanSession.status, 'completed', 'and the session is properly closed')
+    assertEqual(orphanSession.status, 'active', 'the session is not ended through the refused route')
 
     // ============================================================
     console.log('\n=== Cleanup ===\n')

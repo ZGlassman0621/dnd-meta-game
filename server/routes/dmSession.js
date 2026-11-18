@@ -141,6 +141,7 @@ import { detectConditionChanges, formatConditionsForAI } from '../data/condition
 // Phase 0 (clock unification): all clock reads/writes go through scheduleService.
 import { advanceDays as advanceClockDays, setClockDate, getClock } from '../services/scheduleService.js';
 import { safeParse } from '../utils/safeParse.js';
+import { campaignForCharacter, campaignRequiredBody, requireSessionCampaign } from '../utils/campaignGate.js';
 import { validateDmMarkers } from '../services/markerSchemas.js';
 import { verifyDmResponse } from '../services/ruleVerifiers.js';
 import { nextCorrectionEntries, renderCorrectionText } from '../services/markerCorrectionRetry.js';
@@ -536,6 +537,15 @@ router.post('/start', async (req, res) => {
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
+    }
+
+    // S1 campaign gate (2026-11-17): play requires a campaign. Refuse before
+    // anything is assembled or written — no session row, no world context, no
+    // clock sync, no model call. Creation still never sets campaign_id; the
+    // player joins through the existing New Campaign / attach flow.
+    const campaignGate = await campaignForCharacter(character.id);
+    if (campaignGate.campaignId == null) {
+      return res.status(409).json(campaignRequiredBody(character.id));
     }
 
     // Get active companions for this character
@@ -1273,7 +1283,7 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
 // Detection helpers imported from dmSessionService.js
 
 // Send a message/action in the session
-router.post('/:sessionId/message', async (req, res) => {
+router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
   const { sessionId: lockKey } = req.params;
 
   // Phase 2.2 — one turn per session at a time. The handler makes a slow LLM
@@ -2506,7 +2516,7 @@ router.post('/item-rarity-lookup', async (req, res) => {
 });
 
 // Get merchant inventory (DB lookup from persistent loot-table-generated stock)
-router.post('/:sessionId/generate-merchant-inventory', async (req, res) => {
+router.post('/:sessionId/generate-merchant-inventory', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { merchantName, merchantType, location, playerItems } = req.body;
@@ -2616,7 +2626,7 @@ router.post('/:sessionId/generate-merchant-inventory', async (req, res) => {
 });
 
 // List all merchants for the session's campaign
-router.get('/:sessionId/merchants', async (req, res) => {
+router.get('/:sessionId/merchants', requireSessionCampaign, async (req, res) => {
   try {
     const session = await dbGet('SELECT character_id FROM dm_sessions WHERE id = ?', [req.params.sessionId]);
     if (!session) return res.status(404).json({ error: 'Session not found' });
@@ -2632,7 +2642,7 @@ router.get('/:sessionId/merchants', async (req, res) => {
 });
 
 // Restock a merchant's inventory from loot tables
-router.post('/:sessionId/restock-merchant', async (req, res) => {
+router.post('/:sessionId/restock-merchant', requireSessionCampaign, async (req, res) => {
   try {
     const { merchantId } = req.body;
     const session = await dbGet('SELECT character_id FROM dm_sessions WHERE id = ?', [req.params.sessionId]);
@@ -2648,7 +2658,7 @@ router.post('/:sessionId/restock-merchant', async (req, res) => {
 
 // Process merchant transaction (atomic — character + merchant updates succeed
 // or fail together via db.transaction('write')).
-router.post('/:sessionId/merchant-transaction', async (req, res) => {
+router.post('/:sessionId/merchant-transaction', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { merchantName, merchantId, bought, sold, haggleDiscountPercent } = req.body;
@@ -2897,7 +2907,7 @@ router.post('/:sessionId/merchant-transaction', async (req, res) => {
 });
 
 // Adjust the game date during a session
-router.post('/:sessionId/adjust-date', async (req, res) => {
+router.post('/:sessionId/adjust-date', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { daysToAdd } = req.body;
@@ -2970,7 +2980,7 @@ router.post('/:sessionId/adjust-date', async (req, res) => {
 });
 
 // Inject a system notification into the session (e.g., after manual downtime)
-router.post('/:sessionId/inject-context', async (req, res) => {
+router.post('/:sessionId/inject-context', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { message } = req.body;
@@ -2997,7 +3007,7 @@ router.post('/:sessionId/inject-context', async (req, res) => {
 });
 
 // Generate a context-aware rest narrative using AI
-router.post('/:sessionId/rest-narrative', async (req, res) => {
+router.post('/:sessionId/rest-narrative', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { restType, characterName, mechanicalResult } = req.body;
@@ -3050,7 +3060,7 @@ router.post('/:sessionId/rest-narrative', async (req, res) => {
 // used to advance local React state only, drifting from the server
 // turn order. This endpoint advances the server order and returns the
 // tracker shape the client already renders.
-router.post('/:sessionId/advance-turn', async (req, res) => {
+router.post('/:sessionId/advance-turn', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
     const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
@@ -3066,7 +3076,7 @@ router.post('/:sessionId/advance-turn', async (req, res) => {
   }
 });
 
-router.post('/:sessionId/end', async (req, res) => {
+router.post('/:sessionId/end', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
 
@@ -3569,7 +3579,7 @@ router.post('/:sessionId/end', async (req, res) => {
 });
 
 // Apply inventory changes from session wrap-up
-router.post('/:sessionId/apply-inventory', async (req, res) => {
+router.post('/:sessionId/apply-inventory', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { consumed, gained, goldSpent } = req.body;
@@ -3672,7 +3682,7 @@ router.post('/:sessionId/apply-inventory', async (req, res) => {
 });
 
 // Resume a paused session
-router.post('/:sessionId/resume', async (req, res) => {
+router.post('/:sessionId/resume', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
 
@@ -3825,7 +3835,7 @@ router.post('/:sessionId/abort', async (req, res) => {
 });
 
 // Claim rewards from a completed session
-router.post('/:sessionId/claim', async (req, res) => {
+router.post('/:sessionId/claim', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
 
@@ -3976,7 +3986,7 @@ router.delete('/character/:characterId/history', async (req, res) => {
 });
 
 // Extract NPCs from a past session (retroactive extraction)
-router.post('/:sessionId/extract-npcs', async (req, res) => {
+router.post('/:sessionId/extract-npcs', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;
 

@@ -224,7 +224,11 @@ export async function advanceClockForSession({ sessionId = null, characterId = n
     ? await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [characterId])
     : null;
   const campaignId = pc?.campaign_id ?? null;
-  const clockBefore = await getClock(campaignId);
+  // S1 clock invariant: a campaign-less character's time cost (a spellbook
+  // copy, a downtime rest) moves only that character's own clock — never the
+  // shared fallback row, never another character.
+  const clockScope = campaignId == null && characterId ? { characterId } : {};
+  const clockBefore = await getClock(campaignId, clockScope);
 
   let cfg = {};
   let session = null;
@@ -242,7 +246,7 @@ export async function advanceClockForSession({ sessionId = null, characterId = n
 
   let clock = clockBefore;
   if (!flashback && hours > 0) {
-    clock = await advanceHours(hours, { campaignId, reason });
+    clock = await advanceHours(hours, { campaignId, reason, ...clockScope });
   }
   if (sessionId) {
     cfg.elapsedHours = (Number(cfg.elapsedHours) || 0) + hours;

@@ -510,14 +510,15 @@ group('(g) copy-spell');
     await db.dbRun('UPDATE characters SET gold_gp = ? WHERE id = ?', [gold, id]);
     return id;
   }
-  async function clockHour() {
-    const row = await db.dbGet('SELECT current_hour FROM world_clock WHERE id = 1');
-    return Number(row?.current_hour);
+  // S1: these wizards have no campaign, so their time costs move their own clock.
+  async function clockHour(id) {
+    const row = await db.dbGet('SELECT game_hour FROM characters WHERE id = ?', [id]);
+    return Number(row?.game_hour);
   }
   // Success: L3 Counterspell costs 150 gp + 6h; gold deducted in
   // the same transaction as the book write; the clock advances.
   const wiz5 = await copyWizard('WizCopy');
-  const hourBefore = await clockHour();
+  const hourBefore = await clockHour(wiz5);
   const copied = await req('POST', `/api/character/${wiz5}/copy-spell`, {
     spellName: 'Counterspell', source: "Mordenkainen's lost spellbook",
   });
@@ -531,8 +532,8 @@ group('(g) copy-spell');
   check(Number(row5.gold_gp) === 350, 'gold deducted in the DB (500 -> 350)');
   check((await readBook(wiz5)).includes('Counterspell') && (await readBook(wiz5)).length === 11,
     'the book grew 10 -> 11 with Counterspell');
-  check((await clockHour()) === (hourBefore + 6) % 24,
-    `the world clock advanced 6h (${hourBefore} -> ${(hourBefore + 6) % 24})`);
+  check((await clockHour(wiz5)) === (hourBefore + 6) % 24,
+    `the character's clock advanced 6h (${hourBefore} -> ${(hourBefore + 6) % 24})`);
 
   // Refusals: each leaves gold and the book untouched.
   const cases = [
@@ -580,7 +581,7 @@ group('(g) copy-spell');
   }
   const scrollWiz = await copyWizard('WizCopyScroll');
   await giveScroll(scrollWiz, 'Spell Scroll of Counterspell');
-  const scrollHourBefore = await clockHour();
+  const scrollHourBefore = await clockHour(scrollWiz);
   const scrollCopied = await req('POST', `/api/character/${scrollWiz}/copy-spell`, {
     spellName: 'Counterspell', source: 'scroll', scrollName: 'Spell Scroll of Counterspell',
   });
@@ -595,8 +596,8 @@ group('(g) copy-spell');
   check((await readBook(scrollWiz)).includes('Counterspell') && (await readBook(scrollWiz)).length === 11,
     'the book grew 10 -> 11 with Counterspell from the scroll');
   check(JSON.stringify(await readInventory(scrollWiz)) === JSON.stringify([]), 'the scroll row is gone after the copy');
-  check((await clockHour()) === (scrollHourBefore + 6) % 24,
-    `the world clock advanced 6h for the scroll copy (${scrollHourBefore} -> ${(scrollHourBefore + 6) % 24})`);
+  check((await clockHour(scrollWiz)) === (scrollHourBefore + 6) % 24,
+    `the character's clock advanced 6h for the scroll copy (${scrollHourBefore} -> ${(scrollHourBefore + 6) % 24})`);
   // A quantity-2 scroll row decrements to 1, not to 0.
   const scrollQty2 = await copyWizard('WizCopyScrollQty2');
   await giveScroll(scrollQty2, 'Spell Scroll of Dispel Magic', 2);
@@ -792,7 +793,8 @@ group('(i) Memorize Spell — bank + DM short rest');
 {
   const rt = await import(fromRepo('server/services/restTimeService.js'));
   const sched = await import(fromRepo('server/services/scheduleService.js'));
-  const absHours = (clock) => clock.day * 24 + clock.hour;
+  // Works for the shared clock and for S1's per-character clock (no shared day counter).
+  const absHours = (clock) => ((clock.year * 400) + clock.dayOfYear) * 24 + clock.hour;
   async function readBank(id) {
     const r = await readCharacter(id);
     let s = {};
@@ -805,7 +807,7 @@ group('(i) Memorize Spell — bank + DM short rest');
     if (!fbRow) {
       await db.dbRun('INSERT INTO world_clock (campaign_id, current_day, current_day_of_year, current_year, current_hour) VALUES (NULL, 1, 1, 1492, 8)');
     }
-    const clock = await sched.getClock(null);
+    const clock = await sched.getClock(null, { characterId });
     const r = await db.dbRun(
       'INSERT INTO dm_sessions (character_id, game_start_day, game_start_year) VALUES (?, ?, ?)',
       [characterId, clock.dayOfYear, clock.year]);
@@ -841,9 +843,9 @@ group('(i) Memorize Spell — bank + DM short rest');
     'the bank reads back from spellbook_json');
   check((await readCharacter(wiz5)).current_hp === 10, 'banking touches no HP');
   check(JSON.stringify(await readPrepared(wiz5)) === JSON.stringify(COUNTED_8), 'banking touches no prepared list');
-  const clockBefore = await sched.getClock(null);
+  const clockBefore = await sched.getClock(null, { characterId: wiz5 });
   const rested = await rt.applyRest({ sessionId: session5, characterId: wiz5, type: 'short', dice: 2 });
-  const clockAfter = await sched.getClock(null);
+  const clockAfter = await sched.getClock(null, { characterId: wiz5 });
   check(rested.success === true, 'the DM short rest succeeds');
   const pcDetail = rested.event.results.find((r) => r.kind === 'pc');
   check(pcDetail?.memorizeSwap?.applied === true && pcDetail.memorizeSwap.oldSpell === 'Sleep' && pcDetail.memorizeSwap.newSpell === 'Misty Step',
@@ -854,7 +856,7 @@ group('(i) Memorize Spell — bank + DM short rest');
   const wizRow = await readCharacter(wiz5);
   check(wizRow.current_hp > 10 && wizRow.current_hp <= 20, `the short rest healed via hit dice (10 -> ${wizRow.current_hp})`);
   check(Object.values(JSON.parse(wizRow.hit_dice_used || '{}')).reduce((a, b) => a + b, 0) === 2, 'Dice=2 spent exactly 2 hit dice');
-  check(absHours(clockAfter) - absHours(clockBefore) === 1, 'the DM short rest advanced the clock 1 hour');
+  check(absHours(clockAfter) - absHours(clockBefore) === 1, "the DM short rest advanced the character's clock 1 hour (campaign-less: per-character clock, S1)");
   check(rt.formatTimeEventBlock(rested.event).includes('Memorize Spell: swapped Sleep'), 'the outcome block narrates the swap for the DM');
 
   // --- a long rest does NOT consume the bank ----------------------------
@@ -1117,9 +1119,10 @@ group('(l) spellbook-replace (transcribe prepared)');
     await db.dbRun('UPDATE characters SET gold_gp = ? WHERE id = ?', [gold, id]);
     return id;
   }
-  async function clockHour() {
-    const row = await db.dbGet('SELECT current_hour FROM world_clock WHERE id = 1');
-    return Number(row?.current_hour);
+  // S1: these wizards have no campaign, so their time costs move their own clock.
+  async function clockHour(id) {
+    const row = await db.dbGet('SELECT game_hour FROM characters WHERE id = ?', [id]);
+    return Number(row?.game_hour);
   }
 
   // Happy path: 9 prepared at levels 1,1,1,1,2,2,2,3,3 (sum 16) ->
@@ -1127,7 +1130,7 @@ group('(l) spellbook-replace (transcribe prepared)');
   // price) = 210 gp + 16h; the new book is exactly the prepared list.
   const wiz5 = await replaceWizard('WizReplace');
   await req('POST', `/api/character/${wiz5}/spellbook-status`, { status: 'lost' });
-  const hourBefore = await clockHour();
+  const hourBefore = await clockHour(wiz5);
   const replaced = await req('POST', `/api/character/${wiz5}/spellbook-replace`, {});
   check(replaced.status === 200, `replacing a lost book succeeds 200 (got ${replaced.status}: ${errOf(replaced)})`);
   check(replaced.json?.replacement?.source === 'memory', 'the default source is memory');
@@ -1159,7 +1162,7 @@ group('(l) spellbook-replace (transcribe prepared)');
   check((await readSpellbookJson(wiz5)).replaced === 'prepared', 'the state marks the book replaced-from-prepared');
   check(JSON.stringify(await readInventory(wiz5)) === JSON.stringify([{ name: 'Spellbook', quantity: 1, source: 'spellbook-replacement' }]),
     'a Spellbook inventory row was added (the new book is a physical thing)');
-  check((await clockHour()) === (hourBefore + 16) % 24, `the world clock advanced 16h (${hourBefore} -> ${(hourBefore + 16) % 24})`);
+  check((await clockHour(wiz5)) === (hourBefore + 16) % 24, `the character's clock advanced 16h (${hourBefore} -> ${(hourBefore + 16) % 24})`);
   // A second replacement now refuses — the book is no longer lost.
   const again = await req('POST', `/api/character/${wiz5}/spellbook-replace`, {});
   check(again.status === 400 && errOf(again).includes('not lost'), 'replacing an intact book refuses');
@@ -1194,7 +1197,7 @@ group('(l) spellbook-replace (transcribe prepared)');
     if (!fbRow) {
       await db.dbRun('INSERT INTO world_clock (campaign_id, current_day, current_day_of_year, current_year, current_hour) VALUES (NULL, 1, 1, 1492, 8)');
     }
-    const clock = await sched.getClock(null);
+    const clock = await sched.getClock(null, { characterId });
     const r = await db.dbRun(
       'INSERT INTO dm_sessions (character_id, game_start_day, game_start_year) VALUES (?, ?, ?)',
       [characterId, clock.dayOfYear, clock.year]);
@@ -1342,16 +1345,17 @@ group('(m) backup copy + restore from backup');
     await db.dbRun('UPDATE characters SET gold_gp = ? WHERE id = ?', [gold, id]);
     return id;
   }
-  async function clockHour() {
-    const row = await db.dbGet('SELECT current_hour FROM world_clock WHERE id = 1');
-    return Number(row?.current_hour);
+  // S1: these wizards have no campaign, so their time costs move their own clock.
+  async function clockHour(id) {
+    const row = await db.dbGet('SELECT game_hour FROM characters WHERE id = ?', [id]);
+    return Number(row?.game_hour);
   }
 
   // First copy: Fireball (L3) into an empty backup — 30 gp
   // transcription + 50 gp for the blank backup book (V5) = 80 gp +
   // 3h, and the first copy adds the physical backup row.
   const wiz5 = await backupWizard('WizBackup');
-  const hourBefore = await clockHour();
+  const hourBefore = await clockHour(wiz5);
   const first = await req('POST', `/api/character/${wiz5}/spellbook-backup`, { spellName: 'Fireball' });
   check(first.status === 200, `copying Fireball into the backup succeeds (got ${first.status}: ${errOf(first)})`);
   check(first.json?.backup?.goldSpent === 80 && first.json?.backup?.goldRemaining === 420,
@@ -1362,7 +1366,7 @@ group('(m) backup copy + restore from backup');
   check(JSON.stringify(first.json?.backup?.backupSpells) === JSON.stringify(['Fireball']), 'the backup holds Fireball');
   check(JSON.stringify((await readSpellbookJson(wiz5)).backup) === JSON.stringify(['Fireball']), 'the backup reads back from spellbook_json');
   check(Number((await readCharacter(wiz5)).gold_gp) === 420, 'gold deducted in the DB (500 -> 420)');
-  check((await clockHour()) === (hourBefore + 3) % 24, 'the world clock advanced 3h');
+  check((await clockHour(wiz5)) === (hourBefore + 3) % 24, "the character's clock advanced 3h");
   const inv1 = await readInventory(wiz5);
   check(inv1.length === 1 && inv1[0].name === 'Spellbook' && inv1[0].source === 'spellbook-backup',
     'the first backup copy added a Spellbook row tagged spellbook-backup');
@@ -1442,7 +1446,7 @@ group('(m) backup copy + restore from backup');
   }
   check(Number((await readCharacter(rest)).gold_gp) === 360, 'six backup copies cost 140 gp (90 transcription + 50 for the blank backup book, 500 -> 360)');
   await req('POST', `/api/character/${rest}/spellbook-status`, { status: 'lost' });
-  const restHourBefore = await clockHour();
+  const restHourBefore = await clockHour(rest);
   const restored = await req('POST', `/api/character/${rest}/spellbook-replace`, { source: 'backup' });
   check(restored.status === 200, `restoring from the backup succeeds (got ${restored.status}: ${errOf(restored)})`);
   check(restored.json?.replacement?.source === 'backup', 'the response names the backup source');
@@ -1455,7 +1459,7 @@ group('(m) backup copy + restore from backup');
   check(JSON.stringify(await readBook(rest)) === JSON.stringify(BACKUP6), 'the book is now the backup contents');
   check(JSON.stringify(await readPrepared(rest)) === JSON.stringify(BACKUP6), 'the prepared list dropped to the backup contents');
   check(Number((await readCharacter(rest)).gold_gp) === 360, 'no gold moved on the restore');
-  check((await clockHour()) === restHourBefore, 'the clock did not move on the restore');
+  check((await clockHour(rest)) === restHourBefore, 'the clock did not move on the restore');
   check((await readSpellbookJson(rest)).status === 'intact', 'status is back to intact');
   check((await readSpellbookJson(rest)).replaced === 'backup', 'the state marks the book replaced-from-backup');
   check(JSON.stringify((await readSpellbookJson(rest)).backup) === JSON.stringify(BACKUP6), 'the backup itself is NOT consumed by the restore');
@@ -1631,7 +1635,7 @@ group('(o) Arcane Recovery — bank + DM short rest');
     if (!fbRow) {
       await db.dbRun('INSERT INTO world_clock (campaign_id, current_day, current_day_of_year, current_year, current_hour) VALUES (NULL, 1, 1, 1492, 8)');
     }
-    const clock = await sched.getClock(null);
+    const clock = await sched.getClock(null, { characterId });
     const r = await db.dbRun(
       'INSERT INTO dm_sessions (character_id, game_start_day, game_start_year) VALUES (?, ?, ?)',
       [characterId, clock.dayOfYear, clock.year]);

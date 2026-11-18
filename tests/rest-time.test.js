@@ -66,7 +66,8 @@ async function insertRow(table, overrides = {}) {
   return Number(r.lastInsertRowid);
 }
 
-const absHours = (clock) => clock.day * 24 + clock.hour;
+// Works for the shared clock and for S1's per-character clock (which has no shared day counter).
+const absHours = (clock) => ((clock.year * 400) + clock.dayOfYear) * 24 + clock.hour;
 
 // The fallback (campaign-less) clock is this suite's clock. Make sure its
 // row exists in the fresh DB, then anchor the session's start date to it.
@@ -147,14 +148,16 @@ let pcId, sessionId;
     ability_scores: JSON.stringify({ str: 16, dex: 12, con: 16, int: 10, wis: 11, cha: 8 }),
     current_hp: 30, max_hp: 30
   });
+  // S1: this campaign-less character keeps its own clock; the session starts at its date.
+  const pcClock = await sched.getClock(null, { characterId: pcId });
   sessionId = await insertRow('dm_sessions', {
-    character_id: pcId, game_start_day: startClock.dayOfYear, game_start_year: startClock.year
+    character_id: pcId, game_start_day: pcClock.dayOfYear, game_start_year: pcClock.year
   });
 
-  const before = await sched.getClock(null);
+  const before = await sched.getClock(null, { characterId: pcId });
   const evt = await rt.advanceTimeForSession({ sessionId, characterId: pcId, hours: 6, reason: 'the road north' });
-  const after = await sched.getClock(null);
-  assert(absHours(after) - absHours(before) === 6, 'world clock advanced exactly 6 hours');
+  const after = await sched.getClock(null, { characterId: pcId });
+  assert(absHours(after) - absHours(before) === 6, "the character's own clock advanced exactly 6 hours (campaign-less: per-character clock, S1)");
   assert(evt.kind === 'time' && evt.clock.hour === after.hour, 'event carries the new clock');
 
   const cfg = JSON.parse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId])).session_config || '{}');
@@ -184,11 +187,11 @@ group('6. Long rest — the whole party, fully restored, clock +8h');
     companion_hit_dice: JSON.stringify({ d8: 3 }), companion_hit_dice_used: JSON.stringify({ d8: 2 })
   });
 
-  const before = await sched.getClock(null);
+  const before = await sched.getClock(null, { characterId: pcId });
   const r = await rt.applyRest({ sessionId, characterId: pcId, type: 'long' });
-  const after = await sched.getClock(null);
+  const after = await sched.getClock(null, { characterId: pcId });
   assert(r.success === true && r.event.results.length === 2, 'party long rest: PC + companion results');
-  assert(absHours(after) - absHours(before) === 8, 'long rest advanced the clock 8 hours');
+  assert(absHours(after) - absHours(before) === 8, "long rest advanced the character's clock 8 hours (campaign-less: per-character clock, S1)");
 
   const pc = await dbGet('SELECT current_hp, temp_hp, spell_slots_used, hit_dice_used FROM characters WHERE id = ?', [pcId]);
   assert(pc.current_hp === 30 && pc.temp_hp === 0, 'PC: HP full, temp HP cleared');
@@ -207,14 +210,14 @@ group('7. Short rest — dice healing, pact magic, actor scope');
   // Fighter with Dice=2: spends exactly 2, heals at least 2×(1+CON 3).
   await dbRun('UPDATE characters SET current_hp = 8, spell_slots_used = ?, hit_dice_used = ? WHERE id = ?',
     [JSON.stringify({ '1': 1 }), '{}', pcId]);
-  const before = await sched.getClock(null);
+  const before = await sched.getClock(null, { characterId: pcId });
   const r = await rt.applyRest({ sessionId, characterId: pcId, type: 'short', dice: 2 });
-  const after = await sched.getClock(null);
+  const after = await sched.getClock(null, { characterId: pcId });
   const pc = await dbGet('SELECT current_hp, spell_slots_used, hit_dice_used FROM characters WHERE id = ?', [pcId]);
   assert(rt.totalDice(JSON.parse(pc.hit_dice_used)) === 2, 'Dice=2 → exactly 2 dice spent');
   assert(pc.current_hp >= 16 && pc.current_hp <= 30, 'healed by the rolled dice + CON');
   assert(pc.spell_slots_used !== '{}', 'fighter slots do NOT return on a short rest');
-  assert(absHours(after) - absHours(before) === 1, 'short rest advanced the clock 1 hour');
+  assert(absHours(after) - absHours(before) === 1, "short rest advanced the character's clock 1 hour (campaign-less: per-character clock, S1)");
 
   // Warlock companion resting alone: pact slots return; the PC is untouched.
   const vexNpcId = await insertRow('npcs', { name: 'Vex' });

@@ -18,6 +18,17 @@
  * (game_day/game_year/game_hour, forward-only) so legacy readers of
  * characters.game_day stay consistent until Phase 4 removes the mirror.
  *
+ * S1 clock invariant (2026-11-17): no character's play ever moves another
+ * character's clock. The mirror only ever reaches the characters of the
+ * campaign being advanced; the campaign-less fallback row (campaign_id NULL)
+ * is NEVER mirrored onto characters (it used to be copied onto every
+ * character in the database). A campaign-less caller that names its
+ * character ({ characterId }) gets a per-character clock instead: only that
+ * character's game_day/game_year/game_hour move, and the shared fallback row
+ * is left alone. Play itself requires a campaign (server/utils/campaignGate.js);
+ * the per-character scope is for out-of-session time costs such as copying a
+ * spell into a spellbook or a downtime rest.
+ *
  * The details_json field is extensible for future gameplay systems:
  * - Away missions: pending checks, danger level, comm range
  * - Crafting: materials checklist, daily schedule, interruptibility
@@ -59,8 +70,30 @@ function rowToClock(row, campaignId = null) {
   };
 }
 
-export async function getClock(campaignId = null) {
+export async function getClock(campaignId = null, { characterId = null } = {}) {
+  if (campaignId == null && characterId != null) return getCharacterClock(characterId);
   return rowToClock(await resolveClockRow(campaignId), campaignId);
+}
+
+// Per-character clock for a campaign-less character (S1). It has no shared
+// absolute day counter, so `day` is null; callers read dayOfYear/year/hour.
+async function getCharacterClock(characterId) {
+  const ch = await dbGet('SELECT game_day, game_year, game_hour FROM characters WHERE id = ?', [characterId]);
+  return {
+    campaignId: null,
+    characterId,
+    day: null,
+    dayOfYear: ch?.game_day ?? 1,
+    year: ch?.game_year ?? 1492,
+    hour: ch?.game_hour ?? 8,
+  };
+}
+
+async function writeCharacterClock(characterId, { dayOfYear, year, hour }) {
+  await dbRun(
+    'UPDATE characters SET game_day = ?, game_year = ?, game_hour = ? WHERE id = ?',
+    [dayOfYear, year, hour, characterId]
+  );
 }
 
 export async function getCurrentDay(campaignId = null) {
@@ -68,9 +101,9 @@ export async function getCurrentDay(campaignId = null) {
 }
 
 async function mirrorToCharacters(campaignId, clock) {
-  const rows = campaignId != null
-    ? await dbAll('SELECT id, game_day, game_year FROM characters WHERE campaign_id = ?', [campaignId])
-    : await dbAll('SELECT id, game_day, game_year FROM characters');
+  // S1 clock invariant: the fallback row is never copied onto characters.
+  if (campaignId == null) return;
+  const rows = await dbAll('SELECT id, game_day, game_year FROM characters WHERE campaign_id = ?', [campaignId]);
   for (const ch of rows || []) {
     const behind = ch.game_day == null
       || (ch.game_year ?? 1492) < clock.year
@@ -92,8 +125,14 @@ async function writeClock(row, { day, dayOfYear, year, hour }) {
   );
 }
 
-export async function advanceDays(n = 1, { campaignId = null, reason = null } = {}) {
-  if (!n || n < 1) return getClock(campaignId);
+export async function advanceDays(n = 1, { campaignId = null, reason = null, characterId = null } = {}) {
+  if (!n || n < 1) return getClock(campaignId, { characterId });
+  if (campaignId == null && characterId != null) {
+    const cur = await getCharacterClock(characterId);
+    const rolled = advanceTime(cur.dayOfYear, cur.year, n);
+    await writeCharacterClock(characterId, { dayOfYear: rolled.day, year: rolled.year, hour: cur.hour });
+    return getCharacterClock(characterId);
+  }
   const row = await resolveClockRow(campaignId);
   const cur = rowToClock(row, campaignId);
   const rolled = advanceTime(cur.dayOfYear, cur.year, n);
@@ -103,8 +142,16 @@ export async function advanceDays(n = 1, { campaignId = null, reason = null } = 
   return getClock(campaignId);
 }
 
-export async function advanceHours(h = 1, { campaignId = null, reason = null } = {}) {
-  if (!h || h < 1) return getClock(campaignId);
+export async function advanceHours(h = 1, { campaignId = null, reason = null, characterId = null } = {}) {
+  if (!h || h < 1) return getClock(campaignId, { characterId });
+  if (campaignId == null && characterId != null) {
+    const cur = await getCharacterClock(characterId);
+    const total = cur.hour + h;
+    const days = Math.floor(total / 24);
+    const rolled = days > 0 ? advanceTime(cur.dayOfYear, cur.year, days) : { day: cur.dayOfYear, year: cur.year };
+    await writeCharacterClock(characterId, { dayOfYear: rolled.day, year: rolled.year, hour: total % 24 });
+    return getCharacterClock(characterId);
+  }
   const cur = await getClock(campaignId);
   const total = cur.hour + h;
   const days = Math.floor(total / 24);

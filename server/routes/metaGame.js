@@ -25,6 +25,7 @@ import {
 import { processCharacterTimeAdvance, getCharacterWorldView } from '../services/livingWorldService.js';
 import { advanceHours } from '../services/scheduleService.js';
 import { handleServerError } from '../utils/errorHandler.js';
+import { campaignForCharacter, campaignRequiredBody } from '../utils/campaignGate.js';
 
 const router = express.Router();
 
@@ -388,6 +389,13 @@ router.post('/advance-time/:characterId', async (req, res) => {
     const character = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [req.params.characterId]);
     if (!character) {
       return res.status(404).json({ error: 'Character not found' });
+    }
+    // S1 campaign gate (2026-11-17): this is a session tool (the in-session
+    // meta-game tab) that also runs the living-world tick, so it needs a
+    // campaign like the rest of play.
+    const gate = await campaignForCharacter(req.params.characterId);
+    if (gate.campaignId == null) {
+      return res.status(409).json(campaignRequiredBody(Number(req.params.characterId)));
     }
 
     // Phase 0: advance the unified campaign clock; it mirrors the new
