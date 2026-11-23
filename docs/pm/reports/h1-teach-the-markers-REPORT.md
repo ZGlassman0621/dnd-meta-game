@@ -2,7 +2,7 @@
 
 Builder: Claude Code (Opus 5.5). Brief: `docs/pm/h1-teach-the-markers/BRIEF.md`.
 Branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`. Version 1.0.202 → **1.0.203**.
-Commit: recorded by a follow-up commit (see the "Commit:" line, filled in after the build commit).
+Commit: `79b1d6c` (the build); a follow-up commit adds this line.
 
 ## Understanding
 The project is a solo D&D 2024 "forever game": one human player character, with the DM, NPCs, companions and enemies played by an AI (gemma4:12b on the PC). The AI changes the game world by writing short bracketed markers into its narration (`[HP_CHANGE: …]`, `[COMBAT_START: …]`); the engine reads each marker and does the real work.
