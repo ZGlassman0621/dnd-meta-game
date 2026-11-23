@@ -2,7 +2,7 @@
 
 Builder: Claude Code (Opus 5.5). Brief: `docs/pm/combat-loop-fix/BRIEF.md`.
 Branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`. Version **1.0.204 → 1.0.205**.
-Commit: `__COMMIT__`; a follow-up commit records the hash here.
+Commit: `45c34b4`; a follow-up commit records the hash here.
 
 ## Understanding
 The diagnosis found one chain: nothing in play ever advanced a turn, so the turn order stayed on its first combatant. The engine then refused the player's attacks, the refusal never reached the DM, and the DM narrated the fight freehand. This job makes the engine run the fight:
