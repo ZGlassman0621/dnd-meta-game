@@ -34,7 +34,7 @@ const REST_TYPES = {
     icon: '🌙',
     duration: 8,
     description: 'A period of extended rest, at least 8 hours long, during which you sleep for at least 6 hours.',
-    benefits: 'Recover all HP. Regain half your Hit Dice. Most abilities recharge.'
+    benefits: 'Recover all HP. Regain all your spent Hit Dice. Most abilities recharge.'
   }
 }
 

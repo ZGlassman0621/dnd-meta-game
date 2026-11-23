@@ -1705,6 +1705,24 @@ const PROFANE_SOUL_SPELLS_PREPARED = [0, 0, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 
 // full-caster spell slots at every level 1-20, so no slot gate applies.
 const SORCERER_SPELLS_PREPARED = [2, 4, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22]
 
+// Bard, Cleric, Druid (2024 PHB class tables, "Prepared Spells"
+// column; H3, Zach's ruling 2026-11-12, values checked against his
+// PHB class-table photos 2026-11-12). The 2024 cap is the printed
+// column at every level and does NOT depend on the ability modifier:
+// a 1st-level bard, cleric or druid prepares 4 spells at +2 or +5
+// alike. The old 2014 formula (ability mod + level, min 1) is
+// retired. The three classes share one column; it differs from the
+// sorcerer's only at L1-2.
+const BARD_CLERIC_DRUID_SPELLS_PREPARED = [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22]
+
+// Wizard (2024 PHB, Wizard Features table, "Prepared Spells" column;
+// H3, same ruling and photo check). Same as the bard/cleric/druid
+// column through L13, then 18, 19, 21, 22, 23, 24, 25. The 2014
+// formula (Int mod + level) happened to match this column at the
+// standard ASI progression (+3 at L1, +4 at L5, +5 at L20) but not at
+// any other modifier; the column governs, mod-independent.
+const WIZARD_SPELLS_PREPARED = [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 18, 19, 21, 22, 23, 24, 25]
+
 // Helper functions
 function getXPForLevel(level) {
   return XP_THRESHOLDS[level] || 0
@@ -1899,8 +1917,10 @@ function spellcastingAbilityFor(classId, subclass = null) {
 // Spells prepared at a level (Stage 4). Returns null for
 // known-casters and non-casters (they do not prepare), and the 2024
 // prepared count for prepared casters:
-//   - cleric, druid, wizard:
-//     ability modifier + class level (minimum 1).
+//   - bard, cleric, druid, wizard (H3, 2026-11-23): the Prepared
+//     Spells column of the class table, mod-independent
+//     (BARD_CLERIC_DRUID_SPELLS_PREPARED, WIZARD_SPELLS_PREPARED;
+//     4 at L1). The 2014 ability mod + level formula is retired.
 //   - paladin (2024 PHB, pp. 109-110, verified from the book
 //     2026-11-06): the Prepared Spells column of the Paladin
 //     Features table — 2, 3, 4, 5, 6, 6, 7, 7, 9, 10, 10, 11, 11,
@@ -2090,20 +2110,25 @@ function getSpellsPrepared(classId, level, abilityMod = 0, subclass = null) {
   // DB + marker-registration side effects into this config module;
   // a test asserts the two agree at every level and mod.
   if (key === 'artificer') return Math.max(1, mod + Math.floor(lvl / 2));
-  // Bard (2026-11-06): 2024 PHB rule — Cha mod + bard level, min 1
-  // (PHB prepared column 4-22; L1 = 4 at Cha +3). Bards prepare in
-  // 2024, so the 2014 known-spells row is removed from SPELLS_KNOWN
-  // below — a bard is a prepared caster, never both. PUT /:id +
-  // level-up validators live in server/routes/character.js (bard
-  // blocks, 2026-11-06/07).
-  if (key === 'bard') return Math.max(1, mod + lvl);
+  // Bard, Cleric, Druid, Wizard (H3, 2026-11-23): 2024 PHB rule — the
+  // fixed Prepared Spells column of each class table, no modifier
+  // input (BARD_CLERIC_DRUID_SPELLS_PREPARED, WIZARD_SPELLS_PREPARED).
+  // L1 = 4 for all four at any modifier. Bards prepare in 2024, so the
+  // 2014 known-spells row is gone from SPELLS_KNOWN — a bard is a
+  // prepared caster, never both. PUT /:id + level-up validators live
+  // in server/routes/character.js and read the same tables through
+  // bardService / clericService / druidService / wizardService.
+  if (key === 'bard' || key === 'cleric' || key === 'druid') return BARD_CLERIC_DRUID_SPELLS_PREPARED[lvl - 1];
+  if (key === 'wizard') return WIZARD_SPELLS_PREPARED[lvl - 1];
   // Sorcerer (2026-11-06): 2024 PHB rule — fixed Prepared Spells
   // column, 2 at 1st -> 22 at 20th (SORCERER_SPELLS_PREPARED). The
   // book states no formula, so no mod is consulted; the table
   // governs at every level. Sorcerers have full-caster slots at
   // every level, so the slot gate above never fires for them.
   if (key === 'sorcerer') return SORCERER_SPELLS_PREPARED[lvl - 1];
-  return Math.max(1, mod + lvl);
+  // Every class in PREPARED_CASTERS is handled above; no formula
+  // fall-through remains.
+  return null;
 }
 
 
@@ -2246,6 +2271,8 @@ export {
   PROFANE_SOUL_SPELLS_PREPARED,
   WARLOCK_SPELLS_PREPARED,
   SORCERER_SPELLS_PREPARED,
+  BARD_CLERIC_DRUID_SPELLS_PREPARED,
+  WIZARD_SPELLS_PREPARED,
   isCastingSubclass,
   CANTRIPS_KNOWN,
   SPELLS_KNOWN,

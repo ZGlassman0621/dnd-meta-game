@@ -148,12 +148,13 @@ function dwarfClericBody(overrides = {}) {
 // Half-elf Mark of Detection / sage wizard. Variant ASI REPLACES the
 // base half-elf {cha:2, choice:2} with {wis:2, choice:1}; the one
 // choice pick goes to Int. Finals = base + {wis:2} + choice int +1
-// + sage theme {int:2, wis:1}. Int 18 -> mod +4 -> wizard prepares 5.
+// + sage theme {int:2, wis:1}. Int 18 -> mod +4; the 2024 wizard
+// table prepares 4 at L1 at any Int mod (H3, 2026-11-23; was 5).
 // NOTE: Detect Magic is a granted L1 innate spell for this mark, so
-// it must NOT appear in the prepared list (Alarm is the 5th pick).
+// it must NOT appear in the prepared list.
 const MARK_BASE = { str: 8, dex: 13, con: 12, int: 15, wis: 14, cha: 10 };
 const MARK_FINAL = { str: 8, dex: 13, con: 12, int: 18, wis: 17, cha: 10 };
-const MARK_PREPARED = ['magic missile', 'shield', 'mage armor', 'sleep', 'alarm'];
+const MARK_PREPARED = ['magic missile', 'shield', 'mage armor', 'sleep'];
 function markWizardBody(overrides = {}) {
   return {
     creator: MARKER, class: 'wizard', race: 'half-elf', subrace: 'Mark of Detection',
@@ -175,17 +176,18 @@ group('(a) Level-1 per-class table (unit)');
 {
   const table = [
     // [class, cantrips, known (null = prepares), prepared at mod 0, prepared at mod +3]
-    // Bard (2026-11-06): bards PREPARE in 2024 (Cha mod + bard level) —
-    // the 2014 known-spells row is gone from SPELLS_KNOWN.
-    ['bard', 2, null, 1, 4],
-    ['cleric', 3, null, 1, 4],
-    ['druid', 2, null, 1, 4],
+    // Bard, Cleric, Druid, Wizard (H3, 2026-11-23): the 2024 Prepared
+    // Spells column — 4 at L1 at every mod (was mod + 1: 1 at +0).
+    // Bards PREPARE in 2024; the 2014 known-spells row is gone.
+    ['bard', 2, null, 4, 4],
+    ['cleric', 3, null, 4, 4],
+    ['druid', 2, null, 4, 4],
     ['sorcerer', 4, null, 2, 2],
     // Warlock (2026-11-06): warlocks PREPARE in 2024 (fixed Prepared
     // Spells column — table 2 at L1, mod-independent, same pattern
     // as the existing bard comment above).
     ['warlock', 2, null, 2, 2],
-    ['wizard', 3, null, 1, 4],
+    ['wizard', 3, null, 4, 4],
     ['artificer', 2, null, 1, 3],
     ['paladin', 0, null, 2, 2],
     // Ranger (2026-11-06): rangers PREPARE in 2024 — table-driven
@@ -446,20 +448,22 @@ group('(c) Proficiencies + dedup (validator unit + client rules)');
 group('(d) Spell gating (validator unit)');
 {
   // Valid picks save (unit level); counts are the L1 counts.
-  // Bard (2026-11-06): bards PREPARE in 2024 — the DWARF_BASE finals
-  // give Cha 14 (+2), so a bard prepares 3 at L1, not 4 known.
+  // Bard (2026-11-06; H3 2026-11-23): bards PREPARE in 2024, and the
+  // count is the Bard table's Prepared Spells column — 4 at L1 at any
+  // Cha mod (the DWARF_BASE finals give Cha 14, +2; the 2014 formula
+  // said 3).
   check(validateCreatorNextStage4({
     creator: MARKER, class: 'bard', race: 'human', generation_method: 'point_buy',
     base_scores: DWARF_BASE, ability_scores: DWARF_BASE,
-    prepared_spells: ['charm person', 'cure wounds', 'faerie fire'],
-  }).ok === true, 'bard prepared 3 passes (2024: bards prepare; Cha +2 → 3)');
+    prepared_spells: ['charm person', 'cure wounds', 'faerie fire', 'healing word'],
+  }).ok === true, 'bard prepared 4 passes (2024 table: 4 at L1, Cha +2)');
   const bardShort = validateCreatorNextStage4({
     creator: MARKER, class: 'bard', race: 'human', generation_method: 'point_buy',
     base_scores: DWARF_BASE, ability_scores: DWARF_BASE,
-    prepared_spells: ['charm person', 'cure wounds'],
+    prepared_spells: ['charm person', 'cure wounds', 'faerie fire'],
   });
-  check(bardShort.ok === false && errText(bardShort).includes('preparedSpells:') && errText(bardShort).includes('picks 3 spells'),
-    `bard prepared 2 refuses the count (got ${errText(bardShort)})`);
+  check(bardShort.ok === false && errText(bardShort).includes('preparedSpells:') && errText(bardShort).includes('picks 4 spells'),
+    `bard prepared 3 refuses the count (got ${errText(bardShort)})`);
   const bardWrongList = validateCreatorNextStage4({
     creator: MARKER, class: 'bard', race: 'human', generation_method: 'point_buy',
     base_scores: DWARF_BASE, ability_scores: DWARF_BASE,
@@ -732,7 +736,7 @@ group('(f) HTTP persist (real router + real DB)');
   check(wizCreated.status === 201, `PUT-fixture wizard POST creates 201 (got ${wizCreated.status})`);
   const wizId = wizCreated.json?.id;
   const putNoClass = await putCharacter(wizId, {
-    creator: MARKER, prepared_spells: J(['magic missile', 'shield', 'mage armor', 'sleep', 'alarm']),
+    creator: MARKER, prepared_spells: J(['magic missile', 'shield', 'mage armor', 'sleep']),
   });
   check(putNoClass.status === 200, `PUT without class resolves the row wizard class, 200 (got ${putNoClass.status}: ${JSON.stringify(putNoClass.json?.error || '')})`);
   const wizBefore = await readCharacter(wizId);
@@ -841,7 +845,7 @@ group('(h) GET /api/spells (real HTTP)');
       `/api/spells ${cls} list has no cantrips (all level >= 1)`);
   }
   const cleric0 = await getSpells('?class=cleric&level=1');
-  check(cleric0.json?.spellsPrepared === 1, 'cleric spellsPrepared defaults to mod 0 -> 1');
+  check(cleric0.json?.spellsPrepared === 4, 'cleric spellsPrepared at the default mod 0 is the table 4 (H3; was 1)');
   const cleric3 = await getSpells('?class=cleric&level=1&abilityMod=3');
   check(cleric3.json?.spellsPrepared === 4, 'cleric spellsPrepared with abilityMod=3 -> 4');
   const wiz3 = await getSpells('?class=wizard&level=1&abilityMod=3');
@@ -1198,13 +1202,13 @@ group('(l) Wizard spellbook: two-list picker (Stage 4)');
     'burning hands is a learnable L1 wizard spell for the book fixture');
   check(canLearnSpell({ classId: 'wizard', level: 1, spellName: 'comprehend languages' }).ok === true,
     'comprehend languages is a learnable L1 wizard spell for the outside-book fixture');
-  const MARK_BOOK = [...MARK_PREPARED, 'burning hands'];
+  const MARK_BOOK = [...MARK_PREPARED, 'alarm', 'burning hands'];
   const withBook = validateCreatorNextStage4(markWizardBody({ known_spells: MARK_BOOK }));
   check(withBook.ok === true,
     `mark wizard with a 6-spell book and a prepared subset passes Stage 4 (got ${errText(withBook)})`);
   const outsideBook = validateCreatorNextStage4(markWizardBody({
     known_spells: MARK_BOOK,
-    prepared_spells: ['magic missile', 'shield', 'mage armor', 'sleep', 'comprehend languages'],
+    prepared_spells: ['magic missile', 'shield', 'mage armor', 'comprehend languages'],
   }));
   check(outsideBook.ok === false && errText(outsideBook).includes('preparedSpells:') && errText(outsideBook).includes('not in the spellbook'),
     `wizard prepared outside the book refuses naming the spellbook (got ${errText(outsideBook)})`);

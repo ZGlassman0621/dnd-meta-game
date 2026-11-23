@@ -469,13 +469,15 @@ group('(i) Memorize Spell swap');
 // ===========================================================================
 group('(j) Stage 4 wizard book');
 {
-  // Half-elf Mark of Detection / sage wizard, Int 18 -> prepares 5.
-  // Detect Magic is granted for this mark and must NOT appear in
-  // either list; Alarm is the 5th prepared pick. (Same fixture as
-  // creator-next-stage4's markWizardBody.)
+  // Half-elf Mark of Detection / sage wizard, Int 18. The 2024
+  // wizard table prepares 4 at L1 at any Int mod (H3, 2026-11-23;
+  // the 2014 formula gave 5). Detect Magic is granted for this mark
+  // and must NOT appear in either list. Alarm and Burning Hands fill
+  // the 6-spell book. (Same fixture as creator-next-stage4's
+  // markWizardBody.)
   const MARK_BASE = { str: 8, dex: 13, con: 12, int: 15, wis: 14, cha: 10 };
   const MARK_FINAL = { str: 8, dex: 13, con: 12, int: 18, wis: 17, cha: 10 };
-  const MARK_PREPARED = ['magic missile', 'shield', 'mage armor', 'sleep', 'alarm'];
+  const MARK_PREPARED = ['magic missile', 'shield', 'mage armor', 'sleep'];
   function markWizardBody(overrides = {}) {
     return {
       creator: 'creator-next', class: 'wizard', race: 'half-elf', subrace: 'Mark of Detection',
@@ -490,28 +492,28 @@ group('(j) Stage 4 wizard book');
   const errText = (r) => (r.errors || []).join(' | ');
   const has = (r, field) => (r.errors || []).some((e) => e.startsWith(`${field}:`));
 
-  const valid = validateCreatorNextStage4(markWizardBody({ known_spells: [...MARK_PREPARED, 'burning hands'] }));
-  check(valid.ok === true, `a 6-spell book holding the prepared 5 passes Stage 4 (${errText(valid)})`);
+  const valid = validateCreatorNextStage4(markWizardBody({ known_spells: [...MARK_PREPARED, 'alarm', 'burning hands'] }));
+  check(valid.ok === true, `a 6-spell book holding the prepared 4 passes Stage 4 (${errText(valid)})`);
   const bookless = validateCreatorNextStage4(markWizardBody());
   check(bookless.ok === true && !has(bookless, 'knownSpells'),
     'a wizard draft with prepared spells but no book is draft-tolerant at Stage 4 (the commit refuses it, not the draft save)');
-  const short = validateCreatorNextStage4(markWizardBody({ known_spells: MARK_PREPARED }));
+  const short = validateCreatorNextStage4(markWizardBody({ known_spells: [...MARK_PREPARED, 'alarm'] }));
   check(short.ok === false && has(short, 'knownSpells') && errText(short).includes('6'),
     `a 5-spell book refuses naming knownSpells and the count 6 (${errText(short)})`);
   const outside = validateCreatorNextStage4(markWizardBody({
-    known_spells: ['magic missile', 'shield', 'mage armor', 'sleep', 'grease', 'burning hands'],
+    known_spells: ['magic missile', 'shield', 'mage armor', 'alarm', 'grease', 'burning hands'],
   }));
   check(outside.ok === false && has(outside, 'preparedSpells') && errText(outside).includes('not in the spellbook'),
     `a prepared spell outside the book refuses (${errText(outside)})`);
-  const granted = validateCreatorNextStage4(markWizardBody({ known_spells: [...MARK_PREPARED, 'detect magic'] }));
+  const granted = validateCreatorNextStage4(markWizardBody({ known_spells: [...MARK_PREPARED, 'alarm', 'detect magic'] }));
   check(granted.ok === false && has(granted, 'knownSpells') && errText(granted).includes('already granted'),
     `a granted spell in the book refuses (${errText(granted)})`);
-  const cantripBook = validateCreatorNextStage4(markWizardBody({ known_spells: [...MARK_PREPARED, 'fire bolt'] }));
+  const cantripBook = validateCreatorNextStage4(markWizardBody({ known_spells: [...MARK_PREPARED, 'alarm', 'fire bolt'] }));
   check(cantripBook.ok === false && has(cantripBook, 'knownSpells') && errText(cantripBook).includes('cantrip'),
     `a cantrip in the book refuses (${errText(cantripBook)})`);
   const cantripPrep = validateCreatorNextStage4(markWizardBody({
-    known_spells: [...MARK_PREPARED, 'burning hands'],
-    prepared_spells: ['magic missile', 'shield', 'mage armor', 'sleep', 'fire bolt'],
+    known_spells: [...MARK_PREPARED, 'alarm', 'burning hands'],
+    prepared_spells: ['magic missile', 'shield', 'mage armor', 'fire bolt'],
   }));
   check(cantripPrep.ok === false && has(cantripPrep, 'preparedSpells') && errText(cantripPrep).includes('cantrip'),
     `a cantrip in the prepared list refuses (${errText(cantripPrep)})`);
@@ -527,7 +529,7 @@ group('(k) Stage 6 commit completeness');
 {
   const MARK_BASE = { str: 8, dex: 13, con: 12, int: 15, wis: 14, cha: 10 };
   const MARK_FINAL = { str: 8, dex: 13, con: 12, int: 18, wis: 17, cha: 10 };
-  const MARK_PREPARED = ['magic missile', 'shield', 'mage armor', 'sleep', 'alarm'];
+  const MARK_PREPARED = ['magic missile', 'shield', 'mage armor', 'sleep'];
   function markWizardMerged(overrides = {}) {
     return {
       creator: 'creator-next', name: 'Test Wizard', first_name: 'Test', gender: 'Female',
@@ -545,7 +547,7 @@ group('(k) Stage 6 commit completeness');
   const bookless = await validateCreatorNextStage6(markWizardMerged());
   check(hasBookError(bookless), `commit of a bookless wizard draft refuses with the spellbook error (${(bookless.errors || []).join(' | ')})`);
   check((bookless.errors || []).some((e) => e.includes('never auto-filled')), 'the refusal says the book is never auto-filled');
-  const withBook = await validateCreatorNextStage6(markWizardMerged({ known_spells: [...MARK_PREPARED, 'burning hands'] }));
+  const withBook = await validateCreatorNextStage6(markWizardMerged({ known_spells: [...MARK_PREPARED, 'alarm', 'burning hands'] }));
   check(!hasBookError(withBook), `commit with a 6-spell book has no spellbook error (${(withBook.errors || []).join(' | ')})`);
   const noPrep = await validateCreatorNextStage6(markWizardMerged({ prepared_spells: [] }));
   check(!hasBookError(noPrep), 'empty prepared + empty book still passes the book check (same tolerance as other casters)');

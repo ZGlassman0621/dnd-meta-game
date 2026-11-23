@@ -212,8 +212,8 @@ function dwarfClericDraft(overrides = {}) {
 
 // Per-theme dwarf cleric: finals recomputed from the REAL theme ASI,
 // skills = the theme's two signature skills + the first cleric
-// option not already among them, prepared count from the resulting
-// Wis mod. (Stage 5 pattern.)
+// option not already among them, prepared count from the 2024
+// cleric table (4 at L1, any Wis mod). (Stage 5 pattern.)
 function clericBodyForTheme(themeId, overrides = {}) {
   const theme = resolveTheme(themeId);
   assert(theme, `fixture theme ${themeId} resolves`);
@@ -224,7 +224,7 @@ function clericBodyForTheme(themeId, overrides = {}) {
   }
   const sigs = [theme.signature_skill_1, theme.signature_skill_2];
   const extra = ['History', 'Insight', 'Medicine', 'Persuasion', 'Religion'].find((s) => !sigs.includes(s));
-  const prepCount = Math.max(1, Math.floor((finals.wis - 10) / 2) + 1);
+  const prepCount = 4; // 2024 cleric table: 4 at L1 at any Wis mod (H3, 2026-11-23)
   const prepared = ['bless', 'cure wounds', 'guiding bolt', 'shield of faith', 'sanctuary'].slice(0, prepCount);
   return {
     creator: MARKER,
@@ -493,7 +493,8 @@ group('(f) human fighter / Traveler\'s Tongue');
 group('(g) mixed ancestry + forgo');
 {
   const MIXED_FINAL = { str: 14, dex: 10, con: 14, int: 8, wis: 15, cha: 14 };
-  const MIXED_PREPARED = ['bless', 'cure wounds', 'guiding bolt'];
+  // 2024 table (H3): every L1 bard/cleric/druid/wizard prepares 4, any mod.
+  const MIXED_PREPARED = ['bless', 'cure wounds', 'guiding bolt', 'shield of faith'];
   const mixedDraft = (overrides = {}) => ({
     creator: MARKER,
     name: 'Mara Mixed', first_name: 'Mara', gender: 'Female',
@@ -610,9 +611,10 @@ group('(h) versatile slot fixes');
     // rule, creation-solidification 2026-11-12).
     languages: ['Common', 'Giant'],
     // Spellbook (2026-11-07): 6 L1 wizard spells, none of them the
-    // granted 'magic missile' — the prepared 3 are a subset of it.
+    // granted 'magic missile' — the prepared 4 are a subset of it.
+    // 2024 table (H3): every L1 bard/cleric/druid/wizard prepares 4, any mod.
     known_spells: ['shield', 'mage armor', 'sleep', 'burning hands', 'chromatic orb', 'grease'],
-    prepared_spells: ['shield', 'mage armor', 'sleep'],
+    prepared_spells: ['shield', 'mage armor', 'sleep', 'burning hands'],
     known_cantrips: ['Fire Bolt', 'Prestidigitation', 'Ray of Frost', 'Mage Hand', 'Light'],
     ancestry_feat_id: JACK_ID,
     ...STORY,
@@ -718,10 +720,11 @@ group('(j) high elf species cantrip choice');
     generation_method: 'point_buy', base_scores: ELF_BASE, ability_scores: ELF_FINAL,
     skills: ['Arcana', 'History', 'Investigation', 'Insight'],
     languages: ['Common', 'Elvish'],
-    // Spellbook (2026-11-07): the prepared 5 plus one more L1 wizard
-    // spell, exactly 6 — none of them the granted 'magic missile'.
+    // Spellbook (2026-11-07): exactly 6 L1 wizard spells — none of
+    // them the granted 'magic missile'; the prepared 4 are a subset.
+    // 2024 table (H3): every L1 bard/cleric/druid/wizard prepares 4, any mod.
     known_spells: ['shield', 'mage armor', 'sleep', 'charm person', 'detect magic', 'burning hands'],
-    prepared_spells: ['shield', 'mage armor', 'sleep', 'charm person', 'detect magic'],
+    prepared_spells: ['shield', 'mage armor', 'sleep', 'charm person'],
     known_cantrips: ['Fire Bolt', 'Prestidigitation', 'Ray of Frost', 'Mage Hand', 'Light', 'Shocking Grasp'],
     ancestry_feat_id: ELF_NO_CHOICE_ID,
     ...STORY,
@@ -1418,7 +1421,8 @@ group('(t) magus / scholar subclass name without choices + count skip');
     generation_method: 'point_buy', base_scores: DWARF_BASE, ability_scores: MIXED_FINAL,
     skills: ['Athletics', 'Intimidation', 'Religion'],
     languages: ['Common', 'Elvish'],
-    prepared_spells: ['bless', 'cure wounds', 'guiding bolt'],
+    // 2024 table (H3): every L1 bard/cleric/druid/wizard prepares 4, any mod.
+    prepared_spells: ['bless', 'cure wounds', 'guiding bolt', 'shield of faith'],
     known_cantrips: ['Guidance', 'Sacred Flame', 'Thaumaturgy', 'Light', 'Mending'],
     ancestry_feat_id: MIXED_NO_CHOICE_ID,
     ...STORY,

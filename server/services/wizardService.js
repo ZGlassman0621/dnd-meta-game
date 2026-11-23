@@ -1,18 +1,17 @@
 // wizardService.js — Wizard prepared-spell cap (2024 PHB, 2026-11-07).
 //
-// 2024 PHB rule: a wizard prepares Int mod + wizard level spells, min 1
-// (PHB prepared column 4-22; L1 = 4 at Int +3, L5 = 9 at Int +4,
-// L20 = 25 at Int +5). No fixed table is stored anywhere — the printed
-// column is reproduced at the book's implied ASI progression, the same
-// rule-vs-table treatment as cleric/druid/bard. This agrees with
-// levelProgression.getSpellsPrepared (wizard arm: the shared
-// fall-through max(1, mod + level), reached via the PREPARED_CASTERS
-// set; wizards are full casters with 1st-level slots at every level
-// 1-20, so the arm's slot gate never fires for wizard — see
+// 2024 PHB rule (H3, Zach 2026-11-12; corrected 2026-11-23): a wizard
+// prepares the number in the Wizard Features table's Prepared Spells
+// column — 4 at L1 -> 25 at L20 (WIZARD_SPELLS_PREPARED in
+// levelProgression.js), the same at every Int modifier. The 2014
+// formula (Int mod + wizard level) is retired; it matched the column
+// only at the standard ASI progression. This agrees with
+// levelProgression.getSpellsPrepared (wizard arm) at every level and
+// modifier (tests/h2-h3-2024-rules.test.js,
 // tests/wizard-validator-wiring.test.js group (d)).
 //
-// No slot gate: see above — the plain formula agrees with the arm
-// everywhere.
+// No slot gate: wizards are full casters with 1st-level slots at
+// every level 1-20.
 //
 // Always-prepared exclusion: LIVE since the spellbook system
 // (2026-11-07). Spell Mastery (L18) and Signature Spells (L20)
@@ -36,6 +35,7 @@
 // The validator never trims, never silently fixes: it returns
 // { max, counted, ok, over } and the route refuses with a field-named
 // 400.
+import { WIZARD_SPELLS_PREPARED } from '../config/levelProgression.js';
 import { canonicalizeSpellName } from './spellSelectionService.js';
 
 function clampLevel(level) {
@@ -44,15 +44,11 @@ function clampLevel(level) {
   return Math.min(20, Math.max(1, Math.trunc(l)));
 }
 
-function clampMod(mod) {
-  const m = Number(mod);
-  if (!Number.isFinite(m)) return 0;
-  return Math.trunc(m);
-}
-
-// 2024 PHB formula: Int mod + wizard level, min 1.
+// 2024 PHB table: the Prepared Spells column. intMod is accepted
+// (callers pass it) and ignored — the cap is mod-independent.
 export function preparedSpellsMax(intMod, level) {
-  return Math.max(1, clampMod(intMod) + clampLevel(level));
+  void intMod;
+  return WIZARD_SPELLS_PREPARED[clampLevel(level) - 1];
 }
 
 export function validatePreparedSpells(intMod, level, preparedList, alwaysPreparedList) {

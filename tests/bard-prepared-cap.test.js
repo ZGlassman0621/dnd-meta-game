@@ -1,26 +1,22 @@
 // tests/bard-prepared-cap.test.js — bard prepared-spell cap (2026-11-06).
 //
-// 2024 PHB rule: a bard prepares Cha mod + bard level spells, min 1.
-// (PHB prepared column 4-22; L1 = 4 at Cha +3.) Bards PREPARE in 2024 —
+// 2024 PHB rule (H3, Zach 2026-11-12; corrected 2026-11-23): a bard
+// prepares the number in the Bard table's Prepared Spells column —
+// 4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20,
+// 21, 22 — at EVERY Cha mod. The 2014 formula (Cha mod + bard level)
+// that this suite used to pin is retired. Bards PREPARE in 2024 —
 // the 2014 known-spells row is removed from SPELLS_KNOWN, so a bard is
 // a prepared caster, never both (keeping the row made Stage 4 route
 // bards as known casters while /api/spells served both counts).
 //
 // Honest tests: getSpellsPrepared / getSpellsKnown come from the real
 // server/config/levelProgression.js — no re-implemented logic. The
-// formula sweep derives the expectation from the rule itself
-// (max(1, mod + level)), and the generated-dataset group reads the
-// real client/src/data/spellCatalog.generated.json and checks it
-// against the live function. If levelProgression.js were deleted, the
-// imports fail and the suite fails with it.
-//
-// NOTE on the printed PHB column: the book's per-level table bakes in
-// its assumed ASI progression, so its values (9 at L5, 22 at L20) do
-// not equal mod + level at any single fixed mod. The arm implements
-// the book's RULE text (Cha mod + bard level), the same treatment as
-// the cleric/druid/wizard arms — so only the coordinator-named pin
-// (L1 = 4 at Cha +3) is asserted against the table, plus the formula
-// sweep. Do not "fix" the arm to the printed column.
+// sweep's expectation is the printed column as a literal (from the
+// brief, checked against Zach's PHB photos), not the code's own
+// constant, and the generated-dataset group reads the real
+// client/src/data/spellCatalog.generated.json and checks it against
+// the live function. If levelProgression.js were deleted, the imports
+// fail and the suite fails with it.
 //
 // The PUT /:id sheet-save and POST /level-up stored-list validators
 // for bard now exist (server/routes/character.js bard blocks,
@@ -44,13 +40,14 @@ const fromRepo = (rel) => pathToFileURL(path.join(repoRoot, rel)).href;
 
 const { getSpellsPrepared, getSpellsKnown } = await import(fromRepo('server/config/levelProgression.js'));
 
-// (a) The arm is Cha mod + bard level, min 1, at every level and mod.
-group('(a) bard arm formula: max(1, Cha mod + bard level), levels 1-20');
+// (a) The arm is the printed column at every level and mod.
+const BARD_COLUMN = [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22];
+group('(a) bard arm: the 2024 Prepared Spells column, levels 1-20, mod-independent');
 {
   let mismatches = 0;
   for (let level = 1; level <= 20; level++) {
     for (const mod of [-5, -1, 0, 1, 3, 5]) {
-      const want = Math.max(1, mod + level);
+      const want = BARD_COLUMN[level - 1];
       const got = getSpellsPrepared('bard', level, mod);
       if (got !== want) {
         mismatches++;
@@ -58,17 +55,18 @@ group('(a) bard arm formula: max(1, Cha mod + bard level), levels 1-20');
       }
     }
   }
-  check(mismatches === 0, `bard arm equals max(1, mod + level) at all 20 levels x mods [-5, -1, 0, 1, 3, 5] (${mismatches} mismatches)`);
+  check(mismatches === 0, `bard arm equals the printed column at all 20 levels x mods [-5, -1, 0, 1, 3, 5] (${mismatches} mismatches)`);
 }
 
-// (b) PHB pins (coordinator-named: L1 = 4 at Cha +3) + the min-1 floor.
-group('(b) PHB pins + min-1 floor');
+// (b) PHB pins: L1 = 4 at every mod; the printed L5 / L20 values.
+group('(b) PHB pins');
 {
   check(getSpellsPrepared('bard', 1, 3) === 4, 'bard L1 at Cha +3 prepares 4 (2024 PHB table)');
-  check(getSpellsPrepared('bard', 1, 0) === 1, 'bard L1 at Cha +0 prepares 1 (floor, not 0)');
-  check(getSpellsPrepared('bard', 1, -1) === 1, 'bard L1 at Cha -1 prepares 1 (min 1, never 0 or negative)');
-  check(getSpellsPrepared('bard', 10, 5) === 15, 'bard L10 at Cha +5 prepares 15');
-  check(getSpellsPrepared('bard', 20, 5) === 25, 'bard L20 at Cha +5 prepares 25 (formula; the printed column assumes ASI progression, see header)');
+  check(getSpellsPrepared('bard', 1, 0) === 4, 'bard L1 at Cha +0 prepares 4 (table; the 2014 formula said 1)');
+  check(getSpellsPrepared('bard', 1, -1) === 4, 'bard L1 at Cha -1 prepares 4 (table, mod-independent)');
+  check(getSpellsPrepared('bard', 1, 5) === 4, 'bard L1 at Cha +5 prepares 4 (table; the 2014 formula said 6)');
+  check(getSpellsPrepared('bard', 5, 0) === 9, 'bard L5 prepares 9 (printed column)');
+  check(getSpellsPrepared('bard', 20, 5) === 22, 'bard L20 prepares 22 (printed column; the 2014 formula said 25 at +5)');
 }
 
 // (c) Bard is a prepared caster, never a known caster.
@@ -85,8 +83,8 @@ group('(c) bard prepares — getSpellsKnown returns null at every level');
 // (d) No regression on the sibling arms.
 group('(d) sibling arms unchanged');
 {
-  check(getSpellsPrepared('cleric', 1, 3) === 4 && getSpellsPrepared('wizard', 5, 2) === 7,
-    'cleric/wizard still max(1, mod + level)');
+  check(getSpellsPrepared('cleric', 1, 0) === 4 && getSpellsPrepared('wizard', 5, 2) === 9 && getSpellsPrepared('wizard', 16, 0) === 21,
+    'cleric/wizard are their 2024 tables too (H3: cleric L1 4, wizard L5 9, wizard L16 21 — any mod)');
   check(getSpellsPrepared('paladin', 1, 3) === 2 && getSpellsPrepared('paladin', 2, 3) === 3,
     'paladin is the 2024 PHB table now (2 at L1, 3 at L2 — mod-independent)');
   check(getSpellsPrepared('artificer', 1, 3) === 3 && getSpellsPrepared('artificer', 10, 2) === 7,
@@ -116,7 +114,7 @@ group('(e) generated dataset agrees with the live arm');
   const generated = JSON.parse(fs.readFileSync(path.join(repoRoot, 'client/src/data/spellCatalog.generated.json'), 'utf8'));
   const bard = generated.level1ByClass.bard;
   check(bard.spellsKnown === null, 'dataset bard spellsKnown is null');
-  check(bard.spellsPrepared?.kind === 'modPlusLevel', `dataset bard prepared rule is modPlusLevel (got ${bard.spellsPrepared?.kind})`);
+  check(bard.spellsPrepared?.kind === 'table', `dataset bard prepared rule is table (got ${bard.spellsPrepared?.kind})`);
   let mismatches = 0;
   for (const mod of [-1, 0, 3, 5]) {
     if (bard.spellsPrepared?.byMod?.[String(mod)] !== getSpellsPrepared('bard', 1, mod)) mismatches++;

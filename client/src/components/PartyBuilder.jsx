@@ -138,21 +138,29 @@ const SUBCLASS_LEVELS = {
 
 // Spellcasting configuration by class
 // Cantrips known and spells known at each level (for "spells known" casters)
-// Prepared casters (cleric, druid, paladin) prepare from full list, so spellsKnown = 'prepared'
+// Prepared casters (bard, cleric, druid, paladin) prepare from full list, so spellsKnown = 'prepared'
+// Bard, Cleric, Druid (H3, 2026-11-23): the 2024 class tables' Prepared
+// Spells column, mod-independent — 4 at L1 -> 22 at L20. Same column as
+// the server's BARD_CLERIC_DRUID_SPELLS_PREPARED (levelProgression.js).
+// Bards prepare in 2024; the 2014 known-spells row is retired here too.
+const BARD_CLERIC_DRUID_PREPARED = [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22]
 const SPELLCASTING_CONFIG = {
   bard: {
     cantripsKnown: { 1: 2, 4: 3, 10: 4 },
-    spellsKnown: { 1: 4, 2: 5, 3: 6, 4: 7, 5: 8, 6: 9, 7: 10, 8: 11, 9: 12, 10: 14 },
+    spellsKnown: 'prepared',
+    preparedTable: BARD_CLERIC_DRUID_PREPARED,
     spellcastingAbility: 'cha'
   },
   cleric: {
     cantripsKnown: { 1: 3, 4: 4, 10: 5 },
-    spellsKnown: 'prepared', // WIS mod + level
+    spellsKnown: 'prepared',
+    preparedTable: BARD_CLERIC_DRUID_PREPARED,
     spellcastingAbility: 'wis'
   },
   druid: {
     cantripsKnown: { 1: 2, 4: 3, 10: 4 },
-    spellsKnown: 'prepared', // WIS mod + level
+    spellsKnown: 'prepared',
+    preparedTable: BARD_CLERIC_DRUID_PREPARED,
     spellcastingAbility: 'wis'
   },
   paladin: {
@@ -202,11 +210,13 @@ const getSpellsKnown = (className, level, abilityMod = 0) => {
   if (config.spellsStartLevel && level < config.spellsStartLevel) return 0
 
   if (config.spellsKnown === 'prepared') {
-    // Prepared casters: ability mod + level (min 1)
+    // 2024 table casters (H3): the Prepared Spells column, no modifier.
+    if (config.preparedTable) return config.preparedTable[level - 1] ?? 0
+    // Paladin here is still the 2014 rule (reported for its own job).
     if (className.toLowerCase() === 'paladin') {
       return Math.max(1, abilityMod + Math.floor(level / 2))
     }
-    return Math.max(1, abilityMod + level)
+    return 0
   }
   if (config.spellsKnown === 'spellbook') {
     // Wizards start with 6 spells, +2 per level

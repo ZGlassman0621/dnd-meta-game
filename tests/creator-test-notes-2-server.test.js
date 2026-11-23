@@ -150,8 +150,8 @@ const CLERIC_PACKAGE = { gear_choice: 'packages', package_id: 'A', package_picks
 
 // Per-theme dwarf cleric: finals recomputed from the REAL theme ASI,
 // skills = the theme's two signature skills + the first cleric
-// option not already among them, prepared count from the resulting
-// Wis mod.
+// option not already among them, prepared count from the 2024
+// cleric table (4 at L1, any Wis mod).
 function clericBodyForTheme(themeId, overrides = {}) {
   const theme = resolveTheme(themeId);
   assert(theme, `fixture theme ${themeId} resolves`);
@@ -162,7 +162,7 @@ function clericBodyForTheme(themeId, overrides = {}) {
   }
   const sigs = [theme.signature_skill_1, theme.signature_skill_2];
   const extra = ['History', 'Insight', 'Medicine', 'Persuasion', 'Religion'].find((s) => !sigs.includes(s));
-  const prepCount = Math.max(1, Math.floor((finals.wis - 10) / 2) + 1);
+  const prepCount = 4; // 2024 cleric table: 4 at L1 at any Wis mod (H3, 2026-11-23)
   const prepared = ['bless', 'cure wounds', 'guiding bolt', 'shield of faith', 'sanctuary'].slice(0, prepCount);
   return {
     creator: MARKER,

@@ -2,15 +2,13 @@
  * Druid class service — prepared-spell validation ONLY (mechanics
  * hooks Family 3, 2026-11-09, staged — NOT pushed, NOT gated).
  *
- * 2024 PHB rule: a druid prepares a number of druid spells equal
- * to their Wisdom modifier + their druid level, minimum 1.
- * Verified at build against the live build, not carried from the
- * 2014 table: `server/config/levelProgression.js`
- * getSpellsPrepared has no druid arm and falls through to
- * `Math.max(1, mod + lvl)` for druids (same fall-through as
- * cleric and wizard), and the wizard PUT block in
- * server/routes/character.js states the same formula for the
- * wizard's Int-mod twin. Zach's physical-book check at the gate
+ * 2024 PHB rule (H3, Zach 2026-11-12; corrected 2026-11-23): a druid
+ * prepares the number in the Druid Features table's Prepared Spells
+ * column — 4 at L1 -> 22 at L20 (BARD_CLERIC_DRUID_SPELLS_PREPARED
+ * in server/config/levelProgression.js), the same at every Wisdom
+ * modifier. The 2014 formula (Wis mod + druid level) is retired.
+ * This agrees with getSpellsPrepared's druid arm at every level and
+ * modifier (tests/h2-h3-2024-rules.test.js). Zach's physical-book check at the gate
  * remains the final word (the druid circle lists are gateCheck
  * in the registry).
  *
@@ -30,10 +28,14 @@
  * NOT the artificer order (level first, mod last). Callers must
  * not mix the two orders.
  */
+import { BARD_CLERIC_DRUID_SPELLS_PREPARED } from '../config/levelProgression.js';
+
+// 2024 PHB table: the Prepared Spells column. wisMod is accepted
+// (callers pass it) and ignored — the cap is mod-independent.
 export function preparedSpellsMax(wisMod, druidLevel) {
+  void wisMod;
   const level = Math.min(20, Math.max(1, Math.trunc(druidLevel) || 1));
-  const mod = Number.isFinite(Number(wisMod)) ? Math.trunc(Number(wisMod)) : 0;
-  return Math.max(1, mod + level);
+  return BARD_CLERIC_DRUID_SPELLS_PREPARED[level - 1];
 }
 
 export function validatePreparedSpells(wisMod, level, preparedList, alwaysPreparedList) {

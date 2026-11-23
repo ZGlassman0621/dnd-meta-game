@@ -2171,7 +2171,7 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
                 alignItems: 'center',
                 gap: '0.25rem'
               }}
-              title="Ask the DM for a long rest (8 hours) — the DM narrates it and applies it: HP and spell slots restored, half your spent hit dice back, exhaustion down one"
+              title="Ask the DM for a long rest (8 hours) — the DM narrates it and applies it: HP and spell slots restored, all your spent hit dice back, exhaustion down one"
             >
               <span>🌙</span>
               <span>Long Rest</span>

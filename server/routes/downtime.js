@@ -339,7 +339,7 @@ const REST_TYPES = {
     duration: 8, // 8 hours
     description: 'A period of extended rest, at least 8 hours long, during which you sleep for at least 6 hours and perform no more than 2 hours of light activity.',
     benefits: {
-      hitDice: false, // Regain half your Hit Dice (handled separately)
+      hitDice: false, // Regain all spent Hit Dice (2024; applied by restTimeService.applyDowntimeRest)
       hpPercent: 100, // Recover all HP
       abilities: 'long_rest' // Most abilities recharge
     }
@@ -1115,7 +1115,7 @@ async function calculateBenefits(downtime, character, activity) {
         benefits.description = `Your ${restTypeData.name.toLowerCase()} was interrupted! Lost ${damage} HP`;
         benefits.restInterrupted = true;
       } else if (isLongRest) {
-        // LONG REST: Recover all HP, regain half Hit Dice
+        // LONG REST: Recover all HP; all spent Hit Dice come back in applyDowntimeRest (2024, H2)
         // Calculate HP to restore (100% of missing HP for long rest)
         const missingHp = character.max_hp - character.current_hp;
 

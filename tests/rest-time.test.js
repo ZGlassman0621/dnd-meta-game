@@ -4,7 +4,8 @@
  * Pins:
  *   - migration 082 spent-hit-dice columns;
  *   - hit-dice math: Dice= honored exactly, auto-spend stops at half HP,
- *     availability respected, long-rest regain = half total (min 1);
+ *     availability respected, long-rest regain = ALL spent dice (2024; H2,
+ *     2026-11-23 — was half total, min 1);
  *   - TIME_ADVANCE through the service: world clock moves, session
  *     elapsed accumulates, outcomes stash for next-turn injection;
  *   - rests through the service: long rest restores HP/slots/temp HP and
@@ -117,16 +118,16 @@ group('2. spendHitDice — the dice policy (Zach: Dice= or auto-to-half)');
 }
 
 // ---------------------------------------------------------------------------
-group('3. hitDiceRegain — long rest returns half the pool (min 1)');
+group('3. hitDiceRegain — long rest regains ALL spent dice (2024 PHB; H2)');
 {
   const r1 = rt.hitDiceRegain({ d8: 5 }, { d8: 4 });
-  assert(r1.d8 === 2, 'pool 5, spent 4 → regain 2, 2 still spent');
+  assert(rt.totalDice(r1) === 0, 'pool 5, spent 4 → all 4 regained, none still spent');
   const r2 = rt.hitDiceRegain({ d6: 1 }, { d6: 1 });
-  assert(Object.keys(r2).length === 0, 'pool 1 → regain the minimum 1');
-  const r3 = rt.hitDiceRegain({}, { d8: 2 });
-  assert(r3.d8 === 2, 'no pool → nothing regained, nothing invented');
+  assert(Object.keys(r2).length === 0, 'pool 1, spent 1 → regained');
+  const r0 = rt.hitDiceRegain({ d8: 3 }, {});
+  assert(rt.totalDice(r0) === 0, 'nothing spent → nothing to regain (used stays empty, never negative)');
   const r4 = rt.hitDiceRegain({ d10: 4, d8: 2 }, { d10: 3, d8: 1 });
-  assert(rt.totalDice(r4) === 1, 'pool 6 → regain 3 of 4 spent (largest dice first)');
+  assert(rt.totalDice(r4) === 0, 'multiclass pool 6, spent 4 → all 4 regained, every die size');
 }
 
 // ---------------------------------------------------------------------------
@@ -196,11 +197,11 @@ group('6. Long rest — the whole party, fully restored, clock +8h');
   const pc = await dbGet('SELECT current_hp, temp_hp, spell_slots_used, hit_dice_used FROM characters WHERE id = ?', [pcId]);
   assert(pc.current_hp === 30 && pc.temp_hp === 0, 'PC: HP full, temp HP cleared');
   assert(pc.spell_slots_used === '{}', 'PC: spell slots restored');
-  assert(JSON.parse(pc.hit_dice_used).d10 === 1, 'PC: regained 2 of 3 spent dice (half of pool 4)');
+  assert(rt.totalDice(JSON.parse(pc.hit_dice_used)) === 0, 'PC: regained all 3 spent dice (2024 rule; was 2 of 3)');
 
   const comp = await dbGet('SELECT companion_current_hp, companion_spell_slots_used, companion_hit_dice_used FROM companions WHERE id = ?', [lyraId]);
   assert(comp.companion_current_hp === 20 && comp.companion_spell_slots_used === '{}', 'companion: HP full, slots restored');
-  assert(JSON.parse(comp.companion_hit_dice_used).d8 === 1, 'companion: regained 1 spent die (half of pool 3, min 1)');
+  assert(rt.totalDice(JSON.parse(comp.companion_hit_dice_used)) === 0, 'companion: regained both spent dice (2024 rule; was 1 of 2)');
   assert(rt.formatTimeEventBlock(r.event).includes('LONG REST'), 'outcome block is a LONG REST fact');
 }
 
@@ -293,7 +294,7 @@ group('9. Long rest — mythic power + exhaustion (rest consolidation, 2026-11-0
   const pc = await dbGet('SELECT current_hp, temp_hp, spell_slots_used, hit_dice_used, active_conditions FROM characters WHERE id = ?', [mythId]);
   assert(pc.current_hp === 30 && pc.temp_hp === 0, 'PC: HP full, temp HP cleared');
   assert(pc.spell_slots_used === '{}', 'PC: spell slots restored');
-  assert(JSON.parse(pc.hit_dice_used).d10 === 1, 'PC: regained 2 of 3 spent dice (half of pool 4)');
+  assert(rt.totalDice(JSON.parse(pc.hit_dice_used)) === 0, 'PC: regained all 3 spent dice (2024 rule; was 2 of 3)');
   const myth = await dbGet('SELECT mythic_power_used FROM mythic_characters WHERE character_id = ?', [mythId]);
   assert(myth.mythic_power_used === 0, 'PC: mythic power reset to 0 (was 2)');
   assert(JSON.stringify(JSON.parse(pc.active_conditions || '[]')) === JSON.stringify(['exhaustion_1']),
@@ -864,11 +865,11 @@ group('15. applyDowntimeRest — the DM rest effect set, minus HP/clock (Job B, 
   const clockAfter = await sched.getClock(null);
   assert(r.success === true && r.slotsRestored === true, 'downtime long rest succeeds and restores slots');
   assert(r.arcaneRecoveryReset === true, 'downtime long rest reports the Arcane flag cleared');
-  assert(r.diceRegained === 2, 'downtime long rest regains 2 of 3 spent dice (half of pool 5)');
+  assert(r.diceRegained === 3, 'downtime long rest regains all 3 spent dice (2024 rule; was 2 of 3)');
   assert(r.exhaustionAfter === 1, 'downtime long rest steps exhaustion 2 -> 1');
   const wizAfter = await readDown(wizId);
   assert(wizAfter.spell_slots_used === '{}', 'downtime long rest restores every slot');
-  assert(JSON.parse(wizAfter.hit_dice_used).d6 === 1, 'downtime long rest regains the dice in the DB');
+  assert(rt.totalDice(JSON.parse(wizAfter.hit_dice_used)) === 0, 'downtime long rest regains every spent die in the DB');
   assert(wizAfter.temp_hp === 0, 'downtime long rest clears temp HP');
   assert(wizAfter.current_hp === 10, 'downtime long rest does NOT touch HP (applyBenefits owns HP)');
   assert(await flagOf(wizId) === false, 'the Arcane used-flag is gone after a downtime long rest');

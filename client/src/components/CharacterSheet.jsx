@@ -737,11 +737,15 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     const className = character.class?.toLowerCase()
     const abilityKey = classData.spellcasting.ability?.toLowerCase().slice(0, 3)
     const mod = Math.floor((abilities[abilityKey] - 10) / 2)
-    if (className === 'cleric' || className === 'druid') return Math.max(1, mod + character.level)
-    if (className === 'wizard') return Math.max(1, mod + character.level)
-    // Bard (2024 PHB): Cha mod + bard level, min 1 — the bardService
-    // formula (L1 at Cha +3 = 4). No slot gate: a L1 bard has slots.
-    if (className === 'bard') return Math.max(1, mod + character.level)
+    // Bard, Cleric, Druid, Wizard (2024 PHB class tables, Prepared
+    // Spells column; H3, 2026-11-23): fixed per level, no ability
+    // modifier — 4 at L1 for all four. Must agree with the server's
+    // BARD_CLERIC_DRUID_SPELLS_PREPARED / WIZARD_SPELLS_PREPARED
+    // (levelProgression.js). The 2014 mod + level formula is retired.
+    const BARD_CLERIC_DRUID_PREPARED = [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22]
+    const WIZARD_PREPARED = [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 18, 19, 21, 22, 23, 24, 25]
+    if (className === 'bard' || className === 'cleric' || className === 'druid') return BARD_CLERIC_DRUID_PREPARED[character.level - 1] ?? 0
+    if (className === 'wizard') return WIZARD_PREPARED[character.level - 1] ?? 0
     // Paladin (2024 PHB, pp. 109-110): table-driven — the Prepared
     // Spells column, 2 at L1. A 2024 L1 paladin HAS two 1st-level
     // slots, so there is no L1 -> 0 special case.

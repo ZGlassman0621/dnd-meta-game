@@ -64,7 +64,8 @@ function titleCaseSpellKey(key) {
 //                     0 at level 1). Paladin used to be here too — the 2024
 //                     PHB gives it two 1st-level slots and a prepared
 //                     count of 2 at L1, so it now evaluates to 'table'.
-//   modPlusLevel    — max(1, mod + level) at level 1 (cleric, druid, wizard)
+//   modPlusLevel    — max(1, mod + level) at level 1 (no class since H3,
+//                     2026-11-23: bard/cleric/druid/wizard are tables)
 //   modPlusHalfLevel— max(1, mod + half level) at level 1 (artificer)
 //   table           — fallback: the evaluated numbers, if no formula fits
 // byMod carries the exact evaluated numbers either way, so the client

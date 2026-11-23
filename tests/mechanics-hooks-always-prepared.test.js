@@ -3,10 +3,10 @@
 // GET /api/spells alwaysPrepared envelope (2026-11-09, staged —
 // NOT pushed, NOT gated).
 //
-// 2024 PHB rule (verified at build against the live build, not
-// carried from the 2014 table): a cleric prepares Wis mod +
-// cleric level spells, min 1; a druid prepares Wis mod + druid
-// level, min 1. The caps in the new services agree with
+// 2024 PHB rule (H3, Zach 2026-11-12; corrected 2026-11-23): a
+// cleric or druid prepares the number in its class table's Prepared
+// Spells column — 4 at L1 -> 22 at L20, at any Wis mod (the 2014 Wis
+// mod + level formula is retired). The caps in the new services agree with
 // levelProgression.getSpellsPrepared at every level and mod
 // (group (a) pins that agreement, so a drift in either file
 // fails here). Domain / circle spells are ALWAYS PREPARED and
@@ -25,8 +25,8 @@
 //      player prepares COUNTS, and the /api/spells envelope lists
 //      only Contact Other Plane at 9th+ for warlocks.
 //  (3) Multiclass levels count via class_levels (D6): a
-//      cleric-3 / fighter-2 caps at Wis mod + 3 (the cleric
-//      level), not Wis mod + 5 (the total level).
+//      cleric-3 / fighter-2 caps at the L3 table value (6), not
+//      the L5 value (9 — the total level).
 //
 // Honest integration tests: the caps come from the real
 // levelProgression.js tables and the real clericService.js /
@@ -98,8 +98,9 @@ function readPrepared(id) {
   return readCharacter(id).then((r) => JSON.parse(r.prepared_spells || '[]'));
 }
 
-// Wis +3 (score 16) at every level used below, so the cap moves
-// only with level.
+// Wis +3 (score 16) at every level used below. Since H3 (2026-11-23)
+// the cap is the 2024 Prepared Spells column and ignores the mod:
+// L1 4, L3 6, L5 9, L6 10.
 const WIS3_SCORES = { str: 10, dex: 10, con: 14, int: 10, wis: 16, cha: 10 };
 const CHA3_SCORES = { str: 10, dex: 10, con: 14, int: 10, wis: 10, cha: 16 };
 
@@ -122,6 +123,11 @@ const DRUID8 = ['Entangle', 'Faerie Fire', 'Goodberry', 'Healing Word', 'Moonbea
 // 8 counted druid picks for the Moon test — Moonbeam excluded from
 // the counted set because it IS a Moon circle spell.
 const DRUID8_MOON = ['Entangle', 'Faerie Fire', 'Goodberry', 'Healing Word', 'Flaming Sphere', 'Pass without Trace', 'Call Lightning', 'Conjure Animals'];
+// 9-pick lists (the L5 cap since H3): one more real spell each, none
+// of them an always-prepared domain or circle spell.
+const CLERIC9 = [...CLERIC8, 'Zone of Truth'];
+const DRUID9 = [...DRUID8, 'Barkskin'];
+const DRUID9_MOON = [...DRUID8_MOON, 'Barkskin'];
 
 async function makeCharacter({ name, cls, level, scores = null, subclass = null, classLevels = null }) {
   const created = await req('POST', '/api/character', { name, class: cls, race: 'human' });
@@ -157,8 +163,8 @@ async function seedSubclassChoices(id, choices) {
 }
 
 // ===========================================================================
-// (a) Server caps: Wis mod + class level, min 1 — agreeing with
-// getSpellsPrepared at every level and mod
+// (a) Server caps: the 2024 Prepared Spells column (H3) — agreeing
+// with getSpellsPrepared at every level and mod
 // ===========================================================================
 group('(a) preparedSpellsMax agrees with getSpellsPrepared (cleric + druid)');
 {
@@ -171,11 +177,11 @@ group('(a) preparedSpellsMax agrees with getSpellsPrepared (cleric + druid)');
   }
   check(mismatches === 0, `cleric/druid preparedSpellsMax = getSpellsPrepared at L1-20, mods [-2,-1,0,1,3,5] (${mismatches} mismatches)`);
   check(clericPreparedMax(3, 1) === 4, 'spot: cleric L1 at Wis +3 prepares 4');
-  check(clericPreparedMax(3, 5) === 8, 'spot: cleric L5 at Wis +3 prepares 8');
-  check(druidPreparedMax(3, 5) === 8, 'spot: druid L5 at Wis +3 prepares 8');
-  check(clericPreparedMax(5, 20) === 25, 'spot: cleric L20 at Wis +5 prepares 25');
-  check(clericPreparedMax(-1, 1) === 1, 'spot: cleric L1 at Wis -1 still prepares 1 (min 1)');
-  check(druidPreparedMax(-2, 2) === 1, 'spot: druid L2 at Wis -2 still prepares 1 (min 1)');
+  check(clericPreparedMax(3, 5) === 9, 'spot: cleric L5 prepares 9 (table)');
+  check(druidPreparedMax(3, 5) === 9, 'spot: druid L5 prepares 9 (table)');
+  check(clericPreparedMax(5, 20) === 22, 'spot: cleric L20 prepares 22 (table; the 2014 formula said 25 at +5)');
+  check(clericPreparedMax(-1, 1) === 4, 'spot: cleric L1 at Wis -1 prepares 4 (table, mod-independent)');
+  check(druidPreparedMax(-2, 2) === 5, 'spot: druid L2 at Wis -2 prepares 5 (table, mod-independent)');
   // The always-prepared lists the validators exclude come from the
   // registry helpers (verified live in the smoke run): Life L5 is
   // the six spells above; Land polar L5 is the four polar spells;
@@ -192,11 +198,11 @@ group('(a) preparedSpellsMax agrees with getSpellsPrepared (cleric + druid)');
     'druidCircleSpellsAtLevel Moon L5 is the four Moon spells (no land type needed)');
   // Validator shape: over-cap refused with max/counted/over, and
   // the always-prepared exclusion is case-insensitive.
-  const over = validateCleric(3, 5, [...CLERIC8, 'Zone of Truth'], []);
-  check(over.max === 8 && over.counted === 9 && over.ok === false && over.over === 1,
-    `validatePreparedSpells over-cap returns {max 8, counted 9, ok false, over 1} (got ${JSON.stringify(over)})`);
-  const excluded = validateCleric(3, 5, [...CLERIC8, ...LIFE_L5], LIFE_L5);
-  check(excluded.max === 8 && excluded.counted === 8 && excluded.ok === true,
+  const over = validateCleric(3, 5, [...CLERIC9, 'Augury'], []);
+  check(over.max === 9 && over.counted === 10 && over.ok === false && over.over === 1,
+    `validatePreparedSpells over-cap returns {max 9, counted 10, ok false, over 1} (got ${JSON.stringify(over)})`);
+  const excluded = validateCleric(3, 5, [...CLERIC9, ...LIFE_L5], LIFE_L5);
+  check(excluded.max === 9 && excluded.counted === 9 && excluded.ok === true,
     `validatePreparedSpells excludes all six Life spells (got ${JSON.stringify(excluded)})`);
   const cased = validateDruid(3, 5, [...DRUID8, 'fog cloud'], LAND_POLAR_L5);
   check(cased.counted === 8 && cased.ok === true,
@@ -212,7 +218,7 @@ group('(b) GET /api/spells envelope carries alwaysPrepared');
   check(life.status === 200, `/api/spells cleric Life L5 returns 200 (got ${life.status})`);
   check(JSON.stringify(life.json?.alwaysPrepared) === JSON.stringify(LIFE_L5),
     `/api/spells cleric Life L5 alwaysPrepared is the six domain spells (got ${JSON.stringify(life.json?.alwaysPrepared)})`);
-  check(life.json?.spellsPrepared === 8, `/api/spells cleric L5 spellsPrepared at Wis +3 is 8 (got ${life.json?.spellsPrepared})`);
+  check(life.json?.spellsPrepared === 9, `/api/spells cleric L5 spellsPrepared is the table 9 (got ${life.json?.spellsPrepared})`);
   const noSub = await req('GET', '/api/spells?class=cleric&level=5&abilityMod=3');
   check(JSON.stringify(noSub.json?.alwaysPrepared) === JSON.stringify([]),
     '/api/spells cleric with no subclass has alwaysPrepared []');
@@ -245,33 +251,33 @@ group('(b) GET /api/spells envelope carries alwaysPrepared');
 // ===========================================================================
 group('(c) PUT /:id enforces the cleric cap');
 {
-  // L5 Life cleric, Wis +3: cap 8. Eight picks save; nine refuse
+  // L5 Life cleric: cap 9 (table). Nine picks save; ten refuse
   // 400 naming preparedSpells, and the row is unchanged.
   const cle5 = await makeCharacter({ name: 'CleFive', cls: 'cleric', level: 5, scores: WIS3_SCORES, subclass: 'Life Domain' });
-  const ok8 = await req('PUT', `/api/character/${cle5}`, { prepared_spells: J(CLERIC8) });
-  check(ok8.status === 200, `PUT 8 spells on an L5 Life cleric (cap 8) persists 200 (got ${ok8.status}: ${JSON.stringify(ok8.json?.error || '')})`);
-  check(JSON.stringify(await readPrepared(cle5)) === JSON.stringify(CLERIC8),
-    'at-cap L5 PUT stored the 8 picks');
-  const over9 = await req('PUT', `/api/character/${cle5}`, { prepared_spells: J([...CLERIC8, 'Zone of Truth']) });
+  const ok8 = await req('PUT', `/api/character/${cle5}`, { prepared_spells: J(CLERIC9) });
+  check(ok8.status === 200, `PUT 9 spells on an L5 Life cleric (cap 9) persists 200 (got ${ok8.status}: ${JSON.stringify(ok8.json?.error || '')})`);
+  check(JSON.stringify(await readPrepared(cle5)) === JSON.stringify(CLERIC9),
+    'at-cap L5 PUT stored the 9 picks');
+  const over9 = await req('PUT', `/api/character/${cle5}`, { prepared_spells: J([...CLERIC9, 'Augury']) });
   check(over9.status === 400,
-    `PUT 9 spells on an L5 Life cleric (cap 8) refuses 400 (got ${over9.status})`);
-  check(typeof over9.json?.error === 'string' && over9.json.error.includes('preparedSpells') && over9.json.error.includes('at most 8') && over9.json.error.includes('got 9'),
-    `L5 PUT refusal names preparedSpells, cap 8, got 9 (got ${JSON.stringify(over9.json?.error)})`);
-  check(JSON.stringify(await readPrepared(cle5)) === JSON.stringify(CLERIC8),
+    `PUT 10 spells on an L5 Life cleric (cap 9) refuses 400 (got ${over9.status})`);
+  check(typeof over9.json?.error === 'string' && over9.json.error.includes('preparedSpells') && over9.json.error.includes('at most 9') && over9.json.error.includes('got 10'),
+    `L5 PUT refusal names preparedSpells, cap 9, got 10 (got ${JSON.stringify(over9.json?.error)})`);
+  check(JSON.stringify(await readPrepared(cle5)) === JSON.stringify(CLERIC9),
     'refused L5 PUT left the stored prepared list unchanged');
-  // Domain spells do not count: 8 picks + all six Life spells save
-  // (counted 8); 9 picks + all six refuse (counted 9).
-  const withDomain = await req('PUT', `/api/character/${cle5}`, { prepared_spells: J([...CLERIC8, ...LIFE_L5]) });
-  check(withDomain.status === 200, `PUT 8 picks + six Life domain spells on an L5 Life cleric persists 200 (got ${withDomain.status}: ${JSON.stringify(withDomain.json?.error || '')})`);
-  const overDomain = await req('PUT', `/api/character/${cle5}`, { prepared_spells: J([...CLERIC8, 'Zone of Truth', ...LIFE_L5]) });
+  // Domain spells do not count: 9 picks + all six Life spells save
+  // (counted 9); 10 picks + all six refuse (counted 10).
+  const withDomain = await req('PUT', `/api/character/${cle5}`, { prepared_spells: J([...CLERIC9, ...LIFE_L5]) });
+  check(withDomain.status === 200, `PUT 9 picks + six Life domain spells on an L5 Life cleric persists 200 (got ${withDomain.status}: ${JSON.stringify(withDomain.json?.error || '')})`);
+  const overDomain = await req('PUT', `/api/character/${cle5}`, { prepared_spells: J([...CLERIC9, 'Augury', ...LIFE_L5]) });
   check(overDomain.status === 400,
-    `PUT 9 picks + six Life domain spells on an L5 Life cleric refuses 400 (got ${overDomain.status})`);
-  check(typeof overDomain.json?.error === 'string' && overDomain.json.error.includes('at most 8') && overDomain.json.error.includes('got 9'),
-    `L5 PUT refusal counts 9 against cap 8 with domain spells present (got ${JSON.stringify(overDomain.json?.error)})`);
+    `PUT 10 picks + six Life domain spells on an L5 Life cleric refuses 400 (got ${overDomain.status})`);
+  check(typeof overDomain.json?.error === 'string' && overDomain.json.error.includes('at most 9') && overDomain.json.error.includes('got 10'),
+    `L5 PUT refusal counts 10 against cap 9 with domain spells present (got ${JSON.stringify(overDomain.json?.error)})`);
   // Case-insensitive exclusion: 'bless' typed lowercase is still a
   // domain spell and does not count.
-  const lowerDomain = await req('PUT', `/api/character/${cle5}`, { prepared_spells: J([...CLERIC8, 'bless']) });
-  check(lowerDomain.status === 200, `PUT 8 picks + 'bless' (lowercase) on an L5 Life cleric persists 200 (got ${lowerDomain.status}: ${JSON.stringify(lowerDomain.json?.error || '')})`);
+  const lowerDomain = await req('PUT', `/api/character/${cle5}`, { prepared_spells: J([...CLERIC9, 'bless']) });
+  check(lowerDomain.status === 200, `PUT 9 picks + 'bless' (lowercase) on an L5 Life cleric persists 200 (got ${lowerDomain.status}: ${JSON.stringify(lowerDomain.json?.error || '')})`);
 }
 
 // ===========================================================================
@@ -279,35 +285,35 @@ group('(c) PUT /:id enforces the cleric cap');
 // ===========================================================================
 group('(d) PUT /:id enforces the druid cap (Land fail-closed)');
 {
-  // L5 Land druid, Wis +3, stored land_type polar: cap 8. Eight
-  // picks + the four polar spells save (counted 8).
+  // L5 Land druid, stored land_type polar: cap 9 (table). Nine
+  // picks + the four polar spells save (counted 9).
   const dru5 = await makeCharacter({ name: 'DruFive', cls: 'druid', level: 5, scores: WIS3_SCORES, subclass: 'Circle of the Land' });
   await seedSubclassChoices(dru5, { land_type: 'polar' });
-  const ok8 = await req('PUT', `/api/character/${dru5}`, { prepared_spells: J([...DRUID8, ...LAND_POLAR_L5]) });
-  check(ok8.status === 200, `PUT 8 picks + four polar spells on an L5 Land druid (polar stored) persists 200 (got ${ok8.status}: ${JSON.stringify(ok8.json?.error || '')})`);
-  // A temperate land spell is NOT excluded by a polar choice: 8
-  // picks + Lightning Bolt (temperate) is counted 9 and refuses.
-  const wrongLand = await req('PUT', `/api/character/${dru5}`, { prepared_spells: J([...DRUID8, 'Lightning Bolt']) });
+  const ok8 = await req('PUT', `/api/character/${dru5}`, { prepared_spells: J([...DRUID9, ...LAND_POLAR_L5]) });
+  check(ok8.status === 200, `PUT 9 picks + four polar spells on an L5 Land druid (polar stored) persists 200 (got ${ok8.status}: ${JSON.stringify(ok8.json?.error || '')})`);
+  // A temperate land spell is NOT excluded by a polar choice: 9
+  // picks + Lightning Bolt (temperate) is counted 10 and refuses.
+  const wrongLand = await req('PUT', `/api/character/${dru5}`, { prepared_spells: J([...DRUID9, 'Lightning Bolt']) });
   check(wrongLand.status === 400,
-    `PUT 8 picks + Lightning Bolt (temperate, not the stored polar land) refuses 400 (got ${wrongLand.status})`);
-  check(typeof wrongLand.json?.error === 'string' && wrongLand.json.error.includes('at most 8') && wrongLand.json.error.includes('got 9'),
+    `PUT 9 picks + Lightning Bolt (temperate, not the stored polar land) refuses 400 (got ${wrongLand.status})`);
+  check(typeof wrongLand.json?.error === 'string' && wrongLand.json.error.includes('at most 9') && wrongLand.json.error.includes('got 10'),
     `polar-stored PUT refusal counts the temperate spell (got ${JSON.stringify(wrongLand.json?.error)})`);
-  // No stored land type: the polar spells COUNT. Eight picks + Fog
-  // Cloud is counted 9 and refuses.
+  // No stored land type: the polar spells COUNT. Nine picks + Fog
+  // Cloud is counted 10 and refuses.
   const druNoLand = await makeCharacter({ name: 'DruNoLand', cls: 'druid', level: 5, scores: WIS3_SCORES, subclass: 'Circle of the Land' });
-  const noLandOk = await req('PUT', `/api/character/${druNoLand}`, { prepared_spells: J(DRUID8) });
-  check(noLandOk.status === 200, `PUT 8 picks on an L5 Land druid with no stored land type persists 200 (got ${noLandOk.status}: ${JSON.stringify(noLandOk.json?.error || '')})`);
-  const noLandOver = await req('PUT', `/api/character/${druNoLand}`, { prepared_spells: J([...DRUID8, 'Fog Cloud']) });
+  const noLandOk = await req('PUT', `/api/character/${druNoLand}`, { prepared_spells: J(DRUID9) });
+  check(noLandOk.status === 200, `PUT 9 picks on an L5 Land druid with no stored land type persists 200 (got ${noLandOk.status}: ${JSON.stringify(noLandOk.json?.error || '')})`);
+  const noLandOver = await req('PUT', `/api/character/${druNoLand}`, { prepared_spells: J([...DRUID9, 'Fog Cloud']) });
   check(noLandOver.status === 400,
-    `PUT 8 picks + Fog Cloud on an L5 Land druid with no stored land type refuses 400 (got ${noLandOver.status})`);
-  check(typeof noLandOver.json?.error === 'string' && noLandOver.json.error.includes('at most 8') && noLandOver.json.error.includes('got 9'),
+    `PUT 9 picks + Fog Cloud on an L5 Land druid with no stored land type refuses 400 (got ${noLandOver.status})`);
+  check(typeof noLandOver.json?.error === 'string' && noLandOver.json.error.includes('at most 9') && noLandOver.json.error.includes('got 10'),
     `no-land PUT refusal counts Fog Cloud (got ${JSON.stringify(noLandOver.json?.error)})`);
-  check(JSON.stringify(await readPrepared(druNoLand)) === JSON.stringify(DRUID8),
+  check(JSON.stringify(await readPrepared(druNoLand)) === JSON.stringify(DRUID9),
     'refused no-land PUT left the stored prepared list unchanged');
-  // Moon druid: 8 picks + the four Moon spells save (counted 8).
+  // Moon druid: 9 picks + the four Moon spells save (counted 9).
   const moon5 = await makeCharacter({ name: 'DruMoon', cls: 'druid', level: 5, scores: WIS3_SCORES, subclass: 'Circle of the Moon' });
-  const moonOk = await req('PUT', `/api/character/${moon5}`, { prepared_spells: J([...DRUID8_MOON, ...MOON_L5]) });
-  check(moonOk.status === 200, `PUT 8 picks + four Moon spells on an L5 Moon druid persists 200 (got ${moonOk.status}: ${JSON.stringify(moonOk.json?.error || '')})`);
+  const moonOk = await req('PUT', `/api/character/${moon5}`, { prepared_spells: J([...DRUID9_MOON, ...MOON_L5]) });
+  check(moonOk.status === 200, `PUT 9 picks + four Moon spells on an L5 Moon druid persists 200 (got ${moonOk.status}: ${JSON.stringify(moonOk.json?.error || '')})`);
 }
 
 // ===========================================================================
@@ -371,43 +377,44 @@ group('(e) PUT skips: the validator only governs primary clerics/druids');
 // ===========================================================================
 group('(f) level-up re-check: over-cap stored list blocks, level unchanged');
 {
-  // Cleric L5 -> L6, Wis +3, with 10 spells stored: over the L6 cap
-  // (9). Refuses 400, the level stays 5, the list is unchanged.
+  // Cleric L5 -> L6 with 11 spells stored: over the L6 cap (10, the
+  // table). Refuses 400, the level stays 5, the list is unchanged.
   const cle = await makeCharacter({ name: 'CleLevel', cls: 'cleric', level: 5, scores: WIS3_SCORES, subclass: 'Life Domain' });
   await db.dbRun('UPDATE characters SET experience = ? WHERE id = ?', [getXPToNextLevel(5), cle]);
-  await seedStoredPrepared(cle, [...CLERIC8, 'Zone of Truth', 'Dispel Magic']);
+  await seedStoredPrepared(cle, [...CLERIC8, 'Zone of Truth', 'Dispel Magic', 'Augury']);
   const up = await req('POST', `/api/character/level-up/${cle}`, {});
   check(up.status === 400,
-    `level-up L5->6 with 10 stored spells (L6 cap 9) refuses 400 (got ${up.status}: ${JSON.stringify(up.json?.error || '')})`);
+    `level-up L5->6 with 11 stored spells (L6 cap 10) refuses 400 (got ${up.status}: ${JSON.stringify(up.json?.error || '')})`);
   check(typeof up.json?.error === 'string' && up.json.error.includes('preparedSpells'),
     `level-up refusal names preparedSpells (got ${JSON.stringify(up.json?.error)})`);
   check(typeof up.json?.error === 'string' && up.json.error.includes('fix the prepared list on the character sheet'),
     `level-up refusal carries the fix-on-the-sheet message (got ${JSON.stringify(up.json?.error)})`);
   const row = await readCharacter(cle);
   check(row.level === 5, 'refused level-up left the level at 5');
-  check(JSON.parse(row.prepared_spells).length === 10,
+  check(JSON.parse(row.prepared_spells).length === 11,
     'refused level-up left the over-cap stored prepared list unchanged');
   // Domain spells do not block the L5 -> L6 level-up: 8 counted
-  // picks + the six Life spells count 8 against the L6 cap of 9.
+  // picks + the six Life spells count 8 against the L6 cap of 10
+  // (without the exclusion the 14 would refuse).
   const cleOk = await makeCharacter({ name: 'CleLevelOk', cls: 'cleric', level: 5, scores: WIS3_SCORES, subclass: 'Life Domain' });
   await db.dbRun('UPDATE characters SET experience = ? WHERE id = ?', [getXPToNextLevel(5), cleOk]);
   await seedStoredPrepared(cleOk, [...CLERIC8, ...LIFE_L5]);
   const upOk = await req('POST', `/api/character/level-up/${cleOk}`, {});
   check(upOk.status === 200,
-    `level-up L5->6 with 8 picks + six Life spells (counted 8 = L6 cap 9) succeeds 200 (got ${upOk.status}: ${JSON.stringify(upOk.json?.error || '')})`);
+    `level-up L5->6 with 8 picks + six Life spells (counted 8, L6 cap 10) succeeds 200 (got ${upOk.status}: ${JSON.stringify(upOk.json?.error || '')})`);
   check((await readCharacter(cleOk)).level === 6, 'domain-excluded level-up raised the level to 6');
   // Druid Land L5 -> L6 with a stored polar land: 8 counted picks
-  // + the four polar spells count 8 against the L6 cap of 9.
+  // + the four polar spells count 8 against the L6 cap of 10.
   const dru = await makeCharacter({ name: 'DruLevel', cls: 'druid', level: 5, scores: WIS3_SCORES, subclass: 'Circle of the Land' });
   await db.dbRun('UPDATE characters SET experience = ? WHERE id = ?', [getXPToNextLevel(5), dru]);
   await seedSubclassChoices(dru, { land_type: 'polar' });
   await seedStoredPrepared(dru, [...DRUID8, ...LAND_POLAR_L5]);
   const upDru = await req('POST', `/api/character/level-up/${dru}`, {});
   check(upDru.status === 200,
-    `level-up L5->6 with 8 picks + four polar spells (stored polar, counted 8 = L6 cap 9) succeeds 200 (got ${upDru.status}: ${JSON.stringify(upDru.json?.error || '')})`);
+    `level-up L5->6 with 8 picks + four polar spells (stored polar, counted 8, L6 cap 10) succeeds 200 (got ${upDru.status}: ${JSON.stringify(upDru.json?.error || '')})`);
   check((await readCharacter(dru)).level === 6, 'land-excluded level-up raised the level to 6');
   // Control: the same stored list with NO stored land type blocks
-  // the same level-up (the polar spells count: 12 > L6 cap 9).
+  // the same level-up (the polar spells count: 12 > L6 cap 10).
   const druNoLand = await makeCharacter({ name: 'DruLevelNoLand', cls: 'druid', level: 5, scores: WIS3_SCORES, subclass: 'Circle of the Land' });
   await db.dbRun('UPDATE characters SET experience = ? WHERE id = ?', [getXPToNextLevel(5), druNoLand]);
   await seedStoredPrepared(druNoLand, [...DRUID8, ...LAND_POLAR_L5]);
@@ -423,8 +430,8 @@ group('(f) level-up re-check: over-cap stored list blocks, level unchanged');
 group('(g) multiclass: the cap reads the class level from class_levels');
 {
   // Primary cleric, class_levels cleric 3 / fighter 2 (total level
-  // 5), Wis +3: the cleric cap is Wis mod + CLERIC level 3 = 6,
-  // not Wis mod + total level 5 = 8. Six picks save; seven refuse.
+  // 5): the cleric cap is the table at CLERIC level 3 = 6, not at
+  // total level 5 = 9. Six picks save; seven refuse.
   const multi = await makeCharacter({
     name: 'CleMulti', cls: 'cleric', level: 5, scores: WIS3_SCORES,
     classLevels: [{ class: 'cleric', level: 3, subclass: 'Life Domain' }, { class: 'fighter', level: 2, subclass: null }],

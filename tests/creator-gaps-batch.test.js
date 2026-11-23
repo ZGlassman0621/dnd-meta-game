@@ -518,8 +518,9 @@ group('(i) Item 23: generated dataset matches the server catalog; bundled fallba
     'dataset blackguard prepared rule is zero at L1');
   check(generated.level1ByClass.artificer.spellsPrepared.kind === 'modPlusHalfLevel',
     'dataset artificer prepared rule is mod + half level');
-  check(generated.level1ByClass.cleric.spellsPrepared.kind === 'modPlusLevel',
-    'dataset cleric prepared rule is mod + level');
+  check(generated.level1ByClass.cleric.spellsPrepared.kind === 'table'
+    && Object.values(generated.level1ByClass.cleric.spellsPrepared.byMod).every((v) => v === 4),
+    'dataset cleric prepared rule is the 2024 table at L1 (4 at every mod; H3)');
   // Stage 4 falls back to bundled data when the endpoint fails.
   const stage4Src2 = readRepo('client/src/components/creator-next/Stage4AbilitiesSkillsSpells.jsx');
   check(stage4Src2.includes('bundledSpellData(classId'),

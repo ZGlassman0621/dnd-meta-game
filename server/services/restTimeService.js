@@ -163,22 +163,19 @@ export function spendHitDice({ pool, used, conMod, currentHp, maxHp, diceCount =
 }
 
 /**
- * Long-rest hit-dice regain (5e): recover half your total dice, minimum
- * 1. Returns the new USED map. Deterministic — largest spent dice are
- * recovered first.
+ * Long-rest hit-dice regain (2024 PHB; H2, Zach's ruling 2026-11-12):
+ * a long rest regains ALL spent Hit Dice. The 2014 rule (half your
+ * total, minimum 1) is retired. Returns the new USED map, which is
+ * empty: nothing stays spent, and the pool can never go above its
+ * maximum because "used" only ever counts down to zero. A character
+ * with no spent dice regains none. This is the one place every long
+ * rest regains dice — the PC rest, the companion rest and the
+ * downtime rest all call it.
  */
 export function hitDiceRegain(pool, used) {
-  const total = totalDice(pool);
-  if (total === 0) return { ...(used || {}) };
-  let regain = Math.max(1, Math.floor(total / 2));
-  const newUsed = { ...(used || {}) };
-  for (const die of diceList(newUsed)) {
-    if (regain <= 0) break;
-    newUsed[die] -= 1;
-    regain -= 1;
-    if (newUsed[die] <= 0) delete newUsed[die];
-  }
-  return newUsed;
+  void pool;
+  void used;
+  return {};
 }
 
 function mergeUsed(used, spent) {

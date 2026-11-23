@@ -1,6 +1,7 @@
 // tests/bard-validator-wiring.test.js — bard prepared-spell cap wiring
-// (2026-11-06): the 2024 formula (Cha mod + bard level, min 1; L1 = 4
-// at Cha +3) was enforced only at creation (Stage 4) — the character
+// (2026-11-06): the bard cap (since H3, 2026-11-23, the 2024 Bard
+// table's Prepared Spells column — L1 = 4 at any Cha mod; it was the
+// 2014 Cha mod + level formula before) was enforced only at creation (Stage 4) — the character
 // sheet's bare { prepared_spells } PUT sailed through, and a legacy
 // over-cap list already on a row could sit there until level-up. This
 // build wires the enforcement into the two live surfaces that touch
@@ -18,8 +19,8 @@
 //     into it) re-checks the STORED list against the new level and the
 //     post-ASI Cha mod; over cap -> 400 naming preparedSpells, level
 //     unchanged (no DB writes happen before the check).
-//   - server/services/bardService.js preparedSpellsMax is the plain
-//     2024 formula and agrees with levelProgression.getSpellsPrepared
+//   - server/services/bardService.js preparedSpellsMax is the 2024
+//     table (H3) and agrees with levelProgression.getSpellsPrepared
 //     at every level (bards have full-caster slots at every level, so
 //     the arm's slot gate never fires for bard).
 //   - Magical Secrets (L10) picks are prepared spells: they COUNT
@@ -27,7 +28,7 @@
 //     spells from the Cleric/Druid/Wizard lists). Only always-prepared
 //     spells are excluded — the book's own rule.
 //   - The sheet's getMaxPrepared HAS a bard branch (returns
-//     Math.max(1, Cha mod + bard level); label is "All prepared") —
+//     the 2024 table since H3; label is "All prepared") —
 //     landed by the sheet job 2026-11-07; NOT asserted here (the
 //     sheet-prepared-branches suite owns the sheet assertions).
 //
@@ -111,9 +112,9 @@ function readPrepared(id) {
   return readCharacter(id).then((r) => JSON.parse(r.prepared_spells || '[]'));
 }
 
-// Cha +3 (score 16) at every level used below, so the cap moves only
-// with level: L1 -> 4, L2 -> 5, L5 -> 8, L6 -> 9, L10 -> 13, per the
-// 2024 formula (Cha mod + bard level, min 1).
+// Cha +3 (score 16) at every level used below. Since H3 (2026-11-23)
+// the cap is the Bard table's Prepared Spells column and does not use
+// the mod at all: L1 -> 4, L2 -> 5, L5 -> 9, L6 -> 10, L10 -> 15.
 const CHA3_SCORES = { str: 10, dex: 10, con: 14, int: 10, wis: 10, cha: 16 };
 const CHA_MOD = 3;
 
@@ -129,12 +130,13 @@ const COUNTED_9 = [...COUNTED_8, 'Heroism'];
 const COUNTED_10 = [...COUNTED_9, 'Invisibility'];
 const COUNTED_13 = [...COUNTED_10, 'Hold Person', 'Shatter', 'Hypnotic Pattern'];
 const COUNTED_14 = [...COUNTED_13, 'Fireball'];
+const COUNTED_11 = [...COUNTED_10, 'Suggestion'];
 const CLERIC_10 = ['Cure Wounds', 'Bless', 'Guiding Bolt', 'Healing Word', 'Shield of Faith',
   'Sanctuary', 'Command', 'Inflict Wounds', 'Protection from Evil and Good', 'Detect Magic'];
 // Magical Secrets picks (L10): two spells from other lists — Fireball
-// (Wizard) and Spirit Guardians (Cleric) — sitting INSIDE the cap.
-const MS_13 = [...COUNTED_10, 'Hold Person', 'Fireball', 'Spirit Guardians'];
-const MS_14 = [...MS_13, 'Shatter'];
+// (Wizard) and Spirit Guardians (Cleric) — sitting INSIDE the cap (15).
+const MS_15 = [...COUNTED_10, 'Hold Person', 'Shatter', 'Hypnotic Pattern', 'Fireball', 'Spirit Guardians'];
+const MS_16 = [...MS_15, 'Enthrall'];
 
 async function makeCharacter({ name, cls, level, subclass = null, chaScores = null, classLevels = null }) {
   const created = await req('POST', '/api/character', { name, class: cls, race: 'human' });
@@ -182,16 +184,17 @@ group('(a) bardSubclassSpellsAtLevel (real subclassService import)');
   check(JSON.stringify(bardSubclassSpellsAtLevel('bard', null, 10)) === JSON.stringify([]),
     'no subclass: []');
   // Sanity: the service-level validator the routes call agrees with the
-  // formula at the levels the route tests below use as boundaries, and
+  // table at the levels the route tests below use as boundaries, and
   // excludes an always-prepared name from the count.
   check(preparedSpellsMax(CHA_MOD, 1) === 4, 'cap source: preparedSpellsMax(+3, L1) = 4');
   check(preparedSpellsMax(CHA_MOD, 2) === 5, 'cap source: preparedSpellsMax(+3, L2) = 5');
-  check(preparedSpellsMax(CHA_MOD, 5) === 8, 'cap source: preparedSpellsMax(+3, L5) = 8');
-  check(preparedSpellsMax(CHA_MOD, 10) === 13, 'cap source: preparedSpellsMax(+3, L10) = 13');
-  check(preparedSpellsMax(CHA_MOD, 20) === 23, 'cap source: preparedSpellsMax(+3, L20) = 23');
-  check(preparedSpellsMax(-5, 1) === 1, 'cap source: min-1 floor (Cha -5, L1) = 1, never 0');
-  const v = validatePreparedSpells(CHA_MOD, 5, [...COUNTED_8, 'Moonbeam'], ['Moonbeam']);
-  check(v.ok && v.counted === 8 && v.max === 8, 'validator excludes an always-prepared name from the count');
+  // H3 (2026-11-23): the cap is the Bard table column, any Cha mod.
+  check(preparedSpellsMax(CHA_MOD, 5) === 9, 'cap source: preparedSpellsMax(+3, L5) = 9 (table)');
+  check(preparedSpellsMax(CHA_MOD, 10) === 15, 'cap source: preparedSpellsMax(+3, L10) = 15 (table)');
+  check(preparedSpellsMax(CHA_MOD, 20) === 22, 'cap source: preparedSpellsMax(+3, L20) = 22 (table)');
+  check(preparedSpellsMax(-5, 1) === 4 && preparedSpellsMax(5, 1) === 4, 'cap source: L1 = 4 at Cha -5 and at Cha +5 (mod-independent)');
+  const v = validatePreparedSpells(CHA_MOD, 5, [...COUNTED_9, 'Moonbeam'], ['Moonbeam']);
+  check(v.ok && v.counted === 9 && v.max === 9, 'validator excludes an always-prepared name from the count');
   const v1 = validatePreparedSpells(CHA_MOD, 1, COUNTED_5, []);
   check(!v1.ok && v1.max === 4 && v1.counted === 5, 'validator at L1: max 4, a 5-spell list refuses');
 }
@@ -204,33 +207,33 @@ group('(b) PUT refuses over-cap, persists at-cap (bard L5, Cha +3)');
   const cap5 = preparedSpellsMax(CHA_MOD, 5);
   const bard5 = await makeCharacter({ name: 'BardFive', cls: 'bard', level: 5, chaScores: CHA3_SCORES });
   // Seed a valid list first so the refusal case can prove the row is unchanged.
-  const seed = await req('PUT', `/api/character/${bard5}`, { prepared_spells: J(COUNTED_8) });
+  const seed = await req('PUT', `/api/character/${bard5}`, { prepared_spells: J(COUNTED_9) });
   check(seed.status === 200, `PUT at-cap (${cap5} spells) persists 200 (got ${seed.status})`);
-  check(JSON.stringify(await readPrepared(bard5)) === JSON.stringify(COUNTED_8), 'at-cap list persisted and reads back');
+  check(JSON.stringify(await readPrepared(bard5)) === JSON.stringify(COUNTED_9), 'at-cap list persisted and reads back');
   // One over the cap: 400, error names preparedSpells, row untouched.
-  const over = await req('PUT', `/api/character/${bard5}`, { prepared_spells: J(COUNTED_9) });
-  check(over.status === 400, `PUT ${COUNTED_9.length} spells (cap ${cap5}) refuses 400 (got ${over.status})`);
+  const over = await req('PUT', `/api/character/${bard5}`, { prepared_spells: J(COUNTED_10) });
+  check(over.status === 400, `PUT ${COUNTED_10.length} spells (cap ${cap5}) refuses 400 (got ${over.status})`);
   check(typeof over.json?.error === 'string' && over.json.error.includes('preparedSpells'),
     `PUT refusal names preparedSpells (got ${JSON.stringify(over.json?.error)})`);
-  check(typeof over.json?.error === 'string' && over.json.error.includes(`at most ${cap5}`) && over.json.error.includes('got 9'),
+  check(typeof over.json?.error === 'string' && over.json.error.includes(`at most ${cap5}`) && over.json.error.includes('got 10'),
     `PUT refusal states the cap and count (got ${JSON.stringify(over.json?.error)})`);
   check(typeof over.json?.error === 'string' && over.json.error.includes('bard level 5') && over.json.error.includes('Cha mod 3'),
     `PUT refusal names the bard level and Cha mod (got ${JSON.stringify(over.json?.error)})`);
-  check(JSON.stringify(await readPrepared(bard5)) === JSON.stringify(COUNTED_8),
+  check(JSON.stringify(await readPrepared(bard5)) === JSON.stringify(COUNTED_9),
     'refused PUT left the stored prepared list unchanged');
   // A different at-cap list still saves after the refusal.
-  const again = await req('PUT', `/api/character/${bard5}`, { prepared_spells: J([...COUNTED_8.slice(0, 7), 'Heroism']) });
+  const again = await req('PUT', `/api/character/${bard5}`, { prepared_spells: J([...COUNTED_9.slice(0, 8), 'Invisibility']) });
   check(again.status === 200, 'PUT at-cap again after a refusal persists 200');
-  check(JSON.stringify(await readPrepared(bard5)) === JSON.stringify([...COUNTED_8.slice(0, 7), 'Heroism']),
+  check(JSON.stringify(await readPrepared(bard5)) === JSON.stringify([...COUNTED_9.slice(0, 8), 'Invisibility']),
     'second at-cap list persisted and reads back');
   // The camelCase alias the sheet also sends is validated the same way.
-  const camel = await req('PUT', `/api/character/${bard5}`, { preparedSpells: J(COUNTED_9) });
+  const camel = await req('PUT', `/api/character/${bard5}`, { preparedSpells: J(COUNTED_10) });
   check(camel.status === 400, `PUT via preparedSpells (camelCase) over cap refuses 400 (got ${camel.status})`);
   // The status alone does not discriminate: a camelCase-only body with no
   // wiring ALSO 400s ('No valid fields to update' — the generic UPDATE
   // does not know the camelCase key). The error text is the proof the
   // camelCase body went through the bard validator instead.
-  check(typeof camel.json?.error === 'string' && camel.json.error.includes('preparedSpells') && camel.json.error.includes('may prepare at most 8') && camel.json.error.includes('got 9'),
+  check(typeof camel.json?.error === 'string' && camel.json.error.includes('preparedSpells') && camel.json.error.includes('may prepare at most 9') && camel.json.error.includes('got 10'),
     `camelCase refusal is the bard cap error, not 'No valid fields' (got ${JSON.stringify(camel.json?.error)})`);
 }
 
@@ -257,7 +260,7 @@ group('(b3) PUT cap grows with level — L1 vs L5, same Cha +3');
 {
   const cap1 = preparedSpellsMax(CHA_MOD, 1);
   const cap5 = preparedSpellsMax(CHA_MOD, 5);
-  check(cap1 === 4 && cap5 === 8, `cap source: L1 cap ${cap1}, L5 cap ${cap5} (got ${cap1}/${cap5})`);
+  check(cap1 === 4 && cap5 === 9, `cap source: L1 cap ${cap1}, L5 cap ${cap5} (got ${cap1}/${cap5})`);
   const bard1 = await makeCharacter({ name: 'BardOneB', cls: 'bard', level: 1, chaScores: CHA3_SCORES });
   const over1 = await req('PUT', `/api/character/${bard1}`, { prepared_spells: J(COUNTED_5) });
   check(over1.status === 400, `PUT ${COUNTED_5.length} spells at L1 (cap ${cap1}) refuses 400 (got ${over1.status})`);
@@ -265,7 +268,7 @@ group('(b3) PUT cap grows with level — L1 vs L5, same Cha +3');
   check(at1.status === 200, `PUT ${cap1} spells at L1 persists 200 (got ${at1.status})`);
   check(JSON.stringify(await readPrepared(bard1)) === JSON.stringify(COUNTED_4), 'L1 at-cap list persisted');
   // Same Cha mod, higher level, bigger cap: the L1-refused 5-spell list
-  // is legal at L5 — the boundary moves with the formula, not the mod.
+  // is legal at L5 — the boundary moves with the table, not the mod.
   const bard5b = await makeCharacter({ name: 'BardFiveB', cls: 'bard', level: 5, chaScores: CHA3_SCORES });
   const at5 = await req('PUT', `/api/character/${bard5b}`, { prepared_spells: J(COUNTED_5) });
   check(at5.status === 200, `PUT ${COUNTED_5.length} spells at L5 (cap ${cap5}) persists 200 (got ${at5.status})`);
@@ -281,27 +284,27 @@ group('(b4) PUT — Moon Moonbeam does not count (always prepared, L6)');
   const always6 = bardSubclassSpellsAtLevel('bard', 'College of the Moon', 6);
   check(always6.length === 1 && always6[0] === 'Moonbeam',
     `Moon always-prepared at L6 is just Moonbeam (got ${JSON.stringify(always6)})`);
-  // 9 counted + Moonbeam: counted stays 9 = cap 9.
+  // 10 counted + Moonbeam: counted stays 10 = cap 10.
   const withAlways = await req('PUT', `/api/character/${moon6}`, {
-    prepared_spells: J([...COUNTED_9, 'Moonbeam']),
-  });
-  check(withAlways.status === 200,
-    `PUT 9 counted + Moonbeam persists 200 (got ${withAlways.status}: ${JSON.stringify(withAlways.json?.error || '')})`);
-  check((await readPrepared(moon6)).length === 10, 'all 10 sent names persisted (always-prepared are stored, just not counted)');
-  // Lowercase 'moonbeam' is excluded too (canonicalized match).
-  const lowerAlways = await req('PUT', `/api/character/${moon6}`, {
-    prepared_spells: J([...COUNTED_9, 'moonbeam']),
-  });
-  check(lowerAlways.status === 200,
-    `PUT 9 counted + lowercase 'moonbeam' persists 200 (got ${lowerAlways.status}: ${JSON.stringify(lowerAlways.json?.error || '')})`);
-  // 10 counted + Moonbeam: counted 10 > cap 9 -> 400.
-  const overMoon = await req('PUT', `/api/character/${moon6}`, {
     prepared_spells: J([...COUNTED_10, 'Moonbeam']),
   });
-  check(overMoon.status === 400, `PUT 10 counted + Moonbeam refuses 400 (got ${overMoon.status})`);
-  check(typeof overMoon.json?.error === 'string' && overMoon.json.error.includes('preparedSpells') && overMoon.json.error.includes('got 10'),
-    `Moon refusal names preparedSpells and counts 10 (got ${JSON.stringify(overMoon.json?.error)})`);
-  check((await readPrepared(moon6)).length === 10, 'refused Moon PUT left the stored list unchanged');
+  check(withAlways.status === 200,
+    `PUT 10 counted + Moonbeam persists 200 (got ${withAlways.status}: ${JSON.stringify(withAlways.json?.error || '')})`);
+  check((await readPrepared(moon6)).length === 11, 'all 11 sent names persisted (always-prepared are stored, just not counted)');
+  // Lowercase 'moonbeam' is excluded too (canonicalized match).
+  const lowerAlways = await req('PUT', `/api/character/${moon6}`, {
+    prepared_spells: J([...COUNTED_10, 'moonbeam']),
+  });
+  check(lowerAlways.status === 200,
+    `PUT 10 counted + lowercase 'moonbeam' persists 200 (got ${lowerAlways.status}: ${JSON.stringify(lowerAlways.json?.error || '')})`);
+  // 11 counted + Moonbeam: counted 11 > cap 10 -> 400.
+  const overMoon = await req('PUT', `/api/character/${moon6}`, {
+    prepared_spells: J([...COUNTED_11, 'Moonbeam']),
+  });
+  check(overMoon.status === 400, `PUT 11 counted + Moonbeam refuses 400 (got ${overMoon.status})`);
+  check(typeof overMoon.json?.error === 'string' && overMoon.json.error.includes('preparedSpells') && overMoon.json.error.includes('got 11'),
+    `Moon refusal names preparedSpells and counts 11 (got ${JSON.stringify(overMoon.json?.error)})`);
+  check((await readPrepared(moon6)).length === 11, 'refused Moon PUT left the stored list unchanged');
 }
 
 group('(b5) PUT — Magical Secrets picks COUNT against the cap (L10)');
@@ -309,36 +312,35 @@ group('(b5) PUT — Magical Secrets picks COUNT against the cap (L10)');
   // 2024 PHB: Magical Secrets lets the bard choose new PREPARED spells
   // from the Cleric/Druid/Wizard lists — the picks are prepared spells,
   // not always-prepared extras. Fireball (Wizard) + Spirit Guardians
-  // (Cleric) inside a 13-name list at L10 (cap 13) is legal; a 14th
+  // (Cleric) inside a 15-name list at L10 (cap 15) is legal; a 16th
   // name is not, even though two of the names are off-list picks.
   const cap10 = preparedSpellsMax(CHA_MOD, 10);
-  check(cap10 === 13, `cap source: preparedSpellsMax(+3, L10) = 13 (got ${cap10})`);
+  check(cap10 === 15, `cap source: preparedSpellsMax(+3, L10) = 15 (got ${cap10})`);
   const ms10 = await makeCharacter({ name: 'MsTen', cls: 'bard', level: 10, chaScores: CHA3_SCORES });
-  const msAt = await req('PUT', `/api/character/${ms10}`, { prepared_spells: J(MS_13) });
+  const msAt = await req('PUT', `/api/character/${ms10}`, { prepared_spells: J(MS_15) });
   check(msAt.status === 200,
-    `PUT 13 incl. Fireball + Spirit Guardians (Magical Secrets picks) persists 200 (got ${msAt.status}: ${JSON.stringify(msAt.json?.error || '')})`);
-  check(JSON.stringify(await readPrepared(ms10)) === JSON.stringify(MS_13),
+    `PUT 15 incl. Fireball + Spirit Guardians (Magical Secrets picks) persists 200 (got ${msAt.status}: ${JSON.stringify(msAt.json?.error || '')})`);
+  check(JSON.stringify(await readPrepared(ms10)) === JSON.stringify(MS_15),
     'Magical Secrets picks persisted as part of the prepared list');
-  const msOver = await req('PUT', `/api/character/${ms10}`, { prepared_spells: J(MS_14) });
-  check(msOver.status === 400, `PUT 14 incl. Magical Secrets picks refuses 400 (got ${msOver.status})`);
-  check(typeof msOver.json?.error === 'string' && msOver.json.error.includes('preparedSpells') && msOver.json.error.includes('got 14'),
-    `Magical Secrets refusal counts all 14 (got ${JSON.stringify(msOver.json?.error)})`);
-  check(JSON.stringify(await readPrepared(ms10)) === JSON.stringify(MS_13),
+  const msOver = await req('PUT', `/api/character/${ms10}`, { prepared_spells: J(MS_16) });
+  check(msOver.status === 400, `PUT 16 incl. Magical Secrets picks refuses 400 (got ${msOver.status})`);
+  check(typeof msOver.json?.error === 'string' && msOver.json.error.includes('preparedSpells') && msOver.json.error.includes('got 16'),
+    `Magical Secrets refusal counts all 16 (got ${JSON.stringify(msOver.json?.error)})`);
+  check(JSON.stringify(await readPrepared(ms10)) === JSON.stringify(MS_15),
     'refused Magical Secrets PUT left the stored list unchanged');
 }
 
 group('(b6) PUT skips: non-bard, secondary bard, no list, marker');
 {
-  // Control-cleric Wisdom (2026-11-09, gate fix): the control
-  // cleric must be legal under the CLERIC cap too (Wis mod + cleric
-  // level, #10 cleric PUT validator, character.js) — a Wis-10 L5
-  // cleric caps at 5, so the 10-spell list 400s naming 'cleric' and
-  // the skip under test is never reached. Wis 20 -> cap 10 at L5
-  // (exactly at cap), cap 9 at L4, so the PUT returns 200 only if
-  // the validator under test skips; if it misfired it would still
-  // 400 (its own cap is 5 or less at these levels).
+  // Control cleric (2026-11-09 gate fix; H3 2026-11-23): the control
+  // cleric must be legal under the CLERIC cap too (#10 cleric PUT
+  // validator), or the 10-spell list 400s naming 'cleric' and the skip
+  // under test is never reached. Since H3 the cleric cap is the 2024
+  // table (9 at L5, 10 at L6, any Wis), so the control is L6 — exactly
+  // at cap. The PUT returns 200 only if the bard validator skips; a
+  // misfire would 400 (the bard L1 cap is 4).
   // Non-bard (cleric) with a 10-spell list: no bard cap applies.
-  const cleric5 = await makeCharacter({ name: 'ClericFive', cls: 'cleric', level: 5, chaScores: { ...CHA3_SCORES, wis: 20 } });
+  const cleric5 = await makeCharacter({ name: 'ClericSix', cls: 'cleric', level: 6, chaScores: { ...CHA3_SCORES, wis: 20 } });
   const clericPut = await req('PUT', `/api/character/${cleric5}`, { prepared_spells: J(CLERIC_10) });
   check(clericPut.status === 200, `cleric PUT with ${CLERIC_10.length} prepared spells is unaffected, 200 (got ${clericPut.status})`);
   check(JSON.stringify(await readPrepared(cleric5)) === JSON.stringify(CLERIC_10), 'cleric long list persisted');
@@ -388,24 +390,24 @@ group('(b6) PUT skips: non-bard, secondary bard, no list, marker');
 // ===========================================================================
 group('(c) level-up re-check: over-cap stored list blocks, level unchanged');
 {
-  // Bard L4 -> L5, Cha +3: new cap is preparedSpellsMax(+3, 5) = 8.
+  // Bard L4 -> L5: new cap is preparedSpellsMax(+3, 5) = 9 (table).
   const cap5 = preparedSpellsMax(CHA_MOD, 5);
   const over = await makeCharacter({
     name: 'BardLevelOver', cls: 'bard', level: 4, chaScores: CHA3_SCORES,
   });
   await db.dbRun('UPDATE characters SET experience = ? WHERE id = ?', [getXPToNextLevel(4), over]);
-  await seedStoredPrepared(over, COUNTED_9);
+  await seedStoredPrepared(over, COUNTED_10);
   const blocked = await req('POST', `/api/character/level-up/${over}`, {});
-  check(blocked.status === 400, `level-up with stored ${COUNTED_9.length} spells (new cap ${cap5}) refuses 400 (got ${blocked.status})`);
+  check(blocked.status === 400, `level-up with stored ${COUNTED_10.length} spells (new cap ${cap5}) refuses 400 (got ${blocked.status})`);
   check(typeof blocked.json?.error === 'string' && blocked.json.error.includes('preparedSpells'),
     `level-up refusal names preparedSpells (got ${JSON.stringify(blocked.json?.error)})`);
   check(typeof blocked.json?.error === 'string' && blocked.json.error.includes('fix the prepared list'),
     'level-up refusal tells the player to fix the list on the character sheet');
-  check(typeof blocked.json?.error === 'string' && blocked.json.error.includes(`at most ${cap5}`) && blocked.json.error.includes('got 9'),
+  check(typeof blocked.json?.error === 'string' && blocked.json.error.includes(`at most ${cap5}`) && blocked.json.error.includes('got 10'),
     `level-up refusal states the cap and count (got ${JSON.stringify(blocked.json?.error)})`);
   const overRow = await readCharacter(over);
   check(overRow.level === 4, 'blocked level-up left the level at 4');
-  check(JSON.stringify(JSON.parse(overRow.prepared_spells)) === JSON.stringify(COUNTED_9),
+  check(JSON.stringify(JSON.parse(overRow.prepared_spells)) === JSON.stringify(COUNTED_10),
     'blocked level-up left the stored prepared list unchanged');
 
   // Same shape, valid stored list: 200, level increases to 5.
@@ -413,12 +415,12 @@ group('(c) level-up re-check: over-cap stored list blocks, level unchanged');
     name: 'BardLevelOk', cls: 'bard', level: 4, chaScores: CHA3_SCORES,
   });
   await db.dbRun('UPDATE characters SET experience = ? WHERE id = ?', [getXPToNextLevel(4), valid]);
-  await seedStoredPrepared(valid, COUNTED_8);
+  await seedStoredPrepared(valid, COUNTED_9);
   const ok = await req('POST', `/api/character/level-up/${valid}`, {});
   check(ok.status === 200, `level-up with a valid stored list succeeds 200 (got ${ok.status}: ${JSON.stringify(ok.json?.error || '')})`);
   const okRow = await readCharacter(valid);
   check(okRow.level === 5, 'valid level-up raised the level to 5');
-  check(JSON.stringify(JSON.parse(okRow.prepared_spells)) === JSON.stringify(COUNTED_8),
+  check(JSON.stringify(JSON.parse(okRow.prepared_spells)) === JSON.stringify(COUNTED_9),
     'valid level-up kept the stored prepared list');
 }
 
@@ -462,33 +464,33 @@ group('(c3) level-up skips multiclass INTO bard');
     'multiclass level-up kept the stored prepared list');
 }
 
-group('(c4) level-up Moon exclusion: 9 counted + Moonbeam passes at L6');
+group('(c4) level-up Moon exclusion: 10 counted + Moonbeam passes at L6');
 {
-  // Moon bard L5 -> L6, Cha +3: new cap is preparedSpellsMax(+3, 6) = 9.
-  // Moonbeam becomes always-prepared at 6, so 9 counted + Moonbeam is
-  // exactly at cap; 10 counted + Moonbeam is over.
+  // Moon bard L5 -> L6: new cap is preparedSpellsMax(+3, 6) = 10 (table).
+  // Moonbeam becomes always-prepared at 6, so 10 counted + Moonbeam is
+  // exactly at cap; 11 counted + Moonbeam is over.
   const cap6 = preparedSpellsMax(CHA_MOD, 6);
-  check(cap6 === 9, `cap source: preparedSpellsMax(+3, L6) = 9 (got ${cap6})`);
+  check(cap6 === 10, `cap source: preparedSpellsMax(+3, L6) = 10 (got ${cap6})`);
   const moonOk = await makeCharacter({
     name: 'MoonLevelOk', cls: 'bard', level: 5, subclass: 'College of the Moon', chaScores: CHA3_SCORES,
   });
   await db.dbRun('UPDATE characters SET experience = ? WHERE id = ?', [getXPToNextLevel(5), moonOk]);
-  await seedStoredPrepared(moonOk, [...COUNTED_9, 'Moonbeam']);
+  await seedStoredPrepared(moonOk, [...COUNTED_10, 'Moonbeam']);
   const ok = await req('POST', `/api/character/level-up/${moonOk}`, {});
   check(ok.status === 200,
-    `Moon L5->6 level-up with 9 counted + Moonbeam succeeds 200 (got ${ok.status}: ${JSON.stringify(ok.json?.error || '')})`);
+    `Moon L5->6 level-up with 10 counted + Moonbeam succeeds 200 (got ${ok.status}: ${JSON.stringify(ok.json?.error || '')})`);
   check((await readCharacter(moonOk)).level === 6, 'Moon level-up raised the level to 6');
   const moonOver = await makeCharacter({
     name: 'MoonLevelOver', cls: 'bard', level: 5, subclass: 'College of the Moon', chaScores: CHA3_SCORES,
   });
   await db.dbRun('UPDATE characters SET experience = ? WHERE id = ?', [getXPToNextLevel(5), moonOver]);
-  await seedStoredPrepared(moonOver, [...COUNTED_10, 'Moonbeam']);
+  await seedStoredPrepared(moonOver, [...COUNTED_11, 'Moonbeam']);
   const blocked = await req('POST', `/api/character/level-up/${moonOver}`, {});
-  check(blocked.status === 400, `Moon L5->6 level-up with 10 counted + Moonbeam refuses 400 (got ${blocked.status})`);
-  check(typeof blocked.json?.error === 'string' && blocked.json.error.includes('preparedSpells') && blocked.json.error.includes('got 10'),
-    `Moon level-up refusal names preparedSpells and counts 10 (got ${JSON.stringify(blocked.json?.error)})`);
+  check(blocked.status === 400, `Moon L5->6 level-up with 11 counted + Moonbeam refuses 400 (got ${blocked.status})`);
+  check(typeof blocked.json?.error === 'string' && blocked.json.error.includes('preparedSpells') && blocked.json.error.includes('got 11'),
+    `Moon level-up refusal names preparedSpells and counts 11 (got ${JSON.stringify(blocked.json?.error)})`);
   check((await readCharacter(moonOver)).level === 5, 'blocked Moon level-up left the level at 5');
-  check(JSON.stringify(await readPrepared(moonOver)) === JSON.stringify([...COUNTED_10, 'Moonbeam']),
+  check(JSON.stringify(await readPrepared(moonOver)) === JSON.stringify([...COUNTED_11, 'Moonbeam']),
     'blocked Moon level-up left the stored prepared list unchanged');
 }
 

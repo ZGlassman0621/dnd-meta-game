@@ -234,16 +234,16 @@ group('(b3) PUT — Lumberjack always-prepared spells do not count');
 
 group('(b4) PUT skips: non-artificer, secondary artificer, no list, marker');
 {
-  // Control-cleric Wisdom (2026-11-09, gate fix): the control
-  // cleric must be legal under the CLERIC cap too (Wis mod + cleric
-  // level, #10 cleric PUT validator, character.js) — a Wis-10 L5
-  // cleric caps at 5, so the 10-spell list 400s naming 'cleric' and
-  // the skip under test is never reached. Wis 20 -> cap 10 at L5
-  // (exactly at cap), cap 9 at L4, so the PUT returns 200 only if
-  // the validator under test skips; if it misfired it would still
-  // 400 (its own cap is 5 or less at these levels).
+  // Control cleric (2026-11-09 gate fix; H3 2026-11-23): the control
+  // cleric must be legal under the CLERIC cap too (#10 cleric PUT
+  // validator, character.js), or the 10-spell list 400s naming
+  // 'cleric' and the skip under test is never reached. Since H3 the
+  // cleric cap is the 2024 table (9 at L5, 10 at L6, any Wis), so the
+  // control is L6 — exactly at cap. The PUT returns 200 only if the
+  // artificer validator skips; if it misfired it would still 400 (its
+  // own cap at L6 with Int +3 is 6).
   // Non-artificer (cleric) with a 10-spell list: no artificer cap applies.
-  const cleric5 = await makeCharacter({ name: 'ClericFive', cls: 'cleric', level: 5, intScores: { ...INT3_SCORES, wis: 20 } });
+  const cleric5 = await makeCharacter({ name: 'ClericSix', cls: 'cleric', level: 6, intScores: { ...INT3_SCORES, wis: 20 } });
   const clericPut = await req('PUT', `/api/character/${cleric5}`, { prepared_spells: J(CLERIC_10) });
   check(clericPut.status === 200, `cleric PUT with ${CLERIC_10.length} prepared spells is unaffected, 200 (got ${clericPut.status})`);
   check(JSON.stringify(await readPrepared(cleric5)) === JSON.stringify(CLERIC_10), 'cleric long list persisted');

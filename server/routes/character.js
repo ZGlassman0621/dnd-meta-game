@@ -4103,7 +4103,8 @@ router.put('/:id', async (req, res) => {
     // Stage 4 validator), prepared_spells present, primary bard only;
     // bard-as-secondary multiclass skips — the shared prepared_spells
     // column is governed by the primary class's editor. The cap is the
-    // 2024 PHB formula — Cha mod + bard level, min 1 (L1 = 4 at Cha +3).
+    // 2024 PHB Prepared Spells column, mod-independent (L1 = 4 at any
+    // Cha mod; H3 2026-11-23 — bardService reads the table).
     // College of the Moon's Moonbeam (Blessing of Moonlight, L6) is
     // always prepared and excluded via bardSubclassSpellsAtLevel;
     // Magical Secrets picks are prepared spells and DO count. Never
@@ -4334,9 +4335,9 @@ router.put('/:id', async (req, res) => {
     // through the Stage 4 validator), a spell list present, primary
     // wizard only; wizard-as-secondary multiclass skips — the
     // shared prepared_spells column is governed by the primary
-    // class's editor. The cap is the 2024 PHB formula — Int mod +
-    // wizard level, min 1 (L1 = 4 at Int +3, L5 = 9 at Int +4,
-    // L20 = 25 at Int +5) — no fixed table is stored. The
+    // class's editor. The cap is the 2024 PHB Prepared Spells
+    // column (WIZARD_SPELLS_PREPARED: 4 at L1 -> 25 at L20, the same
+    // at every Int mod; H3 2026-11-23 — wizardService reads it). The
     // always-prepared exclusion is now LIVE: Spell Mastery (L18) /
     // Signature Spells (L20) picks are read from spellbook_json and
     // do not count against the cap. Savant spells go INTO the
@@ -4446,11 +4447,10 @@ router.put('/:id', async (req, res) => {
     // validator), prepared_spells present, primary cleric only;
     // cleric-as-secondary multiclass skips — the shared
     // prepared_spells column is governed by the primary class's
-    // editor. The cap is the 2024 PHB formula — Wis mod + cleric
-    // level, min 1 (L1 = 4 at Wis +3, L5 = 8 at Wis +3, L20 = 25
-    // at Wis +5) — verified at build against
-    // levelProgression.getSpellsPrepared, which falls through to
-    // max(1, mod + lvl) for clerics; no fixed table is stored.
+    // editor. The cap is the 2024 PHB Prepared Spells column
+    // (BARD_CLERIC_DRUID_SPELLS_PREPARED: 4 at L1 -> 22 at L20, the
+    // same at every Wis mod; H3 2026-11-23), agreeing with
+    // levelProgression.getSpellsPrepared's cleric arm.
     // Domain spells are always prepared and excluded via
     // clericDomainSpellsAtLevel. Never trims, never silently fixes.
     if (
@@ -4494,11 +4494,10 @@ router.put('/:id', async (req, res) => {
     // validator), prepared_spells present, primary druid only;
     // druid-as-secondary multiclass skips — the shared
     // prepared_spells column is governed by the primary class's
-    // editor. The cap is the 2024 PHB formula — Wis mod + druid
-    // level, min 1 (L1 = 4 at Wis +3, L5 = 8 at Wis +3, L20 = 25
-    // at Wis +5) — verified at build against
-    // levelProgression.getSpellsPrepared, which falls through to
-    // max(1, mod + lvl) for druids; no fixed table is stored.
+    // editor. The cap is the 2024 PHB Prepared Spells column
+    // (BARD_CLERIC_DRUID_SPELLS_PREPARED: 4 at L1 -> 22 at L20, the
+    // same at every Wis mod; H3 2026-11-23), agreeing with
+    // levelProgression.getSpellsPrepared's druid arm.
     // Circle spells are always prepared and excluded via
     // druidCircleSpellsAtLevel. Circle of the Land reads its stored
     // land type from subclass_choices_json (migration 103, key
@@ -7453,8 +7452,7 @@ router.post('/level-up/:id', async (req, res) => {
     // artificer/blackguard/paladin/sorcerer/ranger blocks above.
     // Leveling up IN bard (not multiclassing into it — the stored list
     // belongs to the other class there) re-checks the stored list
-    // against the NEW bard level and the post-ASI Cha mod (Cha mod +
-    // bard level, min 1), with Moonbeam from the (possibly newly
+    // against the NEW bard level (the 2024 Prepared Spells column; the mod is passed and ignored, H3 2026-11-23), with Moonbeam from the (possibly newly
     // chosen) College of the Moon subclass excluded. No DB writes
     // have happened yet — mutations above are in-memory only and the
     // transactional phase is below — so a refusal leaves the level
@@ -7602,7 +7600,7 @@ router.post('/level-up/:id', async (req, res) => {
     // bard block above. Leveling up IN wizard (not multiclassing into
     // it — the stored list belongs to the other class there) re-checks
     // the prepared list against the NEW wizard level and the post-ASI
-    // Int mod (Int mod + wizard level, min 1), with the Spell
+    // Int mod (the 2024 Prepared Spells column; the mod is passed and ignored, H3 2026-11-23), with the Spell
     // Mastery (L18) / Signature Spells (L20) picks from
     // spellbook_json excluded from the cap — and every remaining
     // prepared spell must be in the book. The check runs on the
@@ -7646,8 +7644,7 @@ router.post('/level-up/:id', async (req, res) => {
     // hooks Family 3): mirrors the bard block above. Leveling up
     // IN cleric (not multiclassing into it — the stored list
     // belongs to the other class there) re-checks the stored list
-    // against the NEW cleric level and the post-ASI Wis mod (Wis
-    // mod + cleric level, min 1), with domain spells from the
+    // against the NEW cleric level (the 2024 Prepared Spells column; the mod is passed and ignored, H3 2026-11-23), with domain spells from the
     // (possibly newly chosen) subclass excluded. No DB writes have
     // happened yet — mutations above are in-memory only and the
     // transactional phase is below — so a refusal leaves the level
@@ -7674,8 +7671,7 @@ router.post('/level-up/:id', async (req, res) => {
     // hooks Family 3): mirrors the cleric block above. Leveling
     // up IN druid (not multiclassing into it — the stored list
     // belongs to the other class there) re-checks the stored list
-    // against the NEW druid level and the post-ASI Wis mod (Wis
-    // mod + druid level, min 1), with circle spells from the
+    // against the NEW druid level (the 2024 Prepared Spells column; the mod is passed and ignored, H3 2026-11-23), with circle spells from the
     // (possibly newly chosen) subclass excluded. Circle of the
     // Land reads its land type from the STORED subclass_choices_json
     // (the level-up body carries no land type) — no stored land

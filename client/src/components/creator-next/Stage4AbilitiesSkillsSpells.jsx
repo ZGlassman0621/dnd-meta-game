@@ -711,8 +711,10 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
   // server's getSpellsPrepared) at the current casting modifier.
   // Blackguard is 0 at level 1 (no slots yet); paladin is table-
   // driven in 2024 (2 at L1, PHB pp. 109-110); artificer is mod +
-  // half level, the rest are mod + level — the old "mod + 1,
-  // artificer + 0" fallback was wrong for paladin and blackguard.
+  // half level; bard, cleric, druid and wizard are their class
+  // table's Prepared Spells column (4 at L1 at any mod; H3
+  // 2026-11-23) — the old "mod + 1, artificer + 0" fallback was
+  // wrong for paladin and blackguard.
   const preparedFromScores = castingMod != null
     ? preparedCountFor(classId, castingMod)
     : null

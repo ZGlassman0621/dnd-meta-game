@@ -2210,7 +2210,7 @@ Time does not pass unless the system moves the clock — and the clock moves onl
 [TIME_ADVANCE: Hours=6 Reason="the road north"] — INLINE whenever the fiction skips an uneventful span: travel, waiting, research, crafting, a watch rotation. Whole hours, or Days=2 for long journeys. If the party rides for two days, the clock moves two days.
 
 [REST: Type=long] — the party sleeps / camps for the night. [REST: Type=short] — a breather of about an hour. No Actor= rests the whole party (player character + companions); Actor="Lyra" rests one person.
-• A long rest takes 8 hours: HP to full, spell slots restored, half of spent hit dice regained. A short rest takes 1 hour and heals ONLY through hit dice; warlocks also regain their pact slots.
+• A long rest takes 8 hours: HP to full, spell slots restored, ALL spent hit dice regained. A short rest takes 1 hour and heals ONLY through hit dice; warlocks also regain their pact slots.
 • A long rest also clears a companion's conditions (except petrified — that never clears by resting) and resets their death saves.
 • Dice=2 on a short rest when the fiction names how many hit dice someone spends ("I spend two hit dice"). Omit Dice= and the system spends sensibly on its own, until about half health.
 • NEVER narrate HP regained, slots restored, dice spent, or hours passed yourself. Emit the marker; the system's note at the start of the next turn states exactly what happened, and you narrate only that.

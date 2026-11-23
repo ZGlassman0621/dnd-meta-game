@@ -70,6 +70,14 @@ export function preparedCountFor(classId, abilityMod) {
   const mod = Number(abilityMod) || 0
   const hit = rule.byMod?.[String(mod)]
   if (typeof hit === 'number') return hit
+  // A fixed table column (bard/cleric/druid/wizard/paladin/ranger/
+  // sorcerer/warlock in 2024) is the same number at every probed mod,
+  // so it answers for any mod — e.g. a rolled Int 7 (-2) wizard still
+  // prepares 4 (H3, 2026-11-23).
+  if (rule.kind === 'table') {
+    const vals = Object.values(rule.byMod || {})
+    if (vals.length && vals.every((v) => typeof v === 'number' && v === vals[0])) return vals[0]
+  }
   if (rule.kind === 'modPlusLevel') return Math.max(1, mod + 1)
   if (rule.kind === 'modPlusHalfLevel') return Math.max(1, mod + Math.floor(1 / 2))
   return null

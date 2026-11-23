@@ -161,7 +161,7 @@ function dwarfClericBody(overrides = {}) {
 // Per-theme dwarf/soldier-shaped cleric: finals recomputed from the
 // REAL theme ASI (resolveTheme), skills = the theme's two signature
 // skills + the first cleric option not already among them, prepared
-// count from the resulting Wis mod (cleric prepares Wis mod + 1).
+// count from the 2024 cleric table (4 at L1, any Wis mod).
 function clericBodyForTheme(themeId) {
   const theme = resolveTheme(themeId);
   assert(theme, `fixture theme ${themeId} resolves`);
@@ -172,7 +172,7 @@ function clericBodyForTheme(themeId) {
   }
   const sigs = [theme.signature_skill_1, theme.signature_skill_2];
   const extra = ['History', 'Insight', 'Medicine', 'Persuasion', 'Religion'].find((s) => !sigs.includes(s));
-  const prepCount = Math.max(1, Math.floor((finals.wis - 10) / 2) + 1);
+  const prepCount = 4; // 2024 cleric table: 4 at L1 at any Wis mod (H3, 2026-11-23)
   return {
     creator: MARKER, class: 'cleric', race: 'dwarf', subrace: 'Hill Dwarf',
     theme_id: themeId, generation_method: 'point_buy',
@@ -199,7 +199,8 @@ function dwarfBardBody(overrides = {}) {
     base_scores: DWARF_BASE, ability_scores: DWARF_FINAL,
     skills: ['Athletics', 'Intimidation', 'Performance'],
     languages: ['Common', 'Dwarvish'],
-    prepared_spells: ['cure wounds', 'dissonant whispers', 'healing word'],
+    // 2024 bard table: 4 at L1 at any Cha mod (H3; was Cha +2 + 1 = 3).
+    prepared_spells: ['cure wounds', 'dissonant whispers', 'healing word', 'faerie fire'],
     ...overrides,
   };
 }

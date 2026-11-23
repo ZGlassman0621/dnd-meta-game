@@ -347,12 +347,12 @@ function draftRangerState(stoutHeartedId, preparedKeys) {
 }
 // A COMPLETE wizard draft (group (h7)): the two-list spellbook made
 // concrete — a 6-spell book in known_spells and a prepared subset
-// (first 3 — Int mod +2 at L1) in prepared_spells, both drawn from
+// (first 4 — the 2024 wizard table at L1, any Int mod; H3) in prepared_spells, both drawn from
 // the live /api/spells?level=1 list, plus the 3 wizard cantrips from
 // the live level-0 list. Point buy: 8/14/13/15/12/10 = 27. Finals
 // under the REAL soldier theme (Str +2 / Con +1) + Hill Dwarf
-// (+2 Con, +1 Wis): str 10, con 16, wis 13, int 15 (mod +2 → 3
-// prepared at L1).
+// (+2 Con, +1 Wis): str 10, con 16, wis 13, int 15 (mod +2; the
+// 2024 table still gives 4 prepared at L1).
 const WIZARD_BASE = { str: 8, dex: 14, con: 13, int: 15, wis: 12, cha: 10 };
 const WIZARD_FINAL = { str: 10, dex: 14, con: 16, int: 15, wis: 13, cha: 10 };
 function draftWizardState(stoutHeartedId, cantripKeys, bookKeys, preparedKeys) {
@@ -1050,7 +1050,7 @@ group('(h) HTTP commit (real router + real DB)');
   check(wizardSpells.length === 44, `the wizard fixture draws the live L1 list (got ${wizardSpells.length})`);
   check(w1Json?.spellbookSize === 6, 'the live spells envelope serves spellbookSize 6 for a wizard');
   const wizardBook = wizardSpells.slice(0, 6);
-  const wizardPrepared = wizardSpells.slice(0, 3);
+  const wizardPrepared = wizardSpells.slice(0, 4);
   const wizardState = draftWizardState(stoutId, wizardCantrips, wizardBook, wizardPrepared);
   const wizardReview = validateReview(wizardState, { speciesEntry: DWARF_ENTRY, speciesEntries: [DWARF_ENTRY], mixedTables: null, themes: [SOLDIER_THEME], subclassesByClass: {} });
   check(wizardReview.canCommit === true && wizardReview.errors.length === 0,

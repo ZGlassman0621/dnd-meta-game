@@ -4,7 +4,8 @@
 // §3/§5 and current-build-state.md:557 — do not re-derive):
 //   - The book starts with 6 L1 spells; +2 spells per wizard level
 //     after 1st (6 at L1, 8 at L2, …, 44 at L20).
-//   - A wizard prepares FROM the book: Int mod + wizard level, min 1.
+//   - A wizard prepares FROM the book, up to the Wizard table's
+//     Prepared Spells column (WIZARD_SPELLS_PREPARED; H3 2026-11-23).
 //   - Savant (L3, PHB schools): two school spells of 2nd level or
 //     lower free at 3rd; +1 free school spell per new slot level.
 //   - Memorize Spell (L5): Short Rest single-swap, prepared spell

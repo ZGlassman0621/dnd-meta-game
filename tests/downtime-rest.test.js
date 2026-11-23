@@ -122,7 +122,7 @@ group('1. Long rest over HTTP — slots back, Arcane flag cleared, HP quality-sc
   assert(after.spell_slots_used === '{}', 'slots restored in the DB');
   assert(after.current_hp === 20, 'tavern (adequate) long rest heals to full HP');
   assert(after.temp_hp === 0, 'temp HP cleared by the downtime long rest');
-  assert(JSON.parse(after.hit_dice_used).d6 === 1, 'hit dice regained in the DB (3 spent -> 1)');
+  assert(Object.keys(JSON.parse(after.hit_dice_used)).length === 0, 'all hit dice regained in the DB (3 spent -> 0; 2024 rule)');
   assert(await flagOf(wizId) === false, 'the Arcane used-flag is cleared — the lockout bug is fixed');
   const book = JSON.parse(after.spellbook_json || '{}');
   assert(JSON.stringify(book.pendingArcaneRecovery) === JSON.stringify({ slots: [1] }),

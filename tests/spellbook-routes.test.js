@@ -984,22 +984,26 @@ group('(j) spellbook-always-prepared');
     'Detect Magic', 'Feather Fall', 'Misty Step', 'Fireball', 'Counterspell', 'Dispel Magic',
     'Invisibility', 'Mirror Image', 'Scorching Ray', 'Web', 'Chromatic Orb', 'Grease',
     'Identify', 'Comprehend Languages', 'Alarm', 'False Life'];
+  // H3 (2026-11-23): the L18 cap is the Wizard table's 23 at any Int
+  // mod (the 2014 formula gave 21 at +3), so the exclusion case needs
+  // 24 prepared spells — two more real wizard spells.
+  const BOOK24 = [...BOOK22, 'Expeditious Retreat', 'Fog Cloud'];
   const wiz18 = await makeCharacter({ name: 'WizMastery', cls: 'wizard', level: 18, intScores: INT3_SCORES });
-  await seedBook(wiz18, BOOK22);
+  await seedBook(wiz18, BOOK24);
   await seedStoredPrepared(wiz18, BOOK22.slice(0, 20));
   const mastery = await req('POST', `/api/character/${wiz18}/spellbook-always-prepared`, { mastery: ['Fireball', 'Counterspell'] });
   check(mastery.status === 200 && JSON.stringify(mastery.json?.spellbook?.mastery) === JSON.stringify(['Fireball', 'Counterspell']),
     `setting Mastery picks succeeds 200 (got ${mastery.status}: ${errOf(mastery)})`);
   check(JSON.stringify((await readSpellbookState(wiz18)).mastery) === JSON.stringify(['Fireball', 'Counterspell']),
     'Mastery picks read back from spellbook_json');
-  // Exclusion in force: 22 prepared spells with Fireball among
-  // them count 21 against the L18 cap of 21 — without the
-  // exclusion the same list would refuse at 22.
+  // Exclusion in force: 24 prepared spells with Fireball among
+  // them count 23 against the L18 cap of 23 — without the
+  // exclusion the same list would refuse at 24.
   const cap18 = preparedSpellsMax(3, 18);
-  check(cap18 === 21, `cap source: L18 cap at Int +3 is 21 (got ${cap18})`);
-  const over = await req('PUT', `/api/character/${wiz18}`, { prepared_spells: J(BOOK22) });
+  check(cap18 === 23, `cap source: L18 cap is the table's 23 at any Int mod (got ${cap18})`);
+  const over = await req('PUT', `/api/character/${wiz18}`, { prepared_spells: J(BOOK24) });
   check(over.status === 200,
-    `PUT of 22 spells with 1 always-prepared among them persists — counted 21 at cap 21 (got ${over.status}: ${errOf(over)})`);
+    `PUT of 24 spells with 1 always-prepared among them persists — counted 23 at cap 23 (got ${over.status}: ${errOf(over)})`);
   const three = await req('POST', `/api/character/${wiz18}/spellbook-always-prepared`, { mastery: ['Fireball', 'Counterspell', 'Dispel Magic'] });
   check(three.status === 400 && errOf(three).includes('at most 2'), `three Mastery picks refuse (got ${three.status})`);
   const notBook = await req('POST', `/api/character/${wiz18}/spellbook-always-prepared`, { mastery: ['Wish'] });
@@ -1007,7 +1011,7 @@ group('(j) spellbook-always-prepared');
   const sigEarly = await req('POST', `/api/character/${wiz18}/spellbook-always-prepared`, { signature: ['Wish'] });
   check(sigEarly.status === 400 && errOf(sigEarly).includes('requires wizard level 20'), `Signature picks at L18 refuse (got ${sigEarly.status})`);
   // Picks are NOT added to prepared_spells by the route.
-  check(JSON.stringify(await readPrepared(wiz18)) === JSON.stringify(BOOK22), 'the route did not add picks to prepared_spells (the PUT above set the list, the route left it)');
+  check(JSON.stringify(await readPrepared(wiz18)) === JSON.stringify(BOOK24), 'the route did not add picks to prepared_spells (the PUT above set the list, the route left it)');
 
   const wiz20 = await makeCharacter({ name: 'WizSig', cls: 'wizard', level: 20, intScores: INT3_SCORES });
   await seedBook(wiz20, [...BOOK22, 'Wish', 'Meteor Swarm']);
@@ -1064,7 +1068,8 @@ group('(k) commit refusal for a bookless wizard draft');
       // + 'Giant': the Human species' extra-language pick (R2-15
       // count rule, creation-solidification 2026-11-12).
       languages: ['Common', 'Giant'],
-      prepared_spells: ['shield', 'mage armor', 'sleep'],
+      // 2024 wizard table (H3): 4 prepared at L1, any Int mod.
+      prepared_spells: ['shield', 'mage armor', 'sleep', 'burning hands'],
       known_cantrips: ['Fire Bolt', 'Ray of Frost', 'Mage Hand'],
       ancestry_feat_id: JACK_ID,
       alignment: 'Lawful Good', faith: 'Mystra', lifestyle: 'Modest',

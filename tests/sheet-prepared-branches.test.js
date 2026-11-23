@@ -7,20 +7,22 @@
 // `return 0` in CharacterSheet.jsx getMaxPrepared, and bard + warlock
 // carried the stale "Limited known" label in classes.json — so
 // isPreparedCaster() was false for them and the Prepared Spells
-// section never rendered. The wizard branch already existed and
-// already matched the server formula (Int mod + wizard level, min 1);
-// it is pinned here, not added.
+// section never rendered. The wizard branch already existed; since
+// H3 (2026-11-23) it reads the 2024 Wizard table, matching the server.
 //
 // Rules pinned (2024 PHB):
-//  - Bard: max(1, Cha mod + bard level) — the bardService formula
-//    (L1 at Cha +3 = 4). No slot gate.
+//  - Bard (H3, 2026-11-23): the Bard table's Prepared Spells column,
+//    4 at L1 -> 22 at L20, Cha mod ignored (was max(1, Cha mod +
+//    level)). No slot gate.
 //  - Warlock: fixed table [2,3,4,5,6,7,8,9,10,10,11,11,12,12,13,13,
 //    14,14,15,15] — 2 at L1 -> 15 at L20, Cha mod ignored.
 //  - Blood Hunter, Order of the Profane Soul ONLY: fixed table
 //    [0,0,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,11] — 2 at 3rd ->
 //    11 at 20th. Other Orders (Ghostslayer / Lycan / Mutant) do not
 //    cast and keep falling through to 0.
-//  - Wizard: max(1, Int mod + wizard level), min 1 (pre-existing).
+//  - Wizard (H3, 2026-11-23): the Wizard table's Prepared Spells
+//    column, 4 at L1 -> 25 at L20, Int mod ignored (was max(1, Int
+//    mod + level)).
 //
 // How this tests the sheet honestly: getMaxPrepared and
 // isPreparedCaster are EXTRACTED from the live CharacterSheet.jsx
@@ -51,7 +53,7 @@ function group(name) { console.log('\n==', name); }
 const repoRoot = process.cwd();
 const readRepo = (rel) => fs.readFileSync(path.join(repoRoot, rel), 'utf8');
 
-const { getSpellsPrepared, WARLOCK_SPELLS_PREPARED, PROFANE_SOUL_SPELLS_PREPARED } =
+const { getSpellsPrepared, WARLOCK_SPELLS_PREPARED, PROFANE_SOUL_SPELLS_PREPARED, BARD_CLERIC_DRUID_SPELLS_PREPARED, WIZARD_SPELLS_PREPARED } =
   await import(pathToFileURL(path.join(repoRoot, 'server/config/levelProgression.js')).href);
 
 // --- Extract a function body from the sheet source, brace-matched,
@@ -150,12 +152,16 @@ group('(a) getMaxPrepared has the bard / warlock / Profane Soul branches; wizard
   const fnEnd = sheetSrc.indexOf('const isPreparedCaster', fnStart);
   const fnSrc = sheetSrc.slice(fnStart, fnEnd);
   check(fnSrc.indexOf("className === 'wizard'") !== -1, 'wizard branch present');
-  check(fnSrc.indexOf("if (className === 'wizard') return Math.max(1, mod + character.level)") !== -1,
-    'wizard branch is the server formula (Int mod + level, min 1), untouched');
+  check(fnSrc.indexOf("if (className === 'wizard') return WIZARD_PREPARED[character.level - 1] ?? 0") !== -1,
+    'wizard branch is the 2024 table (WIZARD_PREPARED), mod-independent');
+  check(fnSrc.replace(/\s+/g, '').includes('WIZARD_PREPARED=' + JSON.stringify(WIZARD_SPELLS_PREPARED)),
+    'wizard table literal in the sheet IS the server WIZARD_SPELLS_PREPARED table');
+  check(fnSrc.replace(/\s+/g, '').includes('BARD_CLERIC_DRUID_PREPARED=' + JSON.stringify(BARD_CLERIC_DRUID_SPELLS_PREPARED)),
+    'bard/cleric/druid table literal in the sheet IS the server BARD_CLERIC_DRUID_SPELLS_PREPARED table');
   check((fnSrc.match(/className === 'wizard'/g) || []).length === 1, 'exactly one wizard branch (no duplicate)');
   check(fnSrc.indexOf("className === 'bard'") !== -1, 'bard branch present');
-  check(fnSrc.indexOf("if (className === 'bard') return Math.max(1, mod + character.level)") !== -1,
-    'bard branch is max(1, Cha mod + level)');
+  check(fnSrc.indexOf("if (className === 'bard' || className === 'cleric' || className === 'druid') return BARD_CLERIC_DRUID_PREPARED[character.level - 1] ?? 0") !== -1,
+    'bard branch is the 2024 table (BARD_CLERIC_DRUID_PREPARED), shared with cleric and druid');
   check(fnSrc.indexOf("className === 'warlock'") !== -1, 'warlock branch present');
   check(fnSrc.replace(/\s+/g, '').includes(JSON.stringify(WARLOCK_SPELLS_PREPARED)),
     'warlock table literal in the sheet IS the server WARLOCK_SPELLS_PREPARED table');
@@ -190,8 +196,8 @@ group('(b) Executed getMaxPrepared caps: bard / warlock / Profane Soul / wizard'
 {
   check(capFor({ cls: 'bard', level: 1, scores: CHA3 }) === 4, 'bard L1 Cha+3 = 4');
   check(capFor({ cls: 'bard', level: 5, scores: CHA4 }) === 9, 'bard L5 Cha+4 = 9');
-  check(capFor({ cls: 'bard', level: 20, scores: CHA5 }) === 25, 'bard L20 Cha+5 = 25');
-  check(capFor({ cls: 'bard', level: 1, scores: CHA0 }) === 1, 'bard L1 Cha+0 = 1 (min 1)');
+  check(capFor({ cls: 'bard', level: 20, scores: CHA5 }) === 22, 'bard L20 Cha+5 = 22 (table; the 2014 formula said 25)');
+  check(capFor({ cls: 'bard', level: 1, scores: CHA0 }) === 4, 'bard L1 Cha+0 = 4 (table; the 2014 formula said 1)');
   check(capFor({ cls: 'warlock', level: 1, scores: CHA3 }) === 2, 'warlock L1 = 2');
   check(capFor({ cls: 'warlock', level: 10, scores: CHA3 }) === 10, 'warlock L10 = 10');
   check(capFor({ cls: 'warlock', level: 20, scores: CHA5 }) === 15, 'warlock L20 = 15');
@@ -215,7 +221,7 @@ group('(b) Executed getMaxPrepared caps: bard / warlock / Profane Soul / wizard'
     'blood_hunter with no subclass = 0');
   check(capFor({ cls: 'wizard', level: 1, scores: INT3 }) === 4, 'wizard L1 Int+3 = 4');
   check(capFor({ cls: 'wizard', level: 20, scores: INT5 }) === 25, 'wizard L20 Int+5 = 25');
-  check(capFor({ cls: 'wizard', level: 1, scores: INT0 }) === 1, 'wizard L1 Int+0 = 1 (min 1)');
+  check(capFor({ cls: 'wizard', level: 1, scores: INT0 }) === 4, 'wizard L1 Int+0 = 4 (table; the 2014 formula said 1)');
 }
 
 // ===========================================================================
@@ -231,7 +237,7 @@ group('(c) Sweeps: sheet caps agree with the server at every level');
   }
   check(warlockMismatch === 0, `sheet warlock cap == WARLOCK_SPELLS_PREPARED at all 20 levels (${warlockMismatch} mismatches)`);
   check(profaneMismatch === 0, `sheet Profane Soul cap == PROFANE_SOUL_SPELLS_PREPARED at all 20 levels (${profaneMismatch} mismatches)`);
-  // Bard / wizard formulas swept against the real getSpellsPrepared
+  // Bard / wizard tables swept against the real getSpellsPrepared
   // at every level and every mod from -1 to +5.
   let bardMismatch = 0;
   let wizardMismatch = 0;
@@ -293,7 +299,7 @@ group('(e) Mutation check: deleting a branch breaks its asserts');
   const mutatedWarlock = without("if (className === 'warlock') return WARLOCK_PREPARED[character.level - 1] ?? 0");
   check(mutatedWarlock.getMaxPrepared(false, false, classesJson.warlock, CHA3, { class: 'warlock', subclass: null, level: 10 }) === 0,
     'warlock branch deleted -> warlock L10 cap is 0 (asserts would fail)');
-  const mutatedBard = without("if (className === 'bard') return Math.max(1, mod + character.level)");
+  const mutatedBard = without("if (className === 'bard' || className === 'cleric' || className === 'druid') return BARD_CLERIC_DRUID_PREPARED[character.level - 1] ?? 0");
   check(mutatedBard.getMaxPrepared(false, false, classesJson.bard, CHA3, { class: 'bard', subclass: null, level: 1 }) === 0,
     'bard branch deleted -> bard L1 cap is 0 (asserts would fail)');
   const mutatedProfane = without(`    if (isProfaneSoul) {
@@ -302,7 +308,7 @@ group('(e) Mutation check: deleting a branch breaks its asserts');
     }`);
   check(mutatedProfane.getMaxPrepared(false, true, classesJson.blood_hunter, INT3, { class: 'blood_hunter', subclass: 'Order of the Profane Soul', level: 10 }) === 0,
     'Profane Soul branch deleted -> PS L10 cap is 0 (asserts would fail)');
-  const mutatedWizard = without("if (className === 'wizard') return Math.max(1, mod + character.level)");
+  const mutatedWizard = without("if (className === 'wizard') return WIZARD_PREPARED[character.level - 1] ?? 0");
   check(mutatedWizard.getMaxPrepared(false, false, classesJson.wizard, INT3, { class: 'wizard', subclass: null, level: 1 }) === 0,
     'wizard branch deleted -> wizard L1 cap is 0 (asserts would fail)');
 }
