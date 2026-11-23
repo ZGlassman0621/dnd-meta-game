@@ -180,7 +180,15 @@ group('1. COMBAT_START creates bestiary-true goblins + turn order');
   const start = res.handlerResults.find((h) => h.schemaKey === 'COMBAT_START');
   assert(start && start.ok, 'COMBAT_START handler ran');
   assert(start.result?.type === 'combat_start', 'combat_start result returned');
-  const order = start.result.combatStart.turnOrder;
+  // Combat-loop fix P4: the engine never rolls the player's initiative.
+  // COMBAT_START orders the NPCs and waits on the player's d20; the
+  // reported 10 then slots the PC in.
+  assert(!start.result.combatStart.turnOrder.some((t) => t.type === 'player'), 'the player is not ordered before reporting a d20');
+  assert(start.result.combatStart.awaitingPlayerInitiative, 'COMBAT_START waits on the player\'s initiative d20');
+  const { resolvePlayerInitiative } = await import('../server/services/combatLoopService.js');
+  const init = await resolvePlayerInitiative(sessionId, 10);
+  assert(init && init.entry.roll === 10, 'the reported d20 10 is the player\'s initiative die');
+  const order = init.state.turnOrder;
   assert(order.length === 5, `turn order has PC + companion + 3 goblins (got ${order.length})`);
   assert(order.some((t) => t.type === 'player'), 'player in turn order');
   assert(order.some((t) => t.type === 'companion' && t.name === allyName), 'companion ally in turn order');
@@ -188,6 +196,7 @@ group('1. COMBAT_START creates bestiary-true goblins + turn order');
 
   const rows = await dbAll('SELECT * FROM combat_enemies WHERE session_id = ? ORDER BY id', [sessionId]);
   assert(rows.length === 3, '3 combat_enemies rows created');
+  assert(rows.map((r) => r.name).join(',') === 'Goblin 1,Goblin 2,Goblin 3', 'F3: same-name goblins are numbered');
   for (const r of rows) {
     assert(
       r.max_hp === goblin.max_hp && r.armor_class === goblin.armor_class &&
@@ -262,24 +271,17 @@ group('4. concentration starts on cast and breaks on a failed save');
   assert(bless.success === true && bless.concentration === true, 'Bless cast auto-starts concentration');
   assert((await concSvc.getConcentration(pcId)) === 'Bless', 'concentrating_on = Bless');
 
-  // CON 8 → conMod -1. Damage 22 → DC max(10, 11) = 11. Pass needs d20 >= 12
-  // (55% fail per try); loop heals between tries, bounded at 12 — the chance
-  // of never breaking is ~0.007%. Every check is asserted for consistency.
-  let broke = false;
-  for (let i = 0; i < 12 && !broke; i++) {
-    const r = await hpSvc.applyHpChange(pcId, -22, 'capstone concentration test');
-    const cc = r.concentrationCheck;
-    assert(cc && cc.dc === 11, `check ${i}: DC is 11 for 22 damage`);
-    assert(cc.conMod === -1 && cc.total === cc.roll + cc.conMod, `check ${i}: total = roll + conMod`);
-    assert(cc.success === (cc.total >= cc.dc), `check ${i}: success flag matches total vs DC`);
-    if (cc.broken) {
-      broke = true;
-      assert((await concSvc.getConcentration(pcId)) === null, 'failed save drops the spell');
-    } else {
-      await hpSvc.applyHpChange(pcId, 22, 'capstone heal between checks');
-    }
-  }
-  assert(broke, 'concentration broke within 12 checks');
+  // CON 8 → conMod -1. Damage 22 → DC max(10, 11) = 11. Combat-loop fix
+  // P4: the damage only ASKS for the save; the player's d20 settles it.
+  const r = await hpSvc.applyHpChange(pcId, -22, 'capstone concentration test');
+  const cc = r.concentrationCheck;
+  assert(cc && cc.pending === true && cc.dc === 11 && cc.conMod === -1, 'the damage asks for a DC 11 save (CON −1), rolling nothing');
+  assert((await concSvc.getConcentration(pcId)) === 'Bless', 'nothing breaks before the player rolls');
+  const kept = await concSvc.resolveConcentrationSave(pcId, 12, 11);
+  assert(kept && kept.total === 11 && kept.success === true, 'a reported 12 − 1 = 11 meets DC 11: kept');
+  const lost = await concSvc.resolveConcentrationSave(pcId, 5, 11);
+  assert(lost && lost.total === 4 && lost.broken === true, 'a reported 5 − 1 = 4 fails: broken');
+  assert((await concSvc.getConcentration(pcId)) === null, 'failed save drops the spell');
 }
 
 // ---------------------------------------------------------------------------
@@ -325,16 +327,19 @@ group('6. enemy attacks roll server-side; cover adds to AC; HP pools reconcile')
   // current combatant, its swings were off-turn and already
   // resolved). Cover math, HP reconciliation, and the roll log
   // — this group's actual subjects — are unchanged.
+  // Combat-loop fix: an ordinary enemy attack resolves only on that
+  // enemy's own turn, so every swing first moves the order to Goblin 1
+  // (a later swing moves at least one full step, to a fresh turn).
   let swings = 0;
   async function attackAndReconcile(target, expectedAc, label) {
-    if (swings > 0) {
-      for (let i = 0; i < 5; i++) await turnSvc.advanceTurn(sessionId, SEQ);
-    }
+    let st = await turnSvc.getTurnState(sessionId, SEQ);
+    if (swings > 0) st = await turnSvc.advanceTurn(sessionId, SEQ);
+    for (let i = 0; i < 6 && st?.currentTurn?.name !== 'Goblin 1'; i++) st = await turnSvc.advanceTurn(sessionId, SEQ);
     swings++;
     const before = target.type === 'player'
       ? await pcPool()
       : { pool: (await dbGet('SELECT companion_current_hp FROM companions WHERE id = ?', [target.id])).companion_current_hp };
-    const r = await enemySvc.resolveEnemyAttack(sessionId, SEQ, 'Goblin', target);
+    const r = await enemySvc.resolveEnemyAttack(sessionId, SEQ, 'Goblin 1', target);
     assert(r && r.type === 'enemy_attack', `${label}: attack resolved`);
     assert(r.attackRoll >= 1 && r.attackRoll <= 20, `${label}: attack roll in 1..20`);
     assert(r.totalToHit === r.attackRoll + r.attackBonus, `${label}: total = roll + bonus`);
@@ -381,7 +386,7 @@ group('6. enemy attacks roll server-side; cover adds to AC; HP pools reconcile')
 // ---------------------------------------------------------------------------
 group('7. reactions spend once per round and refresh on your turn');
 {
-  const marker = `[OPPORTUNITY_ATTACK: Attacker="${allyName}" Target="Goblin"]`;
+  const marker = `[OPPORTUNITY_ATTACK: Attacker="${allyName}" Target="Goblin 1"]`;
   const first = await pipeline.processResponseMarkers(marker, CTX);
   const r1 = first.handlerResults.find((h) => h.schemaKey === 'OPPORTUNITY_ATTACK');
   assert(r1 && r1.result?.success === true && r1.result.reactionConsumed === true, 'first opportunity attack consumes the reaction');
@@ -423,12 +428,12 @@ group('8. enemy death records an event, loots immediately, awards NO xp mid-comb
 {
   const invBefore = JSON.parse((await dbGet('SELECT inventory FROM characters WHERE id = ?', [pcId])).inventory || '[]');
 
-  const dmg1 = await pipeline.processResponseMarkers('[ENEMY_DAMAGE: Enemy="Goblin" Amount=4]', CTX);
+  const dmg1 = await pipeline.processResponseMarkers('[ENEMY_DAMAGE: Enemy="Goblin 1" Amount=4]', CTX);
   const d1 = dmg1.handlerResults.find((h) => h.schemaKey === 'ENEMY_DAMAGE');
   assert(d1 && d1.result?.damageDealt === 4 && d1.result.currentHp === 3 && d1.result.killed === false && d1.result.bloodied === true,
     '4 damage: goblin at 3/7, bloodied, alive');
 
-  const dmg2 = await pipeline.processResponseMarkers('[ENEMY_DAMAGE: Enemy="Goblin" Amount=3]', CTX);
+  const dmg2 = await pipeline.processResponseMarkers('[ENEMY_DAMAGE: Enemy="Goblin 1" Amount=3]', CTX);
   const d2 = dmg2.handlerResults.find((h) => h.schemaKey === 'ENEMY_DAMAGE');
   assert(d2 && d2.result?.killed === true && d2.result.status === 'dead', '3 more damage: goblin dead');
   assert(d2.result.deathEvent && d2.result.deathEvent.xpValue === 50, 'death event carries bestiary XP value (50) as data');

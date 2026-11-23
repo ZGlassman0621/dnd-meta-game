@@ -215,7 +215,9 @@ async function testRoute() {
     // "these numbers are authoritative" against a roll that resolved turns ago,
     // and would feed the phrase to the chronicle extractor as if it were prose.
     const after = await readSession(f1.sessionId)
-    const stored = after.parsedMessages.filter(m => m.role === 'user')
+    // System notes (engine facts for the DM) also ride as user turns; the
+    // player's own turn is the last one that is not a system note.
+    const stored = after.parsedMessages.filter(m => m.role === 'user' && !/^\[SYSTEM NOTE/.test(m.content || ''))
     const playerTurn = stored[stored.length - 1]
 
     assertEqual(playerTurn.content, 'I swing at the ogre with my longsword.',

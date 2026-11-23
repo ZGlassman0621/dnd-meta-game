@@ -199,7 +199,9 @@ export async function applyTableDamageToParty(sessionId, encounterSeq, target, c
   }
   if (target.kind === 'player') {
     const dmg = await ess.damageToPc(sessionId, encounterSeq, target.id, total, { type: cause.type, attacker: null, spell: '' });
-    return { type: 'party_damage', success: true, cause: cause.kind, dice: cause.dice || null, total, applied: dmg.applied, flagged: !!cause.flagged };
+    // The concentration save the damage owes rides the result, so the turn
+    // route can ask the player for it (combat-loop fix P4).
+    return { type: 'party_damage', success: true, cause: cause.kind, dice: cause.dice || null, total, applied: dmg.applied, flagged: !!cause.flagged, concentrationCheck: dmg.concentrationCheck || null };
   }
   const dmg = await ess.damageToCompanion(sessionId, encounterSeq, target.id, total, { type: cause.type, attacker: null, spell: '' });
   return { type: 'party_damage', success: true, cause: cause.kind, dice: cause.dice || null, total, applied: dmg.applied, flagged: !!cause.flagged };

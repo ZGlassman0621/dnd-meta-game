@@ -29,6 +29,7 @@
  * Outcomes stash to session_config.recentAttacks and surface next turn
  * through formatAttackOutcomeBlock — the DM narrates facts.
  */
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { roll, rollD20 } from '../utils/rng.js';
@@ -1120,12 +1121,15 @@ async function settleSubclassHitEffects(sessionId, encounterSeq, attackerKey, pr
       return { applied: false, reason: `${label} already used this turn` };
     }
     await writeFlag(sessionId, encounterSeq, flagKey, attackerKey, flag);
-    if (!applyMath) {
-      return { applied: false, reason: 'player-reported total — the pending block told the player to add it' };
+    // Combat-loop fix P4 (Zach 2026-11-23): on a player-reported total the
+    // player rolled this feature's DICE (the damage ask listed them); the
+    // engine adds only its flat part after the roll.
+    if (!applyMath && !flat) {
+      return { applied: false, reason: 'player-reported total — the player rolled these dice with the damage', diceInReport: dice || null };
     }
     let rolled = 0;
     let rolls = [];
-    if (dice) {
+    if (dice && applyMath) {
       const spec = parseDamageSpec(dice);
       if (spec && spec.count > 0) {
         const r = roll(spec.sides, spec.count, { reason: label });
@@ -1144,7 +1148,7 @@ async function settleSubclassHitEffects(sessionId, encounterSeq, attackerKey, pr
       outcome.damage = (outcome.damage || 0) + amount;
       outcome.damageDealt = (outcome.damageDealt ?? 0) + dealt;
     }
-    return { applied: true, dice: dice || null, flat: Number(flat) || 0, damage: amount, dealt, damageType, rolls };
+    return { applied: true, dice: dice || null, flat: Number(flat) || 0, damage: amount, dealt, damageType, rolls, ...(applyMath ? {} : { diceInReport: dice || null }) };
   }
 
   if (profile?.divineFury) {
@@ -1707,27 +1711,117 @@ export async function resolveReportedAttack(sessionId, characterId, reportedDice
     }
   } catch { /* keep the snapshot on any failure */ }
   const judged = judgeAttack({ takenDie, attackBonus: pending.attackBonus, targetAc, critThreshold: pending.critThreshold ?? 20 });
-  let damage = 0;
-  let damageRolls = [];
-  if (judged.hit) {
-    if (reportedDamage != null) {
-      // The player's own damage dice, reported as a total — on a crit
-      // the player doubles their dice before reporting (the prompt
-      // teaches it; the system trusts the report, as with all dice).
-      damage = Math.max(0, reportedDamage);
-    } else {
-      // Fallback system roll (no reported damage): features ARE math
-      // here, because the system is rolling — unlike a reported total.
-      let diceSpec = pending.damageDice;
-      if (pending.improvedSmiteDice) diceSpec = `${diceSpec}+${pending.improvedSmiteDice}`;
-      if (pending.sneakDice) diceSpec = `${diceSpec}+${pending.sneakDice}`;
-      if (pending.smite) diceSpec = `${diceSpec}+${pending.smite.dice}`;
-      const mod = (pending.damageModifier || 0) + (pending.featureDamageBonus || 0) + (pending.gwmBonus || 0);
-      const rolled = rollDamageFor({ label: pending.weapon, damageDice: diceSpec, damageModifier: mod }, judged.critical);
-      damage = rolled.damage;
-      damageRolls = rolled.rolls;
-    }
+  // P4 (combat-loop fix, Zach 2026-11-23): the engine NEVER rolls for the
+  // player. A hit with no reported damage pends a damage roll and names
+  // the exact dice; resolveReportedDamage settles it when the number comes.
+  if (judged.hit && reportedDamage == null) {
+    return awaitPlayerDamage(sessionId, characterId, pending, judged, targetAc, reportedDice, takenDie);
   }
+  return settleReportedAttack(sessionId, characterId, pending, judged, targetAc, reportedDice, takenDie, reportedDamage);
+}
+
+/** The flat damage the engine adds after the player's dice (ability
+ *  modifier + flat feature bonuses such as Dueling). */
+function flatDamageFor(pending) {
+  return (pending.damageModifier || 0) + (pending.featureDamageBonus || 0);
+}
+
+/** Dice notation with the count doubled (a critical hit doubles every
+ *  damage die, never the flat bonus). "1d10+2d6" -> "2d10+4d6". */
+function doubleDice(spec) {
+  return String(spec || '').split('+').map((t) => {
+    const m = t.trim().match(/^(\d*)d(\d+)$/i);
+    return m ? `${(Number(m[1] || 1)) * 2}d${m[2]}` : t.trim();
+  }).filter(Boolean).join(' + ');
+}
+
+/**
+ * The exact damage dice the player rolls for a pending hit: the weapon's
+ * dice, plus Improved Divine Smite, plus Sneak Attack and Divine Smite
+ * dice when they can still apply this turn — every die doubled on a
+ * critical hit. Returns { text, includesSneak, includesSmite, extraFlat }
+ * (extraFlat: settle-time flat bonuses the engine adds, e.g. Divine Fury's
+ * half-level, on top of the weapon's flat modifier).
+ */
+export async function playerDamageDiceFor(sessionId, characterId, pending, critical) {
+  const parts = [pending.damageDice];
+  if (pending.improvedSmiteDice) parts.push(pending.improvedSmiteDice);
+  let extraFlat = 0;
+  let includesSneak = false;
+  let includesSmite = false;
+  try {
+    const ledgerKey = await ledgerKeyForPlayer(characterId);
+    const slot = pending.slotKey || await currentSlotKey(sessionId, pending.encounterSeq);
+    if (pending.sneakDice && !(await readFlag(sessionId, pending.encounterSeq, ledgerKey, `player:${characterId}`, 'sneakUsed', slot))) {
+      parts.push(pending.sneakDice); includesSneak = true;
+    }
+    if (pending.smite) {
+      const bc = await checkBonus(sessionId, pending.encounterSeq, ledgerKey, slot);
+      if (bc.allowed) { parts.push(pending.smite.dice); includesSmite = true; }
+    }
+    // Settle-time subclass packets (once per turn): their dice join the
+    // player's roll, their flat parts join the engine's addition.
+    const attackerKey = `player:${characterId}`;
+    const unused = async (flag) => !(await readFlag(sessionId, pending.encounterSeq, ledgerKey, attackerKey, flag));
+    if (pending.divineFury && await unused('divineFuryUsed')) {
+      if (pending.divineFury.dice) parts.push(pending.divineFury.dice);
+      extraFlat += Number(pending.divineFury.flat) || 0;
+    }
+    if (pending.divineStrike?.dice && await unused('divineStrikeUsed')) parts.push(pending.divineStrike.dice);
+    if (pending.lunarRadianceBonus?.dice && await unused('lunarRadianceUsed')) parts.push(pending.lunarRadianceBonus.dice);
+    if (pending.surprisingStrikes && includesSneak && await unused('surprisingStrikesUsed')) {
+      const st = await getTurnState(sessionId, pending.encounterSeq).catch(() => null);
+      if (st && st.round === 1) extraFlat += Number(pending.surprisingStrikes.bonus) || 0;
+    }
+  } catch { /* flags are best-effort: the weapon dice always stand */ }
+  const base = parts.filter(Boolean).join('+');
+  return { text: critical ? doubleDice(base) : base.split('+').join(' + '), includesSneak, includesSmite, extraFlat };
+}
+
+async function awaitPlayerDamage(sessionId, characterId, pending, judged, targetAc, reportedDice, takenDie) {
+  const dice = await playerDamageDiceFor(sessionId, characterId, pending, judged.critical === 'hit');
+  const flat = flatDamageFor(pending) + (dice.extraFlat || 0);
+  const config = await readSessionConfig(sessionId);
+  config.pendingDamage = { pending, judged, targetAc, reportedDice, takenDie, diceText: dice.text, flat, postedAt: Date.now() };
+  await writeSessionConfig(sessionId, config);
+  const outcome = {
+    type: 'party_attack', success: true, attackerKind: 'player', attacker: pending.attacker,
+    target: pending.target, weapon: pending.weapon, dice: reportedDice, takenDie,
+    attackBonus: pending.attackBonus, total: judged.total, targetAc,
+    hit: true, critical: judged.critical, mode: pending.mode, modeReasons: pending.modeReasons,
+    damageType: pending.damageType, source: 'reported',
+    awaitingDamage: true, damageDiceText: dice.text, damageBonus: flat,
+    featureNotes: pending.featureNotes || [],
+  };
+  await stashOutcome(sessionId, outcome);
+  return outcome;
+}
+
+/** The pending damage roll, or null. */
+export async function getPendingDamage(sessionId) {
+  return (await readSessionConfig(sessionId)).pendingDamage || null;
+}
+
+/**
+ * Settle a pending hit with the player's reported damage-dice total (P4).
+ * The engine adds the flat modifiers after the roll. Returns the attack
+ * outcome (as resolveReportedAttack does), or null with nothing pending.
+ */
+export async function resolveReportedDamage(sessionId, characterId, reportedTotal) {
+  const config = await readSessionConfig(sessionId);
+  const pd = config.pendingDamage;
+  if (!pd || !Number.isInteger(reportedTotal) || reportedTotal < 0) return null;
+  config.pendingDamage = null;
+  await writeSessionConfig(sessionId, config);
+  return settleReportedAttack(sessionId, characterId, pd.pending, pd.judged, pd.targetAc, pd.reportedDice, pd.takenDie, reportedTotal);
+}
+
+async function settleReportedAttack(sessionId, characterId, pending, judged, targetAc, reportedDice, takenDie, reportedDamage) {
+  // The player's own dice total; the engine adds the flat bonuses after
+  // (Zach 2026-11-23: "the engine will calculate that after the roll").
+  let damage = 0;
+  const damageRolls = [];
+  const flat = flatDamageFor(pending);
   // Item 2, PC track: on a hit, consume the once-per-turn Sneak flag
   // and spend a declared Smite slot. A reported total is never
   // adjusted — these records state what the player was told to
@@ -1776,9 +1870,13 @@ export async function resolveReportedAttack(sessionId, characterId, reportedDice
       }
     }
   }
+  if (judged.hit) {
+    damage = Math.max(0, Number(reportedDamage) || 0) + flat + (gwmOutcome?.applied ? (gwmOutcome.bonus || 0) : 0);
+  }
   const outcome = {
     type: 'party_attack', success: true, attackerKind: 'player', attacker: pending.attacker,
     target: pending.target, weapon: pending.weapon, dice: reportedDice, takenDie,
+    damageRoll: judged.hit ? Math.max(0, Number(reportedDamage) || 0) : null, damageBonus: judged.hit ? flat : null,
     attackBonus: pending.attackBonus, total: judged.total, targetAc,
     hit: judged.hit, critical: judged.critical, critThreshold: pending.critThreshold ?? 20,
     formMagicalAttacks: !!pending.formMagicalAttacks, mode: pending.mode, modeReasons: pending.modeReasons,
@@ -1802,7 +1900,7 @@ export async function resolveReportedAttack(sessionId, characterId, reportedDice
           // player-reported total they are instructions only.
           divineFury: pending.divineFury || null, divineStrike: pending.divineStrike || null,
           lunarRadianceBonus: pending.lunarRadianceBonus || null, surprisingStrikes: pending.surprisingStrikes || null,
-          pcSystemRoll: reportedDamage == null },
+          pcSystemRoll: false },
         enemy, outcome, pending.toppleDc, ledgerKey, characterId);
     }
   }
@@ -1839,6 +1937,12 @@ export async function formatAttackOutcomeBlock(sessionIdOrOutcomes) {
   const lines = recent.map(o => {
     const diceText = (o.dice || []).length > 1 ? `dice ${o.dice.join(' and ')}, taking the ${o.takenDie}` : `a ${o.takenDie}`;
     const modeText = o.mode ? ` (${ATTACK_MODE_LABEL[o.mode]}${o.modeReasons?.length ? `: ${o.modeReasons.join(', ')}` : ''})` : '';
+    // P4 (combat-loop fix): a hit waiting for the player's own damage dice.
+    if (o.awaitingDamage) {
+      return `${o.attacker} attacked ${o.target} with ${o.weapon}${modeText}: rolled ${diceText} + ${o.attackBonus} = ${o.total} vs AC ${o.targetAc} — HIT${o.critical === 'hit' ? ' (CRITICAL HIT)' : ''}. ` +
+        `The player now rolls damage: ${o.damageDiceText}${o.damageBonus ? ` (the engine adds ${o.damageBonus >= 0 ? '+' : ''}${o.damageBonus} after)` : ''}. ` +
+        `Narrate the hit landing, then STOP — the engine asks the player for the damage dice itself, so do not name dice, modifiers or a damage number.`;
+    }
     if (!o.hit) {
       // Graze (Step 2): the miss still dealt its flat damage.
       const grazeText = o.grazeDamage > 0
@@ -2009,14 +2113,17 @@ registerMarkerHandler('ATTACK', async (parsed, context) => {
       smiteSlot: parsed?.Smite ? Number(parsed.Smite) : null, smiteFiend: truthyFlag(parsed?.SmiteFiend) };
 
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [context.characterId]);
-    const isPc = /^(player|pc|character)$/i.test(attackerRaw) ||
-      (character && attackerRaw.toLowerCase() === String(character.name).toLowerCase());
+    const isPc = isPlayerRef(attackerRaw, character?.name);
     if (isPc) {
       // Combat item 8: incapacitated attackers cannot act; charmed
       // attackers cannot attack the charmer. Checked before any
       // pending attack or budget spend.
       const blocked = await attackBlockedByConditions('player', context.characterId, 'enemy', enemy.id);
       if (blocked) return { type: 'party_attack', success: false, reason: blocked };
+      // Combat-loop fix P4: nobody acts before the player's initiative is in.
+      if ((await readSessionConfig(context.sessionId)).pendingInitiative) {
+        return { type: 'party_attack', success: false, reason: 'roll initiative first — the fight starts once the initiative d20 is in' };
+      }
       const { pending, error } = await createPcPendingAttack(context.sessionId, context.characterId, character, enemy, opts);
       if (error) return { type: 'party_attack', success: false, reason: error };
       return { type: 'party_attack', success: true, pending: true, ...pending };
@@ -2050,8 +2157,7 @@ registerMarkerHandler('MASTERY_SET', async (parsed, context) => {
       return { type: 'mastery_set', success: false, reason: 'MASTERY_SET needs at least one weapon in Weapons=' };
     }
     const character = await dbGet('SELECT name FROM characters WHERE id = ?', [context.characterId]);
-    const isPc = /^(player|pc|character)$/i.test(targetRaw) ||
-      (character && targetRaw.toLowerCase() === String(character.name).toLowerCase());
+    const isPc = isPlayerRef(targetRaw, character?.name);
     let kind = null;
     let id = null;
     let displayName = targetRaw;

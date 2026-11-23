@@ -25,6 +25,7 @@
  * flag owned by characterHpService. The 'unconscious' CONDITION
  * (sleep, spells) lives here and never touches it (§6 of the design).
  */
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
@@ -657,8 +658,7 @@ async function resolveActorByName(context, rawName) {
   const targetRaw = String(rawName || '').trim();
   if (!targetRaw || !context?.characterId) return null;
   const character = await dbGet('SELECT name FROM characters WHERE id = ?', [context.characterId]);
-  const isPc = /^(player|pc|character)$/i.test(targetRaw) ||
-    (character && targetRaw.toLowerCase() === character.name.toLowerCase());
+  const isPc = isPlayerRef(targetRaw, character?.name);
   if (isPc) {
     const { ledgerKeyForPlayer } = await import('./turnLedgerService.js');
     const key = await ledgerKeyForPlayer(context.characterId).catch(() => `player:${context.characterId}`);
@@ -755,8 +755,7 @@ async function applyConditionMarker(parsed, context, action) {
   }
 
   const character = await dbGet('SELECT name FROM characters WHERE id = ?', [context.characterId]);
-  const isPc = /^(player|pc|character)$/i.test(targetRaw) ||
-    (character && targetRaw.toLowerCase() === character.name.toLowerCase());
+  const isPc = isPlayerRef(targetRaw, character?.name);
 
   let kind = null;
   let id = null;

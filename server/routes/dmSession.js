@@ -97,8 +97,17 @@ import { getPendingRoll, resolveReportedRoll, formatRollOutcomeBlock } from '../
 // markerPipeline.js — a handler service must be imported for
 // side effect in this route or it silently never runs).
 import { resolveBankRoll, formatPerceptionBankBlock, formatPerceptionUseBlock, formatActiveBankBlock } from '../services/perceptionPreRollService.js';
-import { getPendingAttack, resolveReportedAttack, formatAttackOutcomeBlock } from '../services/partyAttackService.js';
-import { getTurnState, advanceTurn } from '../services/combatTurnService.js';
+import { getPendingAttack, resolveReportedAttack, formatAttackOutcomeBlock, getPendingDamage, resolveReportedDamage } from '../services/partyAttackService.js';
+// Combat-loop fix (2026-11-23): the engine-driven turn loop and the
+// player's own initiative / damage / death-save dice.
+import {
+  resolvePlayerInitiative, formatInitiativeFact, setPendingDeathSave, takePendingDeathSave,
+  reportedD20, reportedTotal, pendingPlayerRolls, combatDispatchText, enemyAttackResultText,
+  partyAttackMath, partyAttackRefusalText, runNpcTurns, isPlayerEntry,
+  findPendingConcentration, queueConcentrationSaves, resolvePendingConcentration, resolvePendingHeal,
+} from '../services/combatLoopService.js';
+import { getTurnState } from '../services/combatTurnService.js';
+import { formatTurnAdvanceNote } from '../services/combatMarkerService.js';
 import { formatTurnStateBlock } from '../services/turnLedgerService.js';
 import { getCurrentEncounterSeq } from '../services/enemyCombatService.js';
 // REST / TIME_ADVANCE: rest + clock mechanics. The service registers its
@@ -1293,6 +1302,62 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
 // Detection helpers imported from dmSessionService.js
 
 // Send a message/action in the session
+// ---------------------------------------------------------------------------
+// Combat-loop fix helpers (2026-11-23)
+// ---------------------------------------------------------------------------
+const ATTACK_INTENT_RE = /\b(attack|attacks|strike|swing|stab|slash|shoot|fire at|hit|smite|punch|kick|lunge|cut down|thrust)\b/i;
+
+function signedNum(n) { const v = Number(n || 0); return `${v >= 0 ? '+' : '−'}${Math.abs(v)}`; }
+
+/** Is it the player's turn in a live fight? (false outside combat) */
+async function isPlayersTurn(sessionId) {
+  const seq = await getCurrentEncounterSeq(sessionId);
+  if (!seq) return false;
+  const st = await getTurnState(sessionId, seq).catch(() => null);
+  return !!(st && isPlayerEntry(st.currentTurn));
+}
+
+/** Open a player attack the DM left without an ATTACK marker: the named
+ *  enemy (or the first active one). Dispatched through the real pipeline,
+ *  so every engine rule (turn, economy, range) still applies. */
+async function synthesizePlayerAttack(sessionId, characterId, action) {
+  const seq = await getCurrentEncounterSeq(sessionId);
+  if (!seq) return null;
+  const rows = await dbAll(
+    "SELECT name FROM combat_enemies WHERE session_id = ? AND encounter_seq = ? AND status = 'active' AND (current_hp IS NULL OR current_hp > 0) ORDER BY id",
+    [sessionId, seq]).catch(() => []);
+  if (!rows.length) return null;
+  const low = String(action || '').toLowerCase();
+  const target = rows.find((r) => low.includes(String(r.name).toLowerCase()))
+    || rows.find((r) => low.includes(String(r.name).toLowerCase().replace(/\s+\d+$/, '')))
+    || rows[0];
+  const marker = `[ATTACK: Attacker="Player" Target="${String(target.name).replace(/"/g, '')}"]`;
+  const pr = await processResponseMarkers(marker, { characterId, sessionId, narrative: marker });
+  return { marker, target: target.name, handlerResults: pr.handlerResults || [] };
+}
+
+/** Plain-words engine lines, DM notes and math for one reply's results (P2, item 7). */
+function combatResultLines(handlerResults, playerName = null) {
+  const lines = []; const notes = []; const math = [];
+  for (const hr of handlerResults || []) {
+    if (!hr?.ok || !hr.result) continue;
+    if (hr.schemaKey === 'HP_CHANGE' && (hr.result.refusedSelfDamage || hr.result.refusedInCombat)) {
+      notes.push(`[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${hr.result.reason}`);
+    } else if (hr.schemaKey === 'ENEMY_ATTACK') {
+      // A refusal carries no enemy name; the marker's Enemy= names it.
+      const t = enemyAttackResultText({ enemyName: hr.parsed?.Enemy, ...hr.result }, playerName);
+      if (t) { lines.push(t.line); notes.push(t.note); if (t.math) math.push(t.math); }
+    } else if (hr.schemaKey === 'ATTACK') {
+      const refused = partyAttackRefusalText(hr.result);
+      if (refused) { lines.push(refused.line); notes.push(refused.note); continue; }
+      if (hr.result.pending) continue; // the player's d20 is asked for below
+      const m = partyAttackMath(hr.result);
+      if (m) { lines.push(`⚙ ${m}`); math.push(m); }
+    }
+  }
+  return { lines, notes, math };
+}
+
 router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
   const { sessionId: lockKey } = req.params;
 
@@ -1427,6 +1492,62 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       console.warn('[rolls] pending roll resolution failed (non-fatal):', err.message);
     }
 
+    // Combat-loop fix P4 (Zach 2026-11-23): "The engine should never roll
+    // for the player." Initiative and death saves are the player's reported
+    // d20s, settled here before the turn runs; damage dice settle in the
+    // ATTACK block below. rollMath feeds the side panel (item 7);
+    // engineLines are the plain-words results under the narrative;
+    // engineFacts are binding facts the DM narrates this turn.
+    const sidN = parseInt(sessionId);
+    const rollMath = [];
+    const engineLines = [];
+    const engineFacts = [];
+    let initiativeRes = null;
+    let deathSaveRes = null;
+    let concentrationRes = null;
+    if (!rollOutcome) {
+      try {
+        const d = reportedD20(action, Number.isInteger(checkRoll) ? checkRoll : dice.value.attackRoll);
+        if (d) {
+          initiativeRes = await resolvePlayerInitiative(sidN, d[0]);
+          if (initiativeRes) {
+            rollMath.push(initiativeRes.math);
+            engineFacts.push(formatInitiativeFact(initiativeRes));
+            engineLines.push(`⚙ ${initiativeRes.math}. Turn order: ${initiativeRes.state.turnOrder.map((c) => `${c.name} ${c.initiative}`).join(', ')}.`);
+          } else if ((concentrationRes = await resolvePendingConcentration(sidN, d[0]))) {
+            rollMath.push(concentrationRes.math);
+            engineLines.push(`⚙ ${concentrationRes.math}.${concentrationRes.broken ? ` ${concentrationRes.spell} ends.` : ''}`);
+            engineFacts.push(`[CONCENTRATION — system fact: the player rolled ${concentrationRes.roll} for the Constitution save (total ${concentrationRes.total} vs DC ${concentrationRes.dc}). ${concentrationRes.broken ? `Concentration BROKEN: ${concentrationRes.spell} ends now.` : `Concentration on ${concentrationRes.spell} holds.`} Narrate it.]`);
+          } else {
+            const pendingSave = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {}).pendingDeathSave;
+            if (pendingSave) {
+              await takePendingDeathSave(sidN);
+              deathSaveRes = await rollDeathSave(session.character_id, d[0]);
+              if (deathSaveRes) {
+                const pen = deathSaveRes.penalty ? ` ${signedNum(deathSaveRes.penalty)} (exhaustion)` : '';
+                const m = `Death save: d20 ${deathSaveRes.roll}${pen} vs DC 10 — ${String(deathSaveRes.outcome).replace(/_/g, ' ')} (successes ${deathSaveRes.successes}/3, failures ${deathSaveRes.failures}/3)`;
+                rollMath.push(m);
+                engineLines.push(`⚙ ${m}.${deathSaveRes.died ? ' You have died.' : deathSaveRes.stabilised ? ' You are stable.' : deathSaveRes.outcome === 'revived' ? ' You regain 1 HP and wake.' : ''}`);
+                engineFacts.push(
+                  `[DEATH SAVE — system fact: the player rolled ${deathSaveRes.roll}. Result: ${deathSaveRes.outcome}. Successes ${deathSaveRes.successes}/3, failures ${deathSaveRes.failures}/3.` +
+                  (deathSaveRes.died ? ' THE PLAYER CHARACTER HAS DIED.' : '') +
+                  (deathSaveRes.stabilised ? ' The player is now stable at 0 HP, still unconscious.' : '') +
+                  (deathSaveRes.outcome === 'revived' ? ' The player regained 1 HP and is conscious again.' : '') + ' Narrate it.]');
+              }
+            }
+          }
+          if (initiativeRes || deathSaveRes || concentrationRes) {
+            actionForLlm = `${action}\n\n${engineFacts.join('\n')}`;
+            const fresh = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+            if (fresh) session.session_config = fresh.session_config;
+          }
+        }
+      } catch (err) {
+        console.warn('[combatLoop] initiative/death-save resolution failed (non-fatal):', err.message);
+      }
+    }
+    const preRollConsumed = !!(rollOutcome || initiativeRes || deathSaveRes || concentrationRes);
+
     // ATTACK resolution (combat-real B2): a pending party attack from
     // last turn resolves from the player's reported dice — the
     // attackRoll/damage body fields, or a bare-number action (the same
@@ -1435,8 +1556,48 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     // sees: the ATTACK RESULT block below carries the judged outcome,
     // and the DM must not adjudicate the same dice a second time.
     let attackOutcome = null;
+    let fallbackAttack = null;
+    let healRes = null;
     try {
-      const pendingAttack = await getPendingAttack(parseInt(sessionId));
+      // P4: a hit waits on the player's damage dice — their number is the
+      // dice total; the engine adds the flat modifiers after.
+      if (!preRollConsumed && await getPendingDamage(sidN)) {
+        const total = reportedTotal(action, dice.value.damage);
+        if (total !== null) {
+          attackOutcome = await resolveReportedDamage(sidN, session.character_id, total);
+          if (attackOutcome) {
+            actionForLlm = action;
+            const fresh = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+            if (fresh) session.session_config = fresh.session_config;
+          }
+        }
+      }
+      // P4: a pending feature heal (Second Wind's 1d10) takes the
+      // reported total when no damage roll is waiting on it.
+      if (!preRollConsumed && !attackOutcome) {
+        const healTotal = reportedTotal(action, dice.value.damage);
+        const healCfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+        if (healTotal !== null && healCfg.pendingHeal && !healCfg.pendingDamage) {
+          healRes = await resolvePendingHeal(sidN, healTotal);
+          if (healRes) {
+            rollMath.push(healRes.math);
+            engineLines.push(`⚙ ${healRes.math}${healRes.hp?.currentHp != null ? ` — you are at ${healRes.hp.currentHp}/${healRes.hp.maxHp} HP` : ''}.`);
+            actionForLlm = `${action}\n\n[${healRes.feature.toUpperCase()} — system fact: the player rolled ${healRes.rolled}; the engine added ${healRes.flat}: ${healRes.heal} HP restored. Narrate it.]`;
+            engineFacts.push(actionForLlm.slice(action.length + 2));
+            const fresh = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+            if (fresh) session.session_config = fresh.session_config;
+          }
+        }
+      }
+      let pendingAttack = (preRollConsumed || attackOutcome || healRes) ? null : await getPendingAttack(sidN);
+      // P1 fallback: a bare d20 on the player's turn with nothing pending
+      // is an attack on the named (or first) enemy.
+      if (!pendingAttack && !preRollConsumed && !attackOutcome && !healRes
+          && reportedD20(action, dice.value.attackRoll)
+          && (await pendingPlayerRolls(sidN)).length === 0 && await isPlayersTurn(sidN)) {
+        fallbackAttack = await synthesizePlayerAttack(sidN, session.character_id, action);
+        if (fallbackAttack) pendingAttack = await getPendingAttack(sidN);
+      }
       if (pendingAttack) {
         let reportedDice = null;
         if (Number.isInteger(dice.value.attackRoll)) {
@@ -1477,7 +1638,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       // the same reported-total channel). When it consumes the total,
       // the older spell effect waits for a later report.
       let backlashConsumed = false;
-      if (!attackOutcome) {
+      if (!attackOutcome && !preRollConsumed && !healRes) {
         const scfgB = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
         const backlash = scfgB.pendingBacklashReduction || null;
         const backlashFirst = backlash && (!pendingEffect || (backlash.postedAt || 0) > (pendingEffect.postedAt || 0));
@@ -1497,7 +1658,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
           }
         }
       }
-      if (pendingEffect && !attackOutcome && !backlashConsumed) {
+      if (pendingEffect && !attackOutcome && !preRollConsumed && !healRes && !backlashConsumed) {
         let reportedTotal = null;
         if (Number.isInteger(dice.value.damage)) {
           reportedTotal = dice.value.damage;
@@ -1692,7 +1853,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     try {
       const acfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
       if (Array.isArray(acfg.recentAttacks) && acfg.recentAttacks.length > 0) {
-        const attackBlock = formatAttackOutcomeBlock(acfg.recentAttacks);
+        const attackBlock = await formatAttackOutcomeBlock(acfg.recentAttacks);
         delete acfg.recentAttacks;
         await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(acfg), sessionId]);
         session.session_config = JSON.stringify(acfg);
@@ -1878,6 +2039,17 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       }
     }
 
+    // Combat-loop fix: the engine facts (initiative, death save) rode the
+    // action like the dice directive; store the clean action, and keep the
+    // facts as system notes so the DM's history still has them.
+    if (engineFacts.length && Array.isArray(result.messages)) {
+      for (let i = result.messages.length - 1; i >= 0; i--) {
+        const m = result.messages[i];
+        if (m?.role === 'user' && m.content === actionForLlm) { result.messages[i] = { ...m, content: action }; break; }
+      }
+      for (const f of engineFacts) result.messages.push({ role: 'user', content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${f}` });
+    }
+
     // ─────────── MARKER DISPATCH RUNS BEFORE ANY PERSIST (Phase 2.1) ───────────
     // Ordering is the whole point. Previously the narrative was written first
     // and markers dispatched afterwards, so a crash between the two left a
@@ -1902,7 +2074,9 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       // characters.game_day via characterId (matches the SC-4 piety pattern).
       // SC-6.4b adds `narrative` so MERCHANT_SHOP handler can self-orchestrate
       // the coupled ADD_ITEM markers (parked from independent dispatch).
-      pipelineResult = await processResponseMarkers(result.narrative || '', {
+      // Combat-loop fix: the engine owns TURN_ADVANCE, and a damaging
+      // HP_CHANGE beside an ENEMY_ATTACK would count the blow twice.
+      pipelineResult = await processResponseMarkers(combatDispatchText(result.narrative || '', { combatActive: true }).text, {
         characterId: session.character_id,
         sessionId: parseInt(sessionId),
         narrative: result.narrative || ''
@@ -1911,11 +2085,31 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       console.error('[markerPipeline] dispatch failed (non-fatal):', err.message);
     }
 
+    // Combat-loop fix P1: on the player's turn, an attack the DM narrated
+    // without an ATTACK marker opens one, so the engine asks for the d20
+    // instead of the fight going narrative.
+    try {
+      const anyAttack = (pipelineResult.handlerResults || []).some((hr) => ['ATTACK', 'COMBAT_START', 'SPELL_CAST'].includes(hr?.schemaKey));
+      if (!anyAttack && !preRollConsumed && !attackOutcome && !healRes && !fallbackAttack && ATTACK_INTENT_RE.test(action)
+          && (await pendingPlayerRolls(sidN)).length === 0 && await isPlayersTurn(sidN)) {
+        fallbackAttack = await synthesizePlayerAttack(sidN, session.character_id, action);
+        if (fallbackAttack) {
+          pipelineResult.handlerResults.push(...fallbackAttack.handlerResults);
+          result.messages.push({
+            role: 'user',
+            content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The player's attack on ${fallbackAttack.target} was opened by the engine (${fallbackAttack.marker}); the player now rolls the d20. Next time emit the ATTACK marker yourself, and never narrate a player's attack as a hit or miss before the engine's result.`,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[combatLoop] fallback attack failed (non-fatal):', err.message);
+    }
+
     // Phase 3.1 — death saves. If the turn left the player at 0 HP, roll one
     // save now. The prompt instructs the DM to narrate the fall and stop; the
     // system owns the die, so the AI cannot decide whether the player lives.
     // Runs after dispatch so an HP_CHANGE from this very turn is reflected.
-    let deathSave = null;
+    let deathSave = deathSaveRes;
     try {
       const hpState = await getHpState(session.character_id);
       // S2: a hit taken while already at 0 HP adds failed death saves (two on a
@@ -1930,20 +2124,9 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
           content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The player took damage while at 0 HP. Failures ${hpState.death_save_failures || 3}/3. THE PLAYER CHARACTER HAS DIED.`
         });
       }
-      if (hpState && hpState.current_hp === 0 && !hpState.is_dead) {
-        deathSave = await rollDeathSave(session.character_id);
-        if (deathSave) {
-          result.messages.push({
-            role: 'user',
-            content:
-              `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Death saving throw rolled: ${deathSave.roll}. ` +
-              `Result: ${deathSave.outcome}. Successes ${deathSave.successes}/3, failures ${deathSave.failures}/3.` +
-              (deathSave.died ? ' THE PLAYER CHARACTER HAS DIED.' : '') +
-              (deathSave.stabilised ? ' The player is now stable at 0 HP, still unconscious.' : '') +
-              (deathSave.outcome === 'revived' ? ' The player regained 1 HP and is conscious again.' : '')
-          });
-        }
-      }
+      // Combat-loop fix P4: the save itself is the player's d20 — asked for
+      // after the NPC turns below (setPendingDeathSave) and settled at the
+      // top of the next message. The engine no longer rolls it.
     } catch (err) {
       console.error('[hp] death save failed (non-fatal):', err.message);
     }
@@ -1997,11 +2180,20 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       const beforeJson = JSON.stringify({ p: cfg.pendingMarkerCorrections ?? null, e: cfg.correctionExhaustedKeys ?? null });
       const afterJson = JSON.stringify({ p: nextCfg.pendingMarkerCorrections ?? null, e: nextCfg.correctionExhaustedKeys ?? null });
       if (beforeJson !== afterJson) {
-        // Preserve a pendingRoll the ROLL_REQUEST handler wrote to the DB
-        // during this turn's marker dispatch — nextCfg was built from the
-        // turn-start snapshot and would otherwise erase it.
+        // nextCfg was built from the turn-start snapshot; every key a
+        // handler wrote during this turn's dispatch (pendingAttack,
+        // pendingInitiative, recentAttacks, pendingRoll, …) must survive.
+        // Combat-loop fix: merge the correction keys onto the LIVE row
+        // instead of preserving a hand-kept list of keys (the list missed
+        // the pending attack and initiative).
+        let liveCfg = null;
         try {
           const freshCfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+          liveCfg = { ...freshCfg };
+          delete liveCfg.pendingMarkerCorrections;
+          delete liveCfg.correctionExhaustedKeys;
+          if (entries.length > 0) liveCfg.pendingMarkerCorrections = entries;
+          if (exhaustedKeys.length > 0) liveCfg.correctionExhaustedKeys = exhaustedKeys;
           if (freshCfg.pendingRoll) nextCfg.pendingRoll = freshCfg.pendingRoll;
           // Perception pre-roll: the bank key and any USE outcome the
           // handler stashed must survive this rebuild too — nextCfg was
@@ -2018,7 +2210,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
           if (freshCfg.pendingSpellEffect) nextCfg.pendingSpellEffect = freshCfg.pendingSpellEffect;
           if (freshCfg.pendingWildMagicOffer) nextCfg.pendingWildMagicOffer = freshCfg.pendingWildMagicOffer;
         } catch { /* best-effort — a lost pending roll can be re-asked */ }
-        await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(nextCfg), sessionId]);
+        await dbRun('UPDATE dm_sessions SET session_config = ? WHERE id = ?', [JSON.stringify(liveCfg || nextCfg), sessionId]);
       }
       // Capture summary for playtest logger
       const validMarkerCount = Object.values(validByKey).reduce((sum, arr) => sum + arr.length, 0);
@@ -2202,14 +2394,27 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     // has already read the markers above (processResponseMarkers); this is
     // display only — the stored history keeps them.
     let cleanNarrative = stripMarkers(result.narrative);
+    // Combat-loop fix: the model sometimes echoes an engine fact header
+    // ("[ATTACK RESULT: Hit]", "[INITIATIVE — …]") into its prose. The
+    // engine's own "⚙"/"🎲" lines state those facts to the player, so the
+    // echo is display noise — removed here, kept in stored history.
+    cleanNarrative = cleanNarrative
+      .replace(/\[(?:ATTACK RESULTS?|INITIATIVE|DEATH SAVE|CONCENTRATION|SECOND WIND|COMBAT TURN(?: STATE)?|SPELL EFFECT|ROLL RESULT)\b[^\]\n]*\]\s*/gi, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
 
     // Structural #9: Fiction-marker reconciliation (strict both directions).
     // If narration claims damage without a marker, auto-apply it.
     // If a marker was applied but not narrated, append a system note.
     try {
-      const reconciliation = await reconcileTurn(cleanNarrative, pipelineResult.handlerResults || [], { characterId, sessionId });
+      const reconcileSeq = await getCurrentEncounterSeq(sessionId).catch(() => null);
+      const combatActive = !!(reconcileSeq && await getTurnState(sidN, reconcileSeq).catch(() => null));
+      const reconciliation = await reconcileTurn(cleanNarrative, pipelineResult.handlerResults || [], { characterId: session.character_id, sessionId, combatActive });
+      // The "applied but not narrated" notes are for the DM (next turn),
+      // never the player's text; the engine's own "⚙" lines state combat
+      // results to the player.
       for (const item of reconciliation.missingFiction) {
-        cleanNarrative += `\n\n${item.message}`;
+        result.messages.push({ role: 'user', content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${item.message.replace(/^\[SYSTEM:\s*|\]$/g, '')}` });
       }
       if (reconciliation.autoApplied.length > 0 || reconciliation.missingFiction.length > 0) {
         console.log(`[reconciliation] autoApplied=${reconciliation.autoApplied.length} missingFiction=${reconciliation.missingFiction.length}`);
@@ -2302,6 +2507,159 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
         const endSeq = await getCurrentEncounterSeq(sessionId);
         if (endSeq) await dbRun('DELETE FROM combat_turn_state WHERE session_id = ? AND encounter_seq = ?', [sessionId, endSeq]);
       } catch { /* stale turn state is harmless; next combat re-inits */ }
+    }
+
+    // ─────────── COMBAT LOOP (combat-loop fix P1/P2, 2026-11-23) ───────────
+    // 1. This reply's combat results in plain words (P2): the player sees a
+    //    "⚙" line, the DM gets the same fact as a system note.
+    // 2. The player's turn ends when nothing waits on their dice; then the
+    //    ENGINE runs every NPC turn — one DM call per NPC, the DM choosing
+    //    the action (Zach: "The DM should control each and every NPC") —
+    //    until it is the player's turn again.
+    // 3. Whatever the player must roll next is asked for in plain words.
+    let npcTurnLog = [];
+    let turnStateOut = null;
+    const rollPrompts = [];
+    try {
+      if (attackOutcome) {
+        const m = partyAttackMath(attackOutcome);
+        if (m) { rollMath.push(m); engineLines.push(`⚙ ${m}`); }
+      }
+      const pcRow = await dbGet('SELECT name, nickname FROM characters WHERE id = ?', [session.character_id]).catch(() => null);
+      const pcName = pcRow?.nickname || pcRow?.name || 'Player';
+      const mainLines = combatResultLines(pipelineResult.handlerResults, pcName);
+      engineLines.push(...mainLines.lines);
+      rollMath.push(...mainLines.math);
+      for (const n of mainLines.notes) result.messages.push({ role: 'user', content: n });
+      if (engineLines.length) cleanNarrative += `\n\n${engineLines.join('\n')}`;
+
+      const loopSeq = combatEnd ? null : await getCurrentEncounterSeq(sessionId);
+      if (loopSeq && await getTurnState(sidN, loopSeq).catch(() => null)) {
+        // Settling a concentration save (a reaction to damage) or a bonus-action
+        // heal (Second Wind) leaves the player's turn open: their action is still to come.
+        const playerTurnDone = !initiativeRes && !concentrationRes && !healRes && (await pendingPlayerRolls(sidN)).length === 0;
+        const npcBaseRaw = messages.find((m) => m.role === 'system')?.content || result.messages.find((m) => m.role === 'system')?.content || '';
+        const npcBase = leanPrompt ? applyLeanTransforms(npcBaseRaw) : npcBaseRaw;
+        const npcHistory = result.messages.filter((m) => m.role !== 'system');
+        const loop = await runNpcTurns({
+          sessionId: sidN, encounterSeq: loopSeq, playerTurnDone,
+          playerName: pcName,
+          baseSystemPrompt: npcBase,
+          alreadyActed: (pipelineResult.handlerResults || [])
+            .filter((hr) => hr?.ok && hr.schemaKey === 'ENEMY_ATTACK' && hr.result?.type === 'enemy_attack' && hr.result.success !== false && hr.result.attackRoll != null)
+            .map((hr) => hr.result.enemyName),
+          callDm: async (directive, sysPrompt) => {
+            const w = await wrapLlmCallWithId(
+              {
+                character_id: session.character_id, campaign_id: session.campaign_id, session_id: sidN,
+                prompt_builder: 'combatLoopService', call_purpose: 'combat_npc_turn',
+                system_prompt: sysPrompt, user_message: directive,
+                conversation_history: npcHistory, metadata: { lean_prompt: !!leanPrompt },
+              },
+              (chatOptions) => llm.continueSession(sysPrompt, npcHistory, directive, 'dm', { ...chatOptions, sessionId })
+            );
+            const reply = w.result?.response || '';
+            npcHistory.push({ role: 'user', content: directive }, { role: 'assistant', content: reply });
+            return reply;
+          },
+          dispatch: (raw) => processResponseMarkers(combatDispatchText(raw, { combatActive: true }).text, {
+            characterId: session.character_id, sessionId: sidN, narrative: raw,
+          }),
+        });
+        const lastAssistant = [...result.messages].reverse().find((m) => m.role === 'assistant');
+        for (const t of loop.turns) {
+          const said = stripMarkers(t.raw).trim();
+          const r = combatResultLines(t.handlerResults, pcName);
+          const block = [said, ...r.lines].filter(Boolean).join('\n');
+          if (block) cleanNarrative += `\n\n${block}`;
+          rollMath.push(...r.math);
+          if (lastAssistant && t.raw) lastAssistant.content = `${lastAssistant.content || ''}\n\n${t.raw}`;
+          for (const n of r.notes) result.messages.push({ role: 'user', content: n });
+          pipelineResult.handlerResults.push(...t.handlerResults);
+          if (t.handlerResults.some((hr) => hr?.ok && hr.schemaKey === 'COMBAT_END')) combatEnd = true;
+        }
+        if (loop.turns.length) {
+          npcTurnLog = loop.turns.map((t) => ({ combatant: t.combatant.name, type: t.combatant.type }));
+          appendToTranscript(sidN, loop.turns.map((t) => ({ role: 'assistant', content: t.raw }))).catch(() => {});
+        }
+        // Each engine advance's own effects (lair hazard tick, turn-start
+        // heals and grants) reach the DM the way TURN_ADVANCE notes did.
+        for (const st of loop.advanced || []) {
+          const extra = formatTurnAdvanceNote(st).split('\n').slice(1).join('\n');
+          if (extra) result.messages.push({ role: 'user', content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${extra}` });
+        }
+        if (loop.ended) combatEnd = true;
+        if (combatEnd) {
+          await dbRun('DELETE FROM combat_turn_state WHERE session_id = ? AND encounter_seq = ?', [sessionId, loopSeq]).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.error('[combatLoop] NPC turns failed (non-fatal):', err.message);
+    }
+
+    // P4 concentration: every damage the concentrating player took this
+    // message (their turn and the NPC turns) owes a CON save — asked for,
+    // never rolled.
+    try {
+      const owed = findPendingConcentration(pipelineResult.handlerResults, session.character_id);
+      if (owed.length) await queueConcentrationSaves(sidN, owed);
+    } catch (err) {
+      console.warn('[combatLoop] concentration ask failed (non-fatal):', err.message);
+    }
+
+    // P4 death saves: at 0 HP (not dead, not stable) the player is asked
+    // for a d20 — never when one was just settled with no turn since.
+    try {
+      const hpNow = await getHpState(session.character_id);
+      if (hpNow && hpNow.current_hp === 0 && !hpNow.is_dead && (hpNow.death_save_successes || 0) < 3
+          && (!deathSaveRes || npcTurnLog.length > 0)) {
+        await setPendingDeathSave(sidN, session.character_id);
+      }
+    } catch (err) {
+      console.warn('[combatLoop] death-save ask failed (non-fatal):', err.message);
+    }
+
+    // What the player rolls next, in plain words, plus the live turn state
+    // for the tracker (P5).
+    try {
+      const pcfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+      if (pcfg.pendingInitiative) {
+        rollPrompts.push(`🎲 Roll a d20 for initiative — the engine adds ${signedNum(pcfg.pendingInitiative.modifier)} (Dex) after.`);
+      }
+      if (pcfg.pendingConcentration?.dcs?.length) {
+        const pc = pcfg.pendingConcentration;
+        const extra = pc.penalty ? ` and ${signedNum(pc.penalty)} (exhaustion)` : '';
+        rollPrompts.push(`🎲 Roll a d20 Constitution saving throw to keep concentration on ${pc.spell} — DC ${pc.dcs[0]}; the engine adds ${signedNum(pc.conMod)} (CON)${extra} after.`);
+      }
+      if (pcfg.pendingHeal) {
+        rollPrompts.push(`🎲 Roll ${pcfg.pendingHeal.dice} for ${pcfg.pendingHeal.feature} — the engine adds ${signedNum(pcfg.pendingHeal.flat)} after.`);
+      }
+      if (pcfg.pendingDeathSave) {
+        rollPrompts.push('🎲 Roll a d20 for your death saving throw — 10 or higher succeeds; the engine keeps the count.');
+      }
+      if (pcfg.pendingAttack && pcfg.pendingAttack.attackerKind === 'player') {
+        const pa = pcfg.pendingAttack;
+        const two = pa.mode === 'advantage' || pa.mode === 'disadvantage';
+        const why = Array.isArray(pa.modeReasons) && pa.modeReasons.length ? `: ${pa.modeReasons.join(', ')}` : '';
+        rollPrompts.push(`🎲 Roll ${two ? `two d20s (${pa.mode}${why})` : 'a d20'} to attack ${pa.target} with your ${pa.weapon} — the engine adds ${signedNum(pa.attackBonus)} and checks it against ${pa.target}'s AC.`);
+      }
+      if (pcfg.pendingDamage) {
+        rollPrompts.push(`🎲 Roll ${pcfg.pendingDamage.diceText} for damage — the engine adds ${signedNum(pcfg.pendingDamage.flat)} after.`);
+      }
+      if (rollPrompts.length) cleanNarrative += `\n\n${rollPrompts.join('\n')}`;
+      const tsSeq = await getCurrentEncounterSeq(sessionId);
+      const ts = tsSeq && !combatEnd ? await getTurnState(sidN, tsSeq).catch(() => null) : null;
+      if (ts) {
+        turnStateOut = {
+          encounterSeq: tsSeq,
+          turnOrder: ts.turnOrder,
+          currentTurn: ts.turnOrder.findIndex((c) => c.key === ts.currentTurn?.key),
+          round: ts.round,
+          awaitingInitiative: pcfg.pendingInitiative ? pcfg.pendingInitiative.name : null,
+        };
+      }
+    } catch (err) {
+      console.warn('[combatLoop] roll prompt / turn state failed (non-fatal):', err.message);
     }
 
     // Phase B — SET_COVER failures must SURFACE (ruled 2026-10-29), not
@@ -2462,7 +2820,13 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       spellCasts: pipelineResult.handlerResults
         .filter(hr => hr.ok && hr.schemaKey === 'SPELL_CAST' && hr.result?.success)
         .map(hr => hr.result),
-      rollOutcome: rollOutcome || undefined
+      rollOutcome: rollOutcome || undefined,
+      // Combat-loop fix: the math panel (item 7), what to roll next, the
+      // live turn order for the tracker (P5), and the NPC turns the engine ran.
+      rollMath: rollMath.length ? rollMath : undefined,
+      rollPrompts: rollPrompts.length ? rollPrompts : undefined,
+      turnState: turnStateOut || undefined,
+      npcTurns: npcTurnLog.length ? npcTurnLog : undefined
     });
   } catch (error) {
     // Tagged errors from llm.js: the local model is not reachable, or its
@@ -3045,26 +3409,6 @@ router.post('/:sessionId/rest-narrative', requireSessionCampaign, async (req, re
 });
 
 // End a session - generates rewards based on session content
-// Combat item 3, Tier 1 (Q1 consequence): the tracker Next Turn button
-// used to advance local React state only, drifting from the server
-// turn order. This endpoint advances the server order and returns the
-// tracker shape the client already renders.
-router.post('/:sessionId/advance-turn', requireSessionCampaign, async (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    const session = await dbGet('SELECT * FROM dm_sessions WHERE id = ?', [sessionId]);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-    const encounterSeq = req.body?.encounterSeq || await getCurrentEncounterSeq(sessionId);
-    if (!encounterSeq) return res.status(400).json({ error: 'No active encounter' });
-    const newState = await advanceTurn(sessionId, encounterSeq);
-    if (!newState) return res.status(400).json({ error: 'No turn order for this encounter' });
-    return res.json({ turnOrder: newState.turnOrder, currentTurn: newState.currentIndex, round: newState.round, encounterSeq });
-  } catch (e) {
-    console.error('[dmSession] advance-turn failed:', e.message);
-    return res.status(500).json({ error: 'Failed to advance the turn' });
-  }
-});
-
 router.post('/:sessionId/end', requireSessionCampaign, async (req, res) => {
   try {
     const { sessionId } = req.params;

@@ -128,17 +128,14 @@ try {
     check(r4.roseAboveZero === true && s4.current_hp === 6 && s4.s === 0 && s4.f === 0 && s4.is_unconscious === 0, 'healing from 0 resets both counters and wakes the PC, as before');
   }
 
-  console.log('\n=== PC: rolled saves unchanged (forced dice) ===\n');
+  console.log('\n=== PC: reported saves judged unchanged ===\n');
   {
     const n1 = await pc('Nat1', { hp: 0 });
-    forceMinDice();
-    const r1 = await rollDeathSave(n1);
-    restoreDice();
+    // Combat-loop fix P4: the death save is the player's reported d20.
+    const r1 = await rollDeathSave(n1, 1);
     check(r1.roll === 1 && r1.failures === 2, 'a natural 1 still counts as two failures');
     const n20 = await pc('Nat20', { hp: 0, f: 2 });
-    forceMaxDice();
-    const r2 = await rollDeathSave(n20);
-    restoreDice();
+    const r2 = await rollDeathSave(n20, 20);
     check(r2.roll === 20 && r2.outcome === 'revived' && (await state(n20)).current_hp === 1, 'a natural 20 still revives at 1 HP');
   }
 

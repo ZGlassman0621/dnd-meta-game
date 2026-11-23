@@ -196,8 +196,11 @@ group('3. B1 — initiative uses real DEX modifiers');
 {
   const r = await marker('[COMBAT_START: Enemies="Goblin (HP 7, AC 15, ATK +4, DMG 1d6+2)"]', { characterId: pcId, sessionId: sessionB });
   const order = r?.combatStart?.turnOrder || [];
-  const garrick = order.find(c => c.name === 'Garrick');
-  assert(garrick && garrick.modifier === 3, 'Garrick initiative modifier is +3 (DEX 16), not the old silent +0');
+  // Combat-loop fix P4: the engine never rolls the player's initiative —
+  // it holds Garrick's real DEX modifier until he reports his d20.
+  const { getPendingInitiative } = await import('../server/services/combatLoopService.js');
+  const garrick = await getPendingInitiative(sessionB);
+  assert(garrick && garrick.name === 'Garrick' && garrick.modifier === 3 && !order.some(c => c.name === 'Garrick'), 'Garrick initiative modifier is +3 (DEX 16), not the old silent +0 — held for his own d20');
   const lyra = order.find(c => c.name === 'Lyra');
   assert(lyra && lyra.modifier === 3, 'Lyra initiative modifier is +3 (DEX 16)');
 }
@@ -223,13 +226,14 @@ group('5. B2 — the PC pending attack (player dice, system judgment)');
   assert(r && r.success === true && r.pending === true, 'ATTACK creates a pending attack');
   assert(r.attackBonus === 5 && r.targetAc === 15, 'pending carries the true bonus (+5) and AC (15)');
   const out = await pas.resolveReportedAttack(sessionA, pcId, [17], 8);
-  assert(out.hit === true && out.total === 22 && out.damage === 8, 'reported 17 + 5 = 22 hits; reported damage 8 lands');
-  assert(await goblinHp() === 22, 'goblin HP 30 → 22');
+  // Combat-loop fix P4: the reported 8 is the dice; the engine adds +3 STR.
+  assert(out.hit === true && out.total === 22 && out.damageRoll === 8 && out.damage === 11, 'reported 17 + 5 = 22 hits; reported dice 8 + 3 STR = 11 lands');
+  assert(await goblinHp() === 19, 'goblin HP 30 → 19');
   await advanceRound(); // Item 3: Garrick (L3) has one swing per turn — the whiff is a new turn.
   await marker('[ATTACK: Attacker="Player" Target="Goblin"]', CTX);
   const whiff = await pas.resolveReportedAttack(sessionA, pcId, [1], 8);
   assert(whiff.hit === false && whiff.critical === 'miss', 'nat 1 misses despite the +5');
-  assert(await goblinHp() === 22, 'a miss deals nothing');
+  assert(await goblinHp() === 19, 'a miss deals nothing');
   await advanceRound(); // Item 3: the poisoned attack is a third turn.
   // Poisoned: the pending attack itself is created at disadvantage.
   await cs.addCondition('player', pcId, 'poisoned');

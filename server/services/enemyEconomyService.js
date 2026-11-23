@@ -148,9 +148,28 @@ export async function checkEnemyAction(sessionId, encounterSeq, enemyKey, enemyN
     if (spent.error) return spent;
     return { bonusSpent: true };
   }
-  // Action accounting applies only on the enemy's own turn.
-  const turnKey = await currentTurnKey(sessionId, encounterSeq);
-  if (turnKey !== enemyKey) return {};
+  // Combat-loop fix (P1/B3, 2026-11-23): the ENGINE runs every turn now
+  // and asks the DM for each enemy's action on that enemy's own turn, so
+  // an ordinary attack off its turn is refused instead of resolving as a
+  // free extra attack (reactions, legendary and bonus spends returned
+  // above). Before the player's initiative is in, nobody acts.
+  try {
+    const s = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+    const cfg = safeParse(s?.session_config, {}) || {};
+    if (cfg.pendingInitiative) {
+      return { error: `the fight has not started yet: waiting for ${cfg.pendingInitiative.name || 'the player'}'s initiative roll` };
+    }
+  } catch { /* config is best-effort; the turn check below still applies */ }
+  // Only an enemy that HAS a turn in the order is held to it: one the
+  // order does not list (arrived after initiative) keeps the legacy
+  // unenforced path rather than being refused forever.
+  let turnState;
+  try { turnState = await getTurnState(sessionId, encounterSeq); } catch { turnState = null; }
+  const inOrder = !!turnState?.turnOrder?.some((c) => c.key === enemyKey);
+  if (inOrder && turnState.currentTurn?.key !== enemyKey) {
+    const current = turnState.currentTurn?.name || 'another combatant';
+    return { error: `Out of turn: it is ${current}'s turn, not ${enemyName}'s — the engine runs ${enemyName}'s turn and will ask for its action then` };
+  }
   if (multiattack) {
     const entry = await getEntry(sessionId, encounterSeq, enemyKey);
     const pat = entry?.multiattack;

@@ -28,6 +28,7 @@
  * and action spent, placement rolls, splash cosmetic (no dice).
  */
 
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { roll } from '../utils/rng.js';
@@ -180,8 +181,7 @@ export async function applySplash(ctx, spell, level) {
     } else {
       const ess = await import('./enemySpellService.js');
       const charRow = await dbGet('SELECT name FROM characters WHERE id = ?', [ctx.characterId]);
-      const isPcTarget = /^(player|pc|character)$/i.test(ctx.besideName) ||
-        (charRow && ctx.besideName.toLowerCase() === String(charRow.name).toLowerCase());
+      const isPcTarget = isPlayerRef(ctx.besideName, charRow?.name);
       if (isPcTarget) {
         await ess.damageToPc(ctx.sessionId, ctx.encounterSeq, ctx.characterId, dmg.amount,
           { type: dmg.type, attacker: { kind: 'enemy', id: ctx.casterId, name: ctx.casterName }, spell });

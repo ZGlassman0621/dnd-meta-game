@@ -147,9 +147,15 @@ group('2. Dodge effects: party attacks, enemy attacks, DEX saves');
   // Party member dodges: enemy attacks at disadvantage.
   const d = await markerResult('[DODGE: Target="Dodgy"]', pc.id, sessionId, 'DODGE');
   ok(d && d.success === true, 'party dodge marker succeeds');
+  // Combat-loop fix: an ordinary enemy attack resolves only on that
+  // enemy's own turn, so the order moves to the attacker first.
+  await ct.advanceTurn(sessionId, 1); // Dodge Goblin 2's turn (Dodgy's dodge lasts to Dodgy's next turn)
   const ea = await es.resolveEnemyAttack(sessionId, 1, 'Dodge Goblin 2', { type: 'companion', id: fighter.id, armorClass: 14 });
   ok(ea && ea.attackMode === 'disadvantage' && ea.attackRolls.length === 2, 'enemy attack vs a dodging party member rolls at disadvantage');
-  // Dodging enemy rolls DEX saves with advantage.
+  // Dodging enemy rolls DEX saves with advantage. (Its first Dodge ended
+  // at the start of its own turn above, so it dodges again now.)
+  const ed2 = await markerResult('[DODGE: Target="Dodge Goblin 2"]', pc.id, sessionId, 'DODGE');
+  ok(ed2 && ed2.success === true, 'the goblin dodges again on its own turn');
   const cleric = await addCompanion('Clericy', pc.id, {
     companion_class: 'Cleric', companion_level: 3,
     companion_ability_scores: JSON.stringify({ str: 10, dex: 12, con: 14, int: 10, wis: 16, cha: 12 }),
@@ -412,9 +418,15 @@ group('9. Enemy Hide and Ready are mechanical (Zach veto of party-only)');
   ]);
   const hide = await markerResult('[HIDE: Target="Hide Goblin E" Stealth="18"]', pc.id, sessionId, 'HIDE');
   ok(hide && hide.success === true, 'enemy hide marker succeeds (no longer party-only)');
+  // Combat-loop fix: an ordinary enemy attack resolves only on that
+  // enemy's own turn, so the order moves to the attacker first.
+  await ct.advanceTurn(sessionId, 1); // Hide Goblin E's turn
   const fromHiding = await markerResult('[ENEMY_ATTACK: Enemy="Hide Goblin E" Target="Target"]', pc.id, sessionId, 'ENEMY_ATTACK');
   ok(fromHiding && fromHiding.attackMode === 'advantage' && fromHiding.attackRolls.length === 2, 'hidden enemy attacks at advantage');
+  await ct.advanceTurn(sessionId, 1); // Target
+  await ct.advanceTurn(sessionId, 1); // Hide Goblin E again, round 2
   const plain = await markerResult('[ENEMY_ATTACK: Enemy="Hide Goblin E" Target="Target"]', pc.id, sessionId, 'ENEMY_ATTACK');
+  ok(plain && plain.type === 'enemy_attack' && plain.success !== false, 'the round-2 attack resolves');
   ok(plain && plain.attackMode !== 'advantage', 'enemy hidden consumed by the first attack');
   // Enemy Ready: stored, refused without one, fired on a reaction.
   const sessionId2 = await addSession(pc.id);
@@ -458,10 +470,12 @@ group('10. Enemy Help: monsters helping monsters, consumed, expiring, side rules
     equipment: JSON.stringify({ mainHand: { name: 'Longsword' } })
   });
   const victimKey = await wid.assignWorldId('npcs', victim.npc_id);
+  // The ally acts before the helper, so the help (which lasts to the
+  // helper's next turn) is still live on the ally's own turn.
   await ct.initializeTurnOrder(sessionId, 1, [
     { name: 'Victim', type: 'companion', key: victimKey },
-    { name: 'Helper Goblin', type: 'enemy', key: `combat:${sessionId}:1:${helperGoblin.id}` },
     { name: 'Ally Goblin', type: 'enemy', key: `combat:${sessionId}:1:${allyGoblin.id}` },
+    { name: 'Helper Goblin', type: 'enemy', key: `combat:${sessionId}:1:${helperGoblin.id}` },
   ]);
   // Mixed sides are refused, both directions.
   const mixed1 = await markerResult('[HELP: Helper="Helper Goblin" Target="Victim" Ally="Victim"]', pc.id, sessionId, 'HELP');
@@ -474,10 +488,12 @@ group('10. Enemy Help: monsters helping monsters, consumed, expiring, side rules
   // Real enemy help: advantaged once, then consumed.
   const h = await markerResult('[HELP: Helper="Helper Goblin" Target="Victim" Ally="Ally Goblin"]', pc.id, sessionId, 'HELP');
   ok(h && h.success === true && h.helper === 'Helper Goblin' && h.ally === 'Ally Goblin', 'enemy help marker succeeds');
+  // Combat-loop fix: an ordinary enemy attack resolves only on that
+  // enemy's own turn, so the order moves to the attacker first.
+  await ct.advanceTurn(sessionId, 1); // Ally Goblin's turn
   const helped = await markerResult('[ENEMY_ATTACK: Enemy="Ally Goblin" Target="Victim"]', pc.id, sessionId, 'ENEMY_ATTACK');
   ok(helped && helped.attackMode === 'advantage' && helped.attackRolls.length === 2, 'helped enemy attacks at advantage');
-  const plain = await markerResult('[ENEMY_ATTACK: Enemy="Ally Goblin" Target="Victim"]', pc.id, sessionId, 'ENEMY_ATTACK');
-  ok(plain && plain.attackMode !== 'advantage', 'enemy help consumed by the first attack');
+  ok(!(await ast.getEntry(sessionId, 1, `combat:${sessionId}:1:${allyGoblin.id}`)).help, 'enemy help consumed by the first attack');
   // Enemy help vs the PC: the stored name must be resolvePartyTarget's
   // 'Player', not the character name.
   const paladin = await addPc({ name: 'Helped PC', class: 'Fighter', level: 5,
@@ -487,11 +503,12 @@ group('10. Enemy Help: monsters helping monsters, consumed, expiring, side rules
   const [helper2, ally2] = await es.createEncounterEnemies(sessionId2, 1, [gob('Helper Goblin 2'), gob('Ally Goblin 2')]);
   await ct.initializeTurnOrder(sessionId2, 1, [
     { name: 'Helped PC', type: 'player', key: palKey },
-    { name: 'Helper Goblin 2', type: 'enemy', key: `combat:${sessionId2}:1:${helper2.id}` },
     { name: 'Ally Goblin 2', type: 'enemy', key: `combat:${sessionId2}:1:${ally2.id}` },
+    { name: 'Helper Goblin 2', type: 'enemy', key: `combat:${sessionId2}:1:${helper2.id}` },
   ]);
   const hp = await markerResult('[HELP: Helper="Helper Goblin 2" Target="Player" Ally="Ally Goblin 2"]', paladin.id, sessionId2, 'HELP');
   ok(hp && hp.success === true, 'enemy help vs the PC succeeds');
+  await ct.advanceTurn(sessionId2, 1); // Ally Goblin 2's turn
   const helpedPc = await markerResult('[ENEMY_ATTACK: Enemy="Ally Goblin 2" Target="Player"]', paladin.id, sessionId2, 'ENEMY_ATTACK');
   ok(helpedPc && helpedPc.attackMode === 'advantage', 'helped enemy attacks the PC at advantage');
   // Expiry at the helper's next turn: grant, then advance past it

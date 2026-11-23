@@ -28,6 +28,7 @@
  * instructions, never silently added; Blessed Healer's fixed self-heal
  * is system-applied (it is not a reported total) and stated.
  */
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { roll, rollD20 } from '../utils/rng.js';
@@ -1473,7 +1474,7 @@ async function castPartySpell(context, parsed, spell, level) {
       for (const t of deduped) {
         let tKind = null;
         let tId = null;
-        if (/^(player|pc|character)$/i.test(t) || (pcNameRow && t.toLowerCase() === String(pcNameRow.name).toLowerCase())) {
+        if (isPlayerRef(t, pcNameRow?.name)) {
           tKind = 'player'; tId = context.characterId;
         } else {
           const tCompId = await findCompanionIdByName(context.characterId, t).catch(() => null);

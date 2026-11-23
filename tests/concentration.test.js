@@ -46,12 +46,15 @@ async function run() {
   console.log('\n=== Test 2: DC calculation (damage 8 -> DC 10, damage 30 -> DC 15) ===\n');
   await seed(10); // CON 10 = +0 mod, makes math predictable
   await startConcentration(CHAR_ID, 'Bless');
-  // We can't control the d20 roll, but we can verify the check runs and returns structure
-  const result = await checkConcentration(CHAR_ID, 8);
+  // Combat-loop fix P4: without the player's d20 the check is only asked
+  // for (pending); with the reported die it is judged.
+  const asked = await checkConcentration(CHAR_ID, 8);
+  assert(asked?.pending === true && typeof asked.roll === 'undefined', 'without a reported die the engine rolls nothing — the save is pending');
+  assert(asked?.dc === 10, `DC 10 for 8 damage (got ${asked?.dc})`);
+  const result = await checkConcentration(CHAR_ID, 8, 12);
   assert(result !== null, 'Check runs when concentrating');
-  assert(result?.dc === 10, `DC 10 for 8 damage (got ${result?.dc})`);
-  assert(typeof result?.roll === 'number', 'Roll is a number');
-  assert(typeof result?.success === 'boolean', 'Success is boolean');
+  assert(result?.roll === 12 && result.total === 12, 'the reported 12 is the roll (CON +0)');
+  assert(result?.success === true, 'Success is boolean (12 vs DC 10 succeeds)');
   await cleanup();
 
   console.log('\n=== Test 3: High damage raises DC ===\n');

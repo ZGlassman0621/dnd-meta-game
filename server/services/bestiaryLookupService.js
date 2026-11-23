@@ -142,7 +142,17 @@ function rowEntry(row) {
 
 /** Full statblock for a creature name, per the resolution order in
  *  the header. Returns the entry object, or null when unknown. */
+/** The full statblock for an enemy name. F3 (combat-loop fix): same-name
+ *  enemies are stored numbered ("Goblin 2"), so a miss retries the base
+ *  name — the numbering never hides the creature's statblock. */
 export async function lookupBestiaryFull(name) {
+  const found = await lookupBestiaryFullExact(name);
+  if (found) return found;
+  const base = String(name || '').trim().replace(/\s+\d+$/, '');
+  return base && base !== String(name || '').trim() ? lookupBestiaryFullExact(base) : null;
+}
+
+async function lookupBestiaryFullExact(name) {
   const n = normalizeBestiaryName(name);
   if (!n) return null;
   const key = resolveBestiaryKey(n);

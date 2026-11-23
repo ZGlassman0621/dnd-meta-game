@@ -248,8 +248,12 @@ group('3. PC pending instructions — never a silently added total');
   ok(created.pending && (created.pending.featureNotes || []).join(' ').includes('Divine Fury'), 'the pending block instructs the player to add Divine Fury');
   const reported = await pas.resolveReportedAttack(sessionId, zealotPc.id, [15], 12);
   ok(reported && reported.hit === true, 'the reported Zealot attack hits');
-  ok(reported && reported.damage === 12, 'the reported total stands untouched — the system adds no Fury dice to it');
-  ok(reported && reported.divineFury && reported.divineFury.applied === false, 'the outcome records Divine Fury as player-applied, not system-applied');
+  // Combat-loop fix P4: the player's 12 is the dice (weapon + Fury 1d6);
+  // the engine adds the flat parts after — the weapon/Rage bonus and
+  // Fury's +5 — and rolls no Fury dice of its own.
+  ok(reported && reported.damageRoll === 12 && reported.divineFury?.applied === true && reported.divineFury.diceInReport === '1d6' && !(reported.divineFury.rolls || []).length, 'the system rolls no Fury dice — they are in the player’s 12');
+  ok(reported && reported.damage === 12 + reported.damageBonus + 5, `the engine adds the flat bonus and Fury's +5 after the roll (got ${reported?.damage})`);
+  ok(reported && reported.divineFury && reported.divineFury.diceInReport === '1d6' && reported.divineFury.flat === 5, 'the outcome records Fury as the player’s dice plus the engine’s +5');
   // The profile itself carries no flat Fury bonus: a flat bonus
   // would pay it on every hit. Rage (+3 at level 10) is the only
   // flat subclass-adjacent bonus on the profile.
@@ -278,7 +282,7 @@ group('3. PC pending instructions — never a silently added total');
   const forgeCreated = await pas.createPcPendingAttack(sessionId, forgePc.id, forgePc, await enemyRow(target.id), {});
   ok(forgeCreated.pending && forgeCreated.pending.divineStrike && forgeCreated.pending.divineStrike.dice === '1d8' && forgeCreated.pending.divineStrike.damageType === 'fire', 'the pending block carries Forge Divine Strike 1d8 fire');
   const forgeReported = await pas.resolveReportedAttack(sessionId, forgePc.id, [15], 9);
-  ok(forgeReported && forgeReported.damage === 9, 'a reported Forge total is untouched by Divine Strike');
+  ok(forgeReported && forgeReported.damage === 9 + forgeReported.damageBonus && forgeReported.divineStrike?.applied === false, 'a reported Forge total: Divine Strike dice are in the 9, the engine adds only the weapon flat');
   ok(forgeReported && forgeReported.divineStrike && forgeReported.divineStrike.applied === false, 'Divine Strike is recorded as player-applied on a reported total');
 }
 

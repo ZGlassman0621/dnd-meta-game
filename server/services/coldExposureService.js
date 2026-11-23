@@ -62,6 +62,7 @@
  * (restTimeService) at call time, not here, so direct service calls in
  * tests are unaffected.
  */
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { rollD20 } from '../utils/rng.js';
@@ -550,8 +551,7 @@ export async function handleColdWetMarker(parsed, context) {
   const targetRaw = String(parsed?.Target || '').trim();
   if (!targetRaw) return { type: 'cold_wet', success: false, reason: 'COLD_WET needs a Target' };
   const character = await dbGet('SELECT name FROM characters WHERE id = ?', [context.characterId]);
-  const isPc = /^(player|pc|character)$/i.test(targetRaw) ||
-    (character && targetRaw.toLowerCase() === character.name.toLowerCase());
+  const isPc = isPlayerRef(targetRaw, character?.name);
   let kind = null;
   let id = null;
   if (isPc) { kind = 'player'; id = context.characterId; }

@@ -33,7 +33,7 @@
 
 import { dbGet, dbRun } from '../database.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
-import { rollD20 } from '../utils/rng.js';
+// (rollD20 no longer used: death saves take the player's reported d20 — combat-loop fix P4)
 import { getConditions, exhaustionPenalty } from './conditionService.js';
 
 /**
@@ -262,14 +262,17 @@ export async function gainTempHp(characterId, amount) {
  * @returns {Promise<object|null>} Null if the character is missing or is not
  *   currently dying (at 0 HP, unconscious, not already dead).
  */
-export async function rollDeathSave(characterId) {
+export async function rollDeathSave(characterId, reportedD20) {
+  // Combat-loop fix P4 (Zach 2026-11-23): the engine never rolls for the
+  // player. The death save is the player's d20 — reported, then judged
+  // here. With no reported die there is nothing to judge.
+  const d20 = Number(reportedD20);
+  if (!Number.isInteger(d20) || d20 < 1 || d20 > 20) return null;
   const c = await dbGet(
     'SELECT id, name, current_hp, max_hp, is_unconscious, is_dead, death_save_successes, death_save_failures FROM characters WHERE id = ?',
     [characterId]
   );
   if (!c || c.is_dead || c.current_hp > 0) return null;
-
-  const d20 = rollD20('player death save');
 
   // 2024 exhaustion (ruled 2026-10-26): the penalty applies to the save
   // total vs DC 10. Nat 20 revive / nat 1 double-fail stay die-based.
@@ -360,6 +363,34 @@ export async function getHpState(characterId) {
  * Returns null without a characterId: a dispatch with no character is
  * the pipeline's no-op, not an error.
  */
+/** Is a fight running in this session (an encounter with a turn order)? */
+async function fightRunning(sessionId) {
+  try {
+    const { getCurrentEncounterSeq } = await import('./enemyCombatService.js');
+    const seq = await getCurrentEncounterSeq(sessionId);
+    if (!seq) return false;
+    const row = await dbGet('SELECT 1 AS ok FROM combat_turn_state WHERE session_id = ? AND encounter_seq = ?', [sessionId, seq]);
+    return !!row;
+  } catch { return false; }
+}
+
+/** F2: does an HP_CHANGE reason name the player as the one dealing the
+ *  damage? ("Kell's longsword", "the player's arrow", "Kell strikes".) */
+async function reasonNamesPlayerAsAttacker(characterId, reason) {
+  const text = String(reason || '').toLowerCase();
+  if (!text) return false;
+  if (/\b(player|pc)['’]s\b/.test(text)) return true;
+  const c = await dbGet('SELECT name, nickname FROM characters WHERE id = ?', [characterId]).catch(() => null);
+  // Name words hold only letters, digits, apostrophes and hyphens, so
+  // they are safe inside a RegExp without escaping.
+  const words = [c?.name, c?.nickname].filter(Boolean).join(' ').toLowerCase().split(/[^a-z0-9'’-]+/).filter((w) => w.length >= 3);
+  for (const w of new Set(words)) {
+    if (new RegExp(`\\b${w}['’]s\\b`).test(text)) return true;
+    if (new RegExp(`^\\s*${w}\\s+(strikes|hits|slashes|stabs|shoots|smites|attacks|cuts|swings)\\b`).test(text)) return true;
+  }
+  return false;
+}
+
 registerMarkerHandler('HP_CHANGE', async (parsed, context) => {
   if (!context?.characterId) return null;
 
@@ -395,6 +426,30 @@ registerMarkerHandler('HP_CHANGE', async (parsed, context) => {
   // The schema permits 0; only the prelude detector filtered it. A zero delta
   // is a no-op, not an error.
   if (!Number.isFinite(delta) || delta === 0) return null;
+
+  // F2 (combat-loop fix): damage the PLAYER deals is never player HP
+  // loss. A model that writes [HP_CHANGE: delta=-8 reason="Kell's
+  // longsword"] meant the enemy's wound; applying it hurt the player.
+  if (delta < 0 && await reasonNamesPlayerAsAttacker(context.characterId, parsed?.reason)) {
+    return {
+      type: 'player_hp', success: false, applied: false, refusedSelfDamage: true,
+      reason: `HP_CHANGE refused: the reason ("${parsed.reason}") names the player as the attacker — HP_CHANGE changes the PLAYER's HP. The player's attacks go through [ATTACK: Attacker="Player" Target=…], and the engine applies the damage to the enemy.`,
+    };
+  }
+
+  // Combat-loop fix (B3, live probe 2026-11-23): while a fight is running
+  // the ENGINE applies every combat blow (ENEMY_ATTACK, ENEMY_CAST, the
+  // party's ATTACK). A plain damaging HP_CHANGE then is the DM restating a
+  // blow already applied — the next turn's "[HP_CHANGE: delta=-5
+  // reason="Thug 1's mace"]" counted the thug's hit twice — or the
+  // player's own blow put on the player ("Longsword strike", 18 → 9).
+  // Trap, fall and hazard damage still apply through Fall=/Trap=/Hazard=.
+  if (delta < 0 && context.sessionId && await fightRunning(context.sessionId)) {
+    return {
+      type: 'player_hp', success: false, applied: false, refusedInCombat: true,
+      reason: 'HP_CHANGE refused: a fight is running, and the engine applies combat damage itself (ENEMY_ATTACK, ENEMY_CAST, ATTACK) and states it. Do not restate a blow with HP_CHANGE. For a trap, fall or hazard use HP_CHANGE with Trap=, Fall= or Hazard=.',
+    };
+  }
 
   // S2: the DM marks a critical hit with crit=true; at 0 HP it counts twice.
   const res = await applyHpChange(context.characterId, delta, parsed?.reason || null, { crit: parsed?.crit === true });

@@ -51,6 +51,7 @@
  * The push step re-verifies live bytes first.
  */
 
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { roll } from '../utils/rng.js';
@@ -79,8 +80,7 @@ const MAX_HP_COL = { player: 'max_hp', companion: 'companion_max_hp' };
 
 async function resolveTarget(context, targetRaw) {
   const character = await dbGet('SELECT id, name FROM characters WHERE id = ?', [context.characterId]);
-  const isPc = /^(player|pc|character)$/i.test(targetRaw) ||
-    (character && targetRaw.toLowerCase() === String(character.name).toLowerCase());
+  const isPc = isPlayerRef(targetRaw, character?.name);
   if (isPc) return { kind: 'player', id: context.characterId, name: character?.name || 'Player' };
   const compId = await findCompanionIdByName(context.characterId, targetRaw);
   if (!compId) return null;

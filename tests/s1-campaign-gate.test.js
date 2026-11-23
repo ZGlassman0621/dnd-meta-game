@@ -106,7 +106,6 @@ try {
       ['POST', `/api/dm-session/${id}/adjust-date`, { days: 1 }],
       ['POST', `/api/dm-session/${id}/inject-context`, { context: 'x' }],
       ['POST', `/api/dm-session/${id}/rest-narrative`, { restType: 'long' }],
-      ['POST', `/api/dm-session/${id}/advance-turn`, {}],
       ['POST', `/api/dm-session/${id}/apply-inventory`, {}],
       ['POST', `/api/dm-session/${id}/resume`, {}],
       ['POST', `/api/dm-session/${id}/claim`, {}],

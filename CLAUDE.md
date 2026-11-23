@@ -112,13 +112,13 @@ All defaults live in `server/config/featureFlags.js`.
 2. Per-turn system-prompt suffix rebuilt — current vitals, then the repetition ledger. Both are stripped and re-appended each turn by **one combined regex**; splitting them causes either accretion or silent deletion.
 3. LLM call.
 4. **Marker dispatch — before any persist.** A crash after this loses the turn rather than recording a narrative whose effects never applied.
-5. Death save, if the player is at 0 HP.
+5. **The combat loop** (`server/services/combatLoopService.js`), when a fight is running. The ENGINE owns the turn order; the DM's `[TURN_ADVANCE]` is stripped before dispatch. The player's turn ends when nothing waits on their dice (no pending initiative, attack, damage, check or death save). Then the route makes **one DM call per NPC turn**, enemy or companion: the DM chooses the action and writes its marker, the engine resolves it and states the result as a "⚙" line, and the loop stops on the player's turn again. A death save is asked for here when the player is at 0 HP.
 6. Handler results folded into `result.messages`.
 7. **Exactly one** `UPDATE dm_sessions SET messages`.
 
 Two tests cover this path, and they cover different things:
 
-- `tests/turn-e2e.test.js` drives the real route over HTTP against a real database with only the model transport (Ollama) stubbed (`tests/helpers/llmHarness.js`). It asserts on behaviour: markers apply, the player-facing narrative is marker-free while stored history keeps markers intact, a malformed marker queues then consumes a correction, 0 HP triggers a system-rolled death save, a failed LLM call writes nothing, and a concurrent POST gets `409` before the model is called.
+- `tests/turn-e2e.test.js` drives the real route over HTTP against a real database with only the model transport (Ollama) stubbed (`tests/helpers/llmHarness.js`). It asserts on behaviour: markers apply, the player-facing narrative is marker-free while stored history keeps markers intact, a malformed marker queues then consumes a correction, 0 HP asks the player for a death-save d20 and their reported die settles it, a failed LLM call writes nothing, and a concurrent POST gets `409` before the model is called.
 - `tests/turn-write-ordering.test.js` still enforces steps 4–7 **structurally**, and is not redundant: on the happy path both orderings produce identical output, so no behavioural test can see the difference.
 
 **Do not wrap marker dispatch in `db.transaction('write')`.** libSQL transactions are connection-scoped while all 26 handlers write through `dbRun` on the outer client, so it would roll back nothing while taking a `BEGIN IMMEDIATE` lock that the handlers then contend against — and `markerPipeline` swallows handler errors into `{ok:false}`, so the failure would surface as a `200` with a saved narrative and no effects. Real turn atomicity needs an `AsyncLocalStorage`-backed ambient executor in `server/database.js`; that is its own project.
@@ -143,13 +143,13 @@ Failures are tagged: `LOCAL_MODEL_UNAVAILABLE:` (Ollama unreachable; connection 
 
 ### HP and death — `server/services/characterHpService.js`
 
-HP is **authoritative in the database**. `[HP_CHANGE: delta=-7 reason="..."]` applies via a single atomic clamped `UPDATE` (no transaction needed). At 0 HP the player falls unconscious and the **system** rolls 5e death saves — the AI narrates and stops. Three failures kill; `is_dead` is terminal.
+HP is **authoritative in the database**. `[HP_CHANGE: delta=-7 reason="..."]` applies via a single atomic clamped `UPDATE` (no transaction needed). At 0 HP the player falls unconscious; the engine asks for each death save and judges the **player's reported d20** (`rollDeathSave(characterId, d20)` rolls nothing itself). The AI narrates and stops. Three failures kill; `is_dead` is terminal.
 
 The `HP_CHANGE` prompt instruction lives in `formatPlayerHpRules()`, **outside** `formatMechanicalMarkers()`, because `applyLeanTransforms` strips that entire section — putting it there would make the player silently invulnerable on lean turns.
 
 ### Hybrid combat — player-rolled dice
 
-The player rolls their own attack and damage dice. `POST /:sessionId/message` accepts two optional integers, `attackRoll` and `damage`; both are **binding facts** for that turn. The AI adjudicates against the target's AC and narrates, and does not re-roll. The server keeps player HP, unconsciousness and death saves; the AI keeps enemy HP and hit resolution. There is no server-side enemy HP table, and string-matching the narrative for enemy names to build one was rejected outright.
+**The engine never rolls for the player** (Zach, 2026-11-23): it says what to roll, the player rolls real dice, and the engine does the math afterwards — initiative, the attack d20 (two on advantage or disadvantage), the damage dice (the player's number is the dice total; the engine adds the flat modifiers) and death saves. Each number arrives as a bare-number action or the `attackRoll` / `damage` / `checkRoll` body fields, and settles a pending entry on `session_config` (`pendingInitiative`, `pendingAttack`, `pendingDamage`, `pendingRoll`, `pendingDeathSave`). The engine judges hits against AC and keeps enemy HP in `combat_enemies`; the DM narrates the judged result. The response carries `rollPrompts` (what to roll next), `rollMath` (the client's roll-math panel) and `turnState` (the tracker).
 
 `parsePlayerDiceInput` + `formatPlayerDiceDirective` in `dmPromptBuilder.js` are a pair — validator and the prompt text it guards — and are kept adjacent so the bounds and the wording cannot drift apart. Three rules worth knowing:
 
@@ -198,7 +198,7 @@ There is no sign-in. The account system (register, bcrypt, JWT, per-request Bear
 
 - **Migrations** (`server/migrationRunner.js`): each `up()` and its `_migrations` insert run in **one transaction**, so a failure rolls back and is safely retried. Pass `tx` into `up()`, never `db`. Numbered `NNN_*.js`, additive, idempotent via `PRAGMA table_info`.
 - **Backups** (`server/scripts/backup.js`): the path is chosen by the **URL scheme**, not by whether `TURSO_DATABASE_URL` is merely set. A remote scheme is pulled down via embedded-replica `sync()`; unset or a `file:` URL uses `VACUUM INTO`. `VACUUM INTO` does **not** work against Turso — it runs server-side. Getting this wrong is not a soft failure: feeding a `file:` URL into `syncUrl` makes the libsql native layer **panic**, which no JS `try/catch` can absorb, so the fire-and-forget session-end backup takes the whole process down. Every backup is reopened and verified before older ones are pruned.
-- **RNG** (`server/utils/rng.js`): mechanically meaningful rolls (initiative, crafting, death saves) go through `roll`/`rollD20`/`pick`/`shuffle`. Cosmetic randomness is deliberately left alone. Seeding is not implemented; its correct home is per-session, not per-campaign.
+- **RNG** (`server/utils/rng.js`): mechanically meaningful engine rolls (NPC initiative, enemy attacks, crafting) go through `roll`/`rollD20`/`pick`/`shuffle`. Cosmetic randomness is deliberately left alone. Seeding is not implemented; its correct home is per-session, not per-campaign.
 
 ---
 

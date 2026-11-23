@@ -34,27 +34,46 @@ export async function breakConcentration(characterId, reason = 'unknown') {
   return { type: 'concentration_break', characterId, spell, reason, effectsCleared };
 }
 
+/** Settle a pending player concentration save with the player's d20. */
+export async function resolveConcentrationSave(characterId, reportedD20, dc) {
+  const c = await dbGet('SELECT concentrating_on, ability_scores FROM characters WHERE id = ?', [characterId]);
+  if (!c?.concentrating_on) return null;
+  // DC 10 or half the damage: the damage that yields this DC is 2 × DC.
+  return checkConcentration(characterId, Math.max(1, Number(dc) * 2), reportedD20);
+}
+
 export async function getConcentration(characterId) {
   const c = await dbGet('SELECT concentrating_on FROM characters WHERE id = ?', [characterId]);
   return c?.concentrating_on || null;
 }
 
 /**
- * Check concentration after taking damage. Rolls CON save via rng.js.
+ * Check the PLAYER's concentration after taking damage.
+ *
+ * Combat-loop fix P4 (Zach 2026-11-23): the engine never rolls for the
+ * player. Without the player's d20 this returns the save to ask for —
+ * { pending: true, dc, conMod, penalty, spell } — and breaks nothing; the
+ * turn route asks the player for the d20 and settles it with
+ * resolveConcentrationSave. With a reported d20 it judges it.
  * @param {number} characterId
  * @param {number} damageTaken - Positive amount of HP damage (after temp HP).
+ * @param {number|null} reportedD20 - the player's die, when reported.
  * @returns {Promise<object|null>} Null if not concentrating.
  */
-export async function checkConcentration(characterId, damageTaken) {
+export async function checkConcentration(characterId, damageTaken, reportedD20 = null) {
   if (!characterId || damageTaken <= 0) return null;
   const c = await dbGet('SELECT concentrating_on, ability_scores FROM characters WHERE id = ?', [characterId]);
   if (!c?.concentrating_on) return null;
   const abilities = safeParse(c.ability_scores, {});
   const conMod = Math.floor(((abilities.constitution || abilities.con || 10) - 10) / 2);
   const dc = Math.max(10, Math.floor(damageTaken / 2));
-  const roll = rollD20('concentration save');
   // 2024 exhaustion (ruled 2026-10-26): the penalty applies to this CON save.
   const penalty = exhaustionPenalty(await getConditions('player', characterId));
+  const die = Number(reportedD20);
+  if (!Number.isInteger(die) || die < 1 || die > 20) {
+    return { type: 'concentration_check', pending: true, characterId, spell: c.concentrating_on, damageTaken, dc, conMod, penalty };
+  }
+  const roll = die;
   const total = roll + conMod + penalty;
   const success = total >= dc;
   if (!success) {

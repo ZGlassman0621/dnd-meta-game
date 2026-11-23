@@ -6,7 +6,12 @@ import { dbGet, dbAll, dbRun } from '../database.js';
 
 export async function lookupBestiary(name) {
   if (!name) return null;
-  return dbGet('SELECT * FROM bestiary WHERE name = LOWER(?) LIMIT 1', [name.trim()]);
+  const exact = await dbGet('SELECT * FROM bestiary WHERE name = LOWER(?) LIMIT 1', [name.trim()]);
+  if (exact) return exact;
+  // F3 (combat-loop fix): same-name enemies are stored numbered ("Goblin 2");
+  // the statblock is the base creature's.
+  const base = name.trim().replace(/\s+\d+$/, '');
+  return base !== name.trim() ? dbGet('SELECT * FROM bestiary WHERE name = LOWER(?) LIMIT 1', [base]) : null;
 }
 
 export async function searchBestiary(query, limit = 10) {

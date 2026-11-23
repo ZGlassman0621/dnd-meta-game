@@ -388,7 +388,14 @@ export function formatTurnStateBlock(turnState) {
   const order = turnState.turnOrder.map((c, i) =>
     i === turnState.currentIndex ? `▶ ${c.name}` : c.name).join(', ');
   const current = turnState.currentTurn?.name || turnState.turnOrder[turnState.currentIndex]?.name || 'unknown';
-  return `[COMBAT TURN STATE — system facts. Round ${turnState.round}. It is ${current}'s turn. Turn order: ${order}. Only the current combatant acts on their turn; emit [TURN_ADVANCE] when their turn ends.]`;
+  // Combat-loop fix (P1, 2026-11-23): the ENGINE advances turns and asks
+  // the DM for each NPC's action on that NPC's turn — the DM never emits
+  // TURN_ADVANCE. On the player's turn the DM handles only the player.
+  const current_ = turnState.turnOrder[turnState.currentIndex] || turnState.currentTurn || null;
+  const playerTurn = current_?.type === 'player'
+    ? ` It is the player's turn: respond to ${current} only. If ${current} attacks, emit [ATTACK: Attacker="Player" Target="<enemy name>"] and stop — the engine asks the player for every roll (the d20, then the damage dice) and adds every modifier itself, so never tell the player what to roll or which modifiers to add. Do not act for any NPC now; the engine gives each NPC its own turn.`
+    : '';
+  return `[COMBAT TURN STATE — system facts. Round ${turnState.round}. It is ${current}'s turn. Turn order: ${order}. Only the current combatant acts. The engine advances the turns — never emit [TURN_ADVANCE].${playerTurn}]`;
 }
 
 export default {

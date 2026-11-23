@@ -22,6 +22,7 @@
  * characterHpService, and reactionService likewise, following the
  * enemyCombatService pattern.
  */
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { roll, rollD20 } from '../utils/rng.js';
@@ -274,8 +275,7 @@ export async function resolveTarget(sessionId, encounterSeq, targetName, session
   const character = sessionCharacterId
     ? await dbGet('SELECT name FROM characters WHERE id = ?', [sessionCharacterId])
     : null;
-  if (/^(player|pc|character|self)$/.test(wanted) ||
-      (character && wanted === String(character.name).toLowerCase())) {
+  if (isPlayerRef(wanted, character?.name)) {
     return { kind: 'player', id: sessionCharacterId, name: character?.name || 'Player' };
   }
   if (sessionCharacterId) {

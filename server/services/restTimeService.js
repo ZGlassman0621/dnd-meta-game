@@ -28,6 +28,7 @@
  * session_config.clockGapAtStart; the session-end route reads the same
  * facts via sessionEndDays().
  */
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
@@ -700,7 +701,7 @@ export async function applyRest({ sessionId = null, characterId, type, actor = n
   let pcTarget = true;
   let compTargets = companions;
   if (a && !/^(party|all)$/i.test(a)) {
-    if (/^(player|pc|character)$/i.test(a) || a.toLowerCase() === (pc.name || '').toLowerCase()) {
+    if (isPlayerRef(a, pc.name)) {
       compTargets = [];
     } else {
       const match = companions.find(c => (c.name || '').toLowerCase() === a.toLowerCase());

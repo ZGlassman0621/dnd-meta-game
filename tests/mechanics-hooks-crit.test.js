@@ -213,7 +213,7 @@ group('5. PC pending block states the threshold; reported 19 crits');
   ok(created.pending && (created.pending.featureNotes || []).join(' ').includes('crit on 19'), 'the pending block tells the player they crit on 19–20');
   const reported = await pas.resolveReportedAttack(sessionId, champPc.id, [19], 10);
   ok(reported && reported.hit === true && reported.critical === 'hit', 'a reported 19 for a Champion PC crits');
-  ok(reported && reported.damage === 10, 'a reported total is the player’s — the system does not re-roll it on a crit');
+  ok(reported && reported.damageRoll === 10 && reported.damage === 10 + reported.damageBonus, 'a reported total is the player’s dice — the system re-rolls nothing on a crit and adds the flat bonus once');
   // An 18 for the same PC is an ordinary hit.
   await pas.createPcPendingAttack(sessionId, champPc.id, champPc, await enemyRow(target.id), {});
   const reported18 = await pas.resolveReportedAttack(sessionId, champPc.id, [18], 10);

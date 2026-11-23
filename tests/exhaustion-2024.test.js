@@ -209,9 +209,11 @@ group('6. Death save carries the penalty');
     ability_scores: JSON.stringify({ str: 14, dex: 12, con: 14, int: 10, wis: 10, cha: 8 })
   });
   await cs.addCondition('player', dyingId, 'exhaustion_3');
-  const ds = await hp.rollDeathSave(dyingId);
+  // Combat-loop fix P4: the death save is the player's reported d20.
+  const ds = await hp.rollDeathSave(dyingId, 13);
   assert(ds !== null, 'a dying, exhausted PC rolls a death save');
   assert(ds.penalty === -6, 'death save carries penalty -6');
+  assert(ds.roll === 13 && ds.outcome === 'failure', 'a reported 13 − 6 = 7 fails against DC 10');
   if (ds.outcome === 'revived') assert(ds.roll === 20, 'revive implies a natural 20');
   else if (ds.outcome === 'success') assert(ds.roll + ds.penalty >= 10, 'success implies total >= DC 10');
   else if (ds.outcome === 'failure') assert(ds.roll + ds.penalty < 10 && ds.roll !== 1, 'failure implies total < DC 10');
@@ -226,7 +228,8 @@ group('7. Concentration saves carry the penalty');
 {
   await cs.addCondition('player', pcId, 'exhaustion_2');
   await dbRun('UPDATE characters SET concentrating_on = ? WHERE id = ?', ['Hold Person', pcId]);
-  const chk = await cc.checkConcentration(pcId, 10);
+  // Combat-loop fix P4: the player's reported d20 (here 15).
+  const chk = await cc.checkConcentration(pcId, 10, 15);
   assert(chk !== null, 'a concentrating, exhausted PC checks');
   assert(chk.penalty === -4, 'PC concentration check carries penalty -4');
   assert(chk.total === chk.roll + chk.conMod + chk.penalty, 'PC concentration total folds the penalty in');

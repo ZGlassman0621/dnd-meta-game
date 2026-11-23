@@ -12,10 +12,13 @@ const TYPE_BG = {
   enemy: 'rgba(239, 68, 68, 0.15)'
 };
 
-export default function CombatTracker({ combatState, onAdvanceTurn, onEndCombat }) {
+// The ENGINE runs the turns (combat-loop fix, 2026-11-23): this tracker
+// only shows the server's order and whose turn it is; there is no
+// Next Turn button to drift it.
+export default function CombatTracker({ combatState, onEndCombat }) {
   if (!combatState?.turnOrder?.length) return null;
 
-  const { turnOrder, currentTurn, round } = combatState;
+  const { turnOrder, currentTurn, round, awaitingInitiative } = combatState;
 
   return (
     <div style={{
@@ -58,8 +61,13 @@ export default function CombatTracker({ combatState, onAdvanceTurn, onEndCombat 
         overflowX: 'auto',
         paddingBottom: '2px'
       }}>
+        {awaitingInitiative && (
+          <span style={{ color: '#fbbf24', fontSize: '0.8rem', whiteSpace: 'nowrap', alignSelf: 'center' }}>
+            🎲 {awaitingInitiative}: roll a d20 for initiative
+          </span>
+        )}
         {turnOrder.map((combatant, idx) => {
-          const isActive = idx === currentTurn;
+          const isActive = !awaitingInitiative && idx === currentTurn;
           const color = TYPE_COLORS[combatant.type] || '#ccc';
           const bg = TYPE_BG[combatant.type] || 'rgba(255,255,255,0.05)';
 
@@ -107,23 +115,6 @@ export default function CombatTracker({ combatState, onAdvanceTurn, onEndCombat 
 
       {/* Controls */}
       <div style={{ display: 'flex', gap: '0.4rem', minWidth: 'fit-content' }}>
-        <button
-          onClick={onAdvanceTurn}
-          style={{
-            background: 'rgba(251, 191, 36, 0.2)',
-            border: '1px solid rgba(251, 191, 36, 0.4)',
-            color: '#fbbf24',
-            padding: '0.3rem 0.6rem',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.8rem',
-            fontWeight: 'bold',
-            whiteSpace: 'nowrap'
-          }}
-          title="Advance to next combatant's turn"
-        >
-          Next Turn
-        </button>
         <button
           onClick={onEndCombat}
           style={{

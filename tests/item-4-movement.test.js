@@ -487,9 +487,11 @@ group('11. Enemy attacks are NOT range-gated (DM-governed, Q2)');
   const sessionId = await addSession(pc.id);
   const [g] = await es.createEncounterEnemies(sessionId, 1, [gob('Goblin')]);
   const pk = await tl.ledgerKeyForPlayer(pc.id);
+  // The Goblin acts first: since the combat-loop fix an ordinary enemy
+  // attack resolves only on that enemy's own turn.
   await ct.initializeTurnOrder(sessionId, 1, [
-    { name: 'Tester', type: 'player', key: pk },
     { name: 'Goblin', type: 'enemy', key: `combat:${sessionId}:1:${g.id}` },
+    { name: 'Tester', type: 'player', key: pk },
   ]);
   await markerResult('[ZONES: Zones="arena,ridge" Edges="arena-ridge:30" Places="Tester:arena,Goblin:ridge"]', pc.id, sessionId, 'ZONES');
   const atk = await markerResult('[ENEMY_ATTACK: Enemy="Goblin" Target="Player"]', pc.id, sessionId, 'ENEMY_ATTACK');

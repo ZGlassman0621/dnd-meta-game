@@ -22,6 +22,7 @@
  * computeSkillModifiers) — the formulas are identical by construction
  * (verified 2026-10-20); if you change one, change both.
  */
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
@@ -761,7 +762,7 @@ export async function resolveCheckParty(context, rawName) {
   const character = context.characterId
     ? await dbGet('SELECT id, name FROM characters WHERE id = ?', [context.characterId])
     : null;
-  if (character && (/^(player|pc|character)$/i.test(wanted) || wanted.toLowerCase() === character.name.toLowerCase())) {
+  if (character && isPlayerRef(wanted, character.name)) {
     return { kind: 'player', id: character.id, key: await ledgerKeyForPlayer(character.id), name: character.name };
   }
   const comp = await dbGet(
@@ -842,8 +843,7 @@ registerMarkerHandler('ROLL_REQUEST', async (parsed, context) => {
     const character = context.characterId
       ? await dbGet('SELECT name FROM characters WHERE id = ?', [context.characterId])
       : null;
-    const isPc = /^(player|pc|character)$/i.test(actor) ||
-      (character && actor.toLowerCase() === character.name.toLowerCase());
+    const isPc = isPlayerRef(actor, character?.name);
 
     if (isPc) {
       // Conditions (v1.0.190): paralyzed / stunned / unconscious /

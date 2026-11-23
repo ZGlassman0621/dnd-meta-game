@@ -155,12 +155,13 @@ group('8. Cleave on the PC reported-dice path');
   ok(r1 && r1.hit === true && r1.cleaveReady === true, 'a reported PC Greataxe hit offers Cleave');
   const p2 = await pas.createPcPendingAttack(sessionId, pcCleaver.id, pcCleaver, await enemyRow(b.id), { cleave: true });
   ok(p2.pending && p2.pending.cleave === true && p2.pending.damageModifier === 0, 'the PC Cleave pending carries no ability modifier');
-  const r2 = await pas.resolveReportedAttack(sessionId, pcCleaver.id, [15], null);
+  // Combat-loop fix P4: a hit with no damage reported asks the player for
+  // the damage dice — the engine no longer rolls them.
+  const r2a = await pas.resolveReportedAttack(sessionId, pcCleaver.id, [15], null);
+  ok(r2a && r2a.hit === true && r2a.awaitingDamage === true && r2a.damageBonus === 0, 'the reported Cleave hit asks for the damage dice, with no flat bonus to add');
+  const r2 = await pas.resolveReportedDamage(sessionId, pcCleaver.id, 7);
   ok(r2 && r2.hit === true && r2.cleave === true, 'the reported Cleave follow-up resolves as a Cleave attack');
-  if (r2.hit) {
-    const diceSum = (r2.damageRolls || []).reduce((x, y) => x + y, 0);
-    ok(r2.damage === diceSum, 'reported Cleave damage equals the dice alone');
-  }
+  ok(r2 && r2.damage === 7, 'reported Cleave damage equals the dice alone');
 }
 
 // ---------------------------------------------------------------------------

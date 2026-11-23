@@ -60,7 +60,10 @@ export function narrationMentionsEffect(narration, effect) {
 export async function reconcileTurn(narration, markersApplied, context) {
   const result = { autoApplied: [], missingFiction: [], verified: [] };
   if (!context?.characterId) return result;
-  const damageClaims = extractDamageClaims(narration);
+  // Combat-loop fix: during a fight the engine applies every blow through
+  // its markers, and a narrated number is as often the enemy's wound as
+  // the player's ("deals 9 damage to the thug") — so no auto-apply then.
+  const damageClaims = context.combatActive ? [] : extractDamageClaims(narration);
   for (const claim of damageClaims) {
     const covered = (markersApplied||[]).some(m => {
       if (m?.schemaKey==='HP_CHANGE' && m?.result?.applied) return Math.abs(m.result.delta)===claim.amount;

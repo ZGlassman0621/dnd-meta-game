@@ -129,16 +129,19 @@ group('3. Attack cap: one swing a turn, fresh again next turn');
   ok(a3 && a3.success !== false, 'attack resolves again on the next turn');
 }
 
-group('4. Off-turn attacks resolve unenforced and spend nothing');
+// Combat-loop fix (2026-11-23): the engine runs every turn and asks the DM
+// for each enemy's action on its own turn, so an ordinary attack off the
+// enemy's turn is refused (it used to resolve as a free extra attack).
+group('4. Off-turn attacks are refused and spend nothing');
 {
   const { pc, sessionId, atk } = await setup('GobA', false); // Tester first: GobA is off-turn
   const o1 = await atk();
-  ok(o1 && o1.success !== false, 'first off-turn attack resolves');
+  ok(o1 && o1.success === false && /Out of turn/.test(o1.reason), 'an off-turn attack is refused as out of turn');
   const o2 = await atk();
-  ok(o2 && o2.success !== false, 'second off-turn attack also resolves (no slot cap off-turn)');
+  ok(o2 && o2.success === false && /Out of turn/.test(o2.reason), 'a second off-turn attack is refused too');
   await ct.advanceTurn(sessionId, 1); // now GobA's turn
   const o3 = await atk();
-  ok(o3 && o3.success !== false, 'off-turn attacks spent nothing — the on-turn attack still resolves');
+  ok(o3 && o3.success !== false, 'off-turn attempts spent nothing — the on-turn attack still resolves');
   const o4 = await atk();
   ok(o4 && o4.success === false && /already used its action/.test(o4.reason), 'second on-turn attack refused');
 }

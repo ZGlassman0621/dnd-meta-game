@@ -14,6 +14,7 @@
  * can co-locate here.
  */
 
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
@@ -24,6 +25,7 @@ import { checkTurnIdentity, checkBonus, spendBonus, ledgerKeyForPlayer, ledgerKe
 import { getEntry, setField, clearField, untilFor } from './actionStateService.js'; // Combat item 3, Tier 3
 import { parseEnemyStats, createEncounterEnemies, getNextEncounterSeq, applyPartyDamageToEnemy, resolveEnemyAttack, getCurrentEncounterSeq, findActiveEnemy } from './enemyCombatService.js';
 import { initializeTurnOrder, advanceTurn, getTurnState, getPartyCover, setPartyCover } from './combatTurnService.js';
+import { setPendingInitiative } from './combatLoopService.js'; // combat-loop fix P4: the player's own initiative d20
 import { hasReactionAvailable, useReaction } from './reactionService.js';
 import { getCoverAcBonus } from './enemyCombatService.js';
 import { attackBlockedByConditions, hasIncapacitatingCondition, findCompanionIdByName, charmerFor } from './conditionService.js'; // Combat item 8: action/refusal sweep
@@ -72,16 +74,16 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
     let playerKey = `player:${character.id}`;
     try { playerKey = (await ensureWorldId('characters', character.id)) || playerKey; } catch { /* fallback stands */ }
 
-    // Player initiative
-    const playerRoll = rollD20();
-    turnOrder.push({
+    // Player initiative (combat-loop fix P4, Zach 2026-11-23): the engine
+    // never rolls for the player. The player's d20 is asked for after
+    // this marker; combatLoopService.resolvePlayerInitiative adds the Dex
+    // modifier and slots the player into the order. Until then nobody acts.
+    const pendingPlayer = {
       name: character.nickname || character.name || 'Player',
       type: 'player',
       key: playerKey,
-      roll: playerRoll,
       modifier: playerDexMod,
-      initiative: playerRoll + playerDexMod
-    });
+    };
 
     // Companion initiatives. Schema notes preserved from the legacy
     // inline block: companions.name doesn't exist (lives on npcs via
@@ -130,9 +132,23 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
     // by that name, and the block's book name may differ (the DM's
     // "Goblin" is the book's "Goblin Warrior").
     const parsedStats = parseEnemyStats(parsed.Enemies || '');
+    // F3 (combat-loop fix): same-name enemies get distinct names — "Thug 1",
+    // "Thug 2" — because every marker finds an enemy by name. The bestiary
+    // lookup below still uses the base name.
+    const nameCounts = {};
+    for (const p of parsedStats) nameCounts[String(p.name).toLowerCase()] = (nameCounts[String(p.name).toLowerCase()] || 0) + 1;
+    const nameSeen = {};
+    const uniqueNames = parsedStats.map((p) => {
+      const k = String(p.name).toLowerCase();
+      if (nameCounts[k] < 2) return p.name;
+      nameSeen[k] = (nameSeen[k] || 0) + 1;
+      return `${p.name} ${nameSeen[k]}`;
+    });
     const enemyStats = [];
     const enemyDigests = [];
+    let parsedIdx = -1;
     for (const p of parsedStats) {
+      parsedIdx++;
       const isDefault = p.maxHp === 10 && p.armorClass === 12 && p.attackBonus === 3;
       const full = await lookupBestiaryFull(p.name).catch(() => null);
       let spec = p;
@@ -166,7 +182,7 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
         const line = bestiaryDigestLine(full);
         if (line) enemyDigests.push(line);
       }
-      enemyStats.push(spec);
+      enemyStats.push({ ...spec, name: uniqueNames[parsedIdx] });
     }
     const encounterSeq = context?.sessionId ? await getNextEncounterSeq(context.sessionId) : 1;
     // Created rows come back in insertion order, matching enemyStats
@@ -203,12 +219,13 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
     const digestText = enemyDigests.length
       ? `\nEnemy intel (system facts from the bestiary — narrate these traits, actions and spells faithfully; do not invent others):\n${enemyDigests.map(d => `- ${d}`).join('\n')}`
       : '';
-    const systemNote = `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Initiative has been rolled. Turn order: ${orderStr}. Use this order for all combat turns. The first combatant to act is ${turnOrder[0].name}. Emit [TURN_ADVANCE] when a combatant's turn ends.${digestText}`;
+    const systemNote = `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Initiative rolled for the NPCs: ${orderStr}. The engine is now asking ${pendingPlayer.name} to roll a d20 for initiative (it adds ${pendingPlayer.modifier >= 0 ? '+' : ''}${pendingPlayer.modifier} after); nobody acts until that number is in. From then on the ENGINE runs every turn: on each NPC's turn it asks you what that NPC does. Never emit [TURN_ADVANCE].${digestText}`;
 
     // Combat Pipeline #2: Store turn order server-side
     if (context?.sessionId) {
       try {
         await initializeTurnOrder(context.sessionId, encounterSeq, turnOrder);
+        await setPendingInitiative(context.sessionId, { ...pendingPlayer, encounterSeq, characterId: context.characterId });
       } catch (e) {
         console.error('[combatMarkerService] Failed to store turn order:', e.message);
       }
@@ -230,7 +247,7 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
 
     return {
       type: 'combat_start',
-      combatStart: { turnOrder, currentTurn: 0, round: 1, encounterSeq },
+      combatStart: { turnOrder, currentTurn: 0, round: 1, encounterSeq, awaitingPlayerInitiative: pendingPlayer.name },
       systemNote,
       roomLink
     };
@@ -308,7 +325,7 @@ async function resolvePartyTarget(context, encounterSeq, targetName) {
   let target = null;
   const wanted = String(targetName || '').toLowerCase();
   const c = await dbGet('SELECT id, name FROM characters WHERE id = ?', [context.characterId]);
-  if (c && (wanted === 'player' || wanted === String(c.name).toLowerCase())) {
+  if (c && isPlayerRef(wanted, c.name)) {
     const combatAc = await getPlayerCombatAc(context.characterId).catch(() => null);
     target = { type: 'player', id: c.id, armorClass: combatAc?.ac || 10, name: 'Player' };
   } else {
@@ -625,7 +642,7 @@ registerMarkerHandler('OPPORTUNITY_ATTACK', async (parsed, context) => {
       if (oaBlocked) return { type: 'opportunity_attack', success: false, reason: oaBlocked, attacker, target, reactionConsumed: false };
     } else {
       const oaCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [context.characterId]);
-      const oaIsPc = /^(player|pc|character)$/i.test(attacker) || (oaCharacter && attacker.toLowerCase() === String(oaCharacter.name).toLowerCase());
+      const oaIsPc = isPlayerRef(attacker, oaCharacter?.name);
       const oaEnemyTarget = await findActiveEnemy(context.sessionId, encounterSeq, target);
       if (oaIsPc) {
         const oaBlocked = await attackBlockedByConditions('player', context.characterId, 'enemy', oaEnemyTarget?.id);
@@ -663,7 +680,7 @@ registerMarkerHandler('OPPORTUNITY_ATTACK', async (parsed, context) => {
     // shadowed the companion branch above into TDZ and crashed every
     // companion opportunity attack (capstone + combat-real gate).
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [context.characterId]);
-    const isPc = /^(player|pc|character)$/i.test(attacker) || (character && attacker.toLowerCase() === String(character.name).toLowerCase());
+    const isPc = isPlayerRef(attacker, character?.name);
     if (isPc) {
       // Item 3, Tier 1: reactions are exempt from the turn-identity
       // gate (they legitimately fire on others' turns); their flags
@@ -902,7 +919,7 @@ registerMarkerHandler('DASH', async (parsed, context) => {
 async function resolveActionTarget(context, encounterSeq, targetRaw) {
   const wanted = String(targetRaw || '').trim();
   const c = await dbGet('SELECT id, name FROM characters WHERE id = ?', [context.characterId]);
-  if (c && (/^(player|pc|character)$/i.test(wanted) || wanted.toLowerCase() === String(c.name).toLowerCase())) {
+  if (c && isPlayerRef(wanted, c.name)) {
     return { kind: 'player', id: c.id, key: await ledgerKeyForPlayer(c.id), name: c.name };
   }
   const comp = await dbGet(
@@ -1414,9 +1431,54 @@ registerMarkerHandler('SET_COVER', async (parsed, context) => {
 });
 
 /**
+ * The DM note for a turn advance: whose turn it is, plus whatever the
+ * advance itself produced (lair hazard tick, turn-start heals, grants,
+ * Wild Magic surges). Shared by the TURN_ADVANCE handler and the
+ * engine-driven loop (combat-loop fix), which advances turns itself.
+ */
+export function formatTurnAdvanceNote(newState) {
+  if (!newState) return '';
+  // Lair hazard auto-roll (2026-11-04): only real hazard outcomes
+  // reach the DM note — a strike, a telegraph, or a precursor.
+  // Skips (no linked room, no lair) stay in the returned
+  // lairHazard object for diagnostics and are not narrated every
+  // round, or every unlinked fight would spam the note. The
+  // struck/telegraphed detail is DM-facing narration fuel, not
+  // player text: the DM adjudicates what the party sees.
+  const lairHazard = newState.lairHazard || null;
+  let systemNote = `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Turn advanced. It is now ${newState.currentTurn?.name}'s turn (Round ${newState.round}).`;
+  if (lairHazard?.struck?.hazard) {
+    const h = lairHazard.struck.hazard;
+    const caught = (lairHazard.struck.results || []).filter((r) => !r.avoided && !r.skipped).map((r) => `${r.name} (${r.damageTaken})`).join(', ');
+    systemNote += `\n[LAIR HAZARD] ${h.feature} (${h.severity}, ${h.type}) struck: ${caught || 'everyone avoided it'}.`;
+  } else if (lairHazard?.telegraphed) {
+    const t = lairHazard.telegraphed;
+    systemNote += `\n[LAIR HAZARD TELEGRAPH] ${t.feature} (${t.severity}, ${t.type}) is about to strike — it lands on the next round's tick unless the party moves, stabilizes, or leaves.`;
+  } else if (lairHazard?.hazard?.precursor) {
+    systemNote += `\n[LAIR HAZARD PRECURSOR] ${lairHazard.hazard.feature}: ${lairHazard.hazard.note}`;
+  }
+  // Mechanics hooks (M13): turn-start subclass effects ride newState.
+  if (newState.turnStartHeal) {
+    const h = newState.turnStartHeal; // { applied, kind, actor, amount, currentHp, maxHp, newHp, feature: 'Survivor' }
+    systemNote += `\n[SURVIVOR] ${h.actor} regains ${h.amount} HP at the start of their turn.`;
+  }
+  if (newState.turnStartGrants?.length) {
+    for (const g of newState.turnStartGrants) { // { feature: 'Heroic Warrior', actor, kind, granted: 'Heroic Inspiration' }
+      systemNote += `\n[${g.feature.toUpperCase()}] ${g.actor} gains ${g.granted}.`;
+    }
+  }
+  if (newState.turnStartSurge?.length) { // string[]
+    for (const n of newState.turnStartSurge) systemNote += `\n[WILD MAGIC] ${n}`;
+  }
+  return systemNote;
+}
+
+/**
  * TURN_ADVANCE handler (Combat Pipeline #2).
  * [TURN_ADVANCE] — advance to the next combatant in initiative order.
- * The AI emits this when a combatant's turn ends.
+ * Since the combat-loop fix the ENGINE advances turns and the route
+ * strips this marker from the DM's replies; the handler stays for any
+ * direct dispatch (tests, tools) and shares the note text above.
  */
 registerMarkerHandler('TURN_ADVANCE', async (parsed, context) => {
   if (!context?.sessionId) return null;
@@ -1425,38 +1487,8 @@ registerMarkerHandler('TURN_ADVANCE', async (parsed, context) => {
     if (!encounterSeq) return null;
     const newState = await advanceTurn(context.sessionId, encounterSeq);
     if (!newState) return null;
-    // Lair hazard auto-roll (2026-11-04): only real hazard outcomes
-    // reach the DM note — a strike, a telegraph, or a precursor.
-    // Skips (no linked room, no lair) stay in the returned
-    // lairHazard object for diagnostics and are not narrated every
-    // round, or every unlinked fight would spam the note. The
-    // struck/telegraphed detail is DM-facing narration fuel, not
-    // player text: the DM adjudicates what the party sees.
     const lairHazard = newState.lairHazard || null;
-    let systemNote = `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Turn advanced. It is now ${newState.currentTurn?.name}'s turn (Round ${newState.round}).`;
-    if (lairHazard?.struck?.hazard) {
-      const h = lairHazard.struck.hazard;
-      const caught = (lairHazard.struck.results || []).filter((r) => !r.avoided && !r.skipped).map((r) => `${r.name} (${r.damageTaken})`).join(', ');
-      systemNote += `\n[LAIR HAZARD] ${h.feature} (${h.severity}, ${h.type}) struck: ${caught || 'everyone avoided it'}.`;
-    } else if (lairHazard?.telegraphed) {
-      const t = lairHazard.telegraphed;
-      systemNote += `\n[LAIR HAZARD TELEGRAPH] ${t.feature} (${t.severity}, ${t.type}) is about to strike — it lands on the next round's tick unless the party moves, stabilizes, or leaves.`;
-    } else if (lairHazard?.hazard?.precursor) {
-      systemNote += `\n[LAIR HAZARD PRECURSOR] ${lairHazard.hazard.feature}: ${lairHazard.hazard.note}`;
-    }
-    // Mechanics hooks (M13): turn-start subclass effects ride newState.
-    if (newState.turnStartHeal) {
-      const h = newState.turnStartHeal; // { applied, kind, actor, amount, currentHp, maxHp, newHp, feature: 'Survivor' }
-      systemNote += `\n[SURVIVOR] ${h.actor} regains ${h.amount} HP at the start of their turn.`;
-    }
-    if (newState.turnStartGrants?.length) {
-      for (const g of newState.turnStartGrants) { // { feature: 'Heroic Warrior', actor, kind, granted: 'Heroic Inspiration' }
-        systemNote += `\n[${g.feature.toUpperCase()}] ${g.actor} gains ${g.granted}.`;
-      }
-    }
-    if (newState.turnStartSurge?.length) { // string[]
-      for (const n of newState.turnStartSurge) systemNote += `\n[WILD MAGIC] ${n}`;
-    }
+    const systemNote = formatTurnAdvanceNote(newState);
     return {
       type: 'turn_advance',
       currentTurn: newState.currentTurn,

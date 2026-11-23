@@ -175,8 +175,11 @@ async function run() {
     assert(!/MARKER CORRECTION NEEDED/.test(llm.lastCall.system), 'no correction is injected once resolved')
 
     // ============================================================
-    console.log('\n=== Test 5: dropping to 0 HP triggers a system-rolled death save ===\n')
+    console.log('\n=== Test 5: dropping to 0 HP asks the player for a death save ===\n')
     // ============================================================
+    // Combat-loop fix P4 (Zach 2026-11-23): the engine never rolls for the
+    // player. Falling to 0 HP asks for a death-save d20; the player's next
+    // message reports it and the engine judges it.
 
     const f3 = await freshFixture({ prefix: 'TEST_E2E_3', hp: 6, maxHp: 30 })
 
@@ -188,33 +191,20 @@ async function run() {
       'SELECT current_hp, is_unconscious, death_save_successes, death_save_failures FROM characters WHERE id = ?',
       [f3.characterId]
     )
-    assert(!!dyingRes.body.deathSave, 'the system rolled a death save without being asked')
-    // The death save is a real d20 the system rolls, so the asserts must
-    // model every outcome branch, not just the middle two (a nat-20 revive
-    // flaked this test 2026-10-21 — HP 1, conscious, 0 pips is CORRECT):
-    //   20    -> revived at 1 HP, conscious, pips reset to 0/0
-    //   10-19 -> one success pip, still down at 0 HP
-    //   2-9   -> one failure pip, still down at 0 HP
-    //   1     -> TWO failure pips, still down at 0 HP
-    const ds = dyingRes.body.deathSave
-    if (ds && ds.outcome === 'revived') {
-      assertEqual(dying.current_hp, 1, 'a nat-20 death save revives at 1 HP')
-      assertEqual(dying.is_unconscious, 0, 'a revived player is conscious')
-      assert(ds.successes + ds.failures === 0, 'revive resets the death-save pips')
-    } else {
-      assertEqual(dying.current_hp, 0, 'HP floors at 0, not 1 — the player can fall')
-      assertEqual(dying.is_unconscious, 1, 'falling to 0 HP sets unconscious')
-      const expectedPips = ds && ds.roll === 1 ? 2 : 1
-      assert(
-        !!ds && ds.successes + ds.failures === expectedPips,
-        'exactly one death save was rolled for the turn (a nat 1 counts as two failure pips)'
-      )
-    }
+    assertEqual(dying.current_hp, 0, 'HP floors at 0, not 1 — the player can fall')
+    assertEqual(dying.is_unconscious, 1, 'falling to 0 HP sets unconscious')
+    assert(!dyingRes.body.deathSave && dying.death_save_successes + dying.death_save_failures === 0, 'the system rolled no death save for the player')
+    assert((dyingRes.body.rollPrompts || []).some(p => /death saving throw/.test(p)), 'the player is asked to roll the death save')
+
+    llm.reply('You cling to the edge of consciousness.')
+    const saveRes = await server.post(`/api/dm-session/${f3.sessionId}/message`, { action: '1' })
+    const saved = await dbGet('SELECT death_save_failures FROM characters WHERE id = ?', [f3.characterId])
+    assert(saveRes.body.deathSave?.roll === 1 && saved.death_save_failures === 2, 'the reported natural 1 is judged: two failure pips')
 
     // The AI is told the outcome so the next turn narrates from truth.
     const afterDying = await readSession(f3.sessionId)
     assert(
-      afterDying.parsedMessages.some(m => /Death saving throw rolled/.test(m.content || '')),
+      afterDying.parsedMessages.some(m => /DEATH SAVE — system fact: the player rolled 1/.test(m.content || '')),
       'the death-save result was appended to the history the AI reads'
     )
 

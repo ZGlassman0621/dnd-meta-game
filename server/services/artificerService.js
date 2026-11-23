@@ -99,6 +99,7 @@
  * real load paths, not a new central registry.
  */
 
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
@@ -642,8 +643,7 @@ function intModOf(abilityScores) {
 async function resolveArtificer(context, targetRaw) {
   const character = await dbGet('SELECT id, name, class, level, ability_scores FROM characters WHERE id = ?', [context.characterId]);
   const raw = String(targetRaw || '').trim();
-  const isPc = !raw || /^(player|pc|character)$/i.test(raw) ||
-    (character && raw.toLowerCase() === String(character.name).toLowerCase());
+  const isPc = !raw || isPlayerRef(raw, character?.name);
   if (isPc) {
     return {
       kind: 'player', id: context.characterId, name: character?.name || 'Player',

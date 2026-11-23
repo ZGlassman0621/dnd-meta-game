@@ -44,6 +44,7 @@
  * "not confidently sourced" line is superseded by that table.
  */
 
+import { isPlayerRef } from '../utils/playerName.js';
 import { dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
 import { roll } from '../utils/rng.js';
@@ -464,8 +465,7 @@ export async function getCompanionFeats(id) {
 
 async function resolveTarget(context, targetRaw) {
   const character = await dbGet('SELECT id, name FROM characters WHERE id = ?', [context.characterId]);
-  const isPc = /^(player|pc|character)$/i.test(targetRaw) ||
-    (character && targetRaw.toLowerCase() === String(character.name).toLowerCase());
+  const isPc = isPlayerRef(targetRaw, character?.name);
   if (isPc) return { kind: 'player', id: context.characterId, name: character?.name || 'Player' };
   const compId = await findCompanionIdByName(context.characterId, targetRaw);
   if (!compId) return null;
@@ -616,14 +616,20 @@ registerMarkerHandler('SECOND_WIND', async (parsed, context) => {
     const spent = await spendResource(target.kind, target.id, 'secondWind');
     if (!spent.success) return { type: 'second_wind', success: false, reason: spent.reason };
     const level = Number(got.row[LEVEL_COL[target.kind]] || 1);
+    if (target.kind === 'player') {
+      // Combat-loop fix P4 (Zach 2026-11-23): the engine never rolls for
+      // the player. The use and the bonus action are spent now; the
+      // player rolls the 1d10 and the engine adds the fighter level.
+      await spendBonusFor(context, target, 'Second Wind');
+      if (context.sessionId) {
+        const { setPendingHeal } = await import('./combatLoopService.js');
+        await setPendingHeal(context.sessionId, { characterId: target.id, feature: 'Second Wind', dice: '1d10', flat: level });
+      }
+      return { type: 'second_wind', success: true, pending: true, target: target.name, dice: '1d10', flat: level, usesUsed: spent.used, usesMax: spent.max };
+    }
     const rolled = roll(10, 1, { reason: 'second wind' });
     const heal = rolled.total + level;
-    if (target.kind === 'player') {
-      const { applyHpChange } = await import('./characterHpService.js');
-      await applyHpChange(target.id, heal, 'second wind');
-    } else {
-      await dbRun('UPDATE companions SET companion_current_hp = MIN(companion_max_hp, companion_current_hp + ?) WHERE id = ?', [heal, target.id]);
-    }
+    await dbRun('UPDATE companions SET companion_current_hp = MIN(companion_max_hp, companion_current_hp + ?) WHERE id = ?', [heal, target.id]);
     await spendBonusFor(context, target, 'Second Wind');
     return { type: 'second_wind', success: true, target: target.name, heal, usesUsed: spent.used, usesMax: spent.max };
   } catch (e) {

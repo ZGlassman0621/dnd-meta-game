@@ -263,7 +263,9 @@ group('6. PC track: features are instructions, never added to the report');
   ok(p1.pending && p1.pending.sneakDice === '3d6', 'PC pending attack records sneak 3d6 as an instruction');
   ok(p1.pending.attackBonus === 6, 'PC attack bonus is not inflated by sneak (DEX 3 + PB 3)');
   const r1 = await pas.resolveReportedAttack(sessionId, pcRogue.id, [15, 10], 8);
-  ok(r1 && r1.hit && r1.damage === 8, 'PC reported total is trusted as-is — sneak is NOT added on top');
+  // Combat-loop fix P4: the player's number is the dice total (sneak dice
+  // included, as instructed); the engine adds only the flat modifier.
+  ok(r1 && r1.hit && r1.damageRoll === 8 && r1.damageBonus === 3 && r1.damage === 11, 'PC reported dice total stands; the engine adds the flat +3 DEX — sneak is NOT added on top');
   ok(r1.sneakAttack && r1.sneakAttack.applied === true, 'first hit consumes the once-per-turn sneak flag');
   const p2 = await pas.createPcPendingAttack(sessionId, pcRogue.id, pcRogue, await enemyRow(dummy.id), { marker: { advantage: true } });
   const r2 = await pas.resolveReportedAttack(sessionId, pcRogue.id, [15, 10], 8);

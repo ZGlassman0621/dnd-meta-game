@@ -196,7 +196,9 @@ group('2. Falls: enemy, PC, companion, short fall, legacy paths unchanged');
   ok(lrec && lrec.attackerKind === 'player', 'legacy declared damage stays player-dealt');
   const lpcBefore = await pcHp(pc.id);
   const lpc = await markerResult('[HP_CHANGE: delta=-5]', pc.id, sessionId, 'HP_CHANGE');
-  ok(lpc && lpc.applied === true && (await pcHp(pc.id)) === lpcBefore - 5, 'legacy declared PC delta unchanged');
+  // Combat-loop fix (decision 4): mid-fight the engine owns combat damage,
+  // so a plain declared PC delta is refused; the table causes above still apply.
+  ok(lpc && lpc.refusedInCombat === true && (await pcHp(pc.id)) === lpcBefore, 'a plain declared PC delta is refused mid-fight (the engine applies combat damage)');
   const beats = await markerResult('[ENEMY_DAMAGE: Enemy="GobA" Amount=8 Fall=30]', pc.id, sessionId, 'ENEMY_DAMAGE');
   ok(beats && beats.cause === 'fall' && beats.applied >= 3 && beats.applied <= 18, 'a table field beats a declared amount');
 }

@@ -12,6 +12,7 @@ import InventoryPanel from './InventoryPanel';
 import CommissionsPanel from './CommissionsPanel';
 import MerchantRelationshipsPanel from './MerchantRelationshipsPanel';
 import CombatTracker from './CombatTracker';
+import RollMathPanel from './RollMathPanel';
 import SessionSetup from './SessionSetup';
 import SessionRewards from './SessionRewards';
 import CampaignNotesPanel from './CampaignNotesPanel';
@@ -109,6 +110,8 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
 
   // Combat tracker state
   const [combatState, setCombatState] = useState(null);
+  // Combat-loop fix item 7: the engine's math for every roll this session.
+  const [rollMathLog, setRollMathLog] = useState([]);
 
   // Condition tracking state
   const [playerConditions, setPlayerConditions] = useState([]);
@@ -810,6 +813,14 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
       if (data.combatStart?.turnOrder) {
         setCombatState(data.combatStart);
       }
+      // Combat-loop fix P5: the server runs the turns, so the tracker
+      // follows the server's turn state after every message.
+      if (data.turnState?.turnOrder) {
+        setCombatState(prev => ({ ...(prev || {}), ...data.turnState }));
+      }
+      if (Array.isArray(data.rollMath) && data.rollMath.length) {
+        setRollMathLog(prev => [...prev, ...data.rollMath].slice(-200));
+      }
       if (data.combatEnd) {
         setCombatState(null);
         // Auto-clear combat-end conditions
@@ -873,27 +884,9 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
     }
   };
 
-  // Item 3, Tier 1: Next Turn advances the SERVER turn order (the
-  // ledger, reactions, and Slow expiry all key off it) and the tracker
-  // follows the server's answer. On failure the tracker does not move:
-  // a local advance would re-introduce the drift this wiring removes.
-  const advanceTurn = async () => {
-    if (!combatState || !activeSession?.id) return;
-    try {
-      const response = await fetch(`/api/dm-session/${activeSession.id}/advance-turn`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ encounterSeq: combatState.encounterSeq })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Failed to advance the turn');
-      setCombatState(prev => ({ ...prev, turnOrder: data.turnOrder, currentTurn: data.currentTurn, round: data.round, encounterSeq: data.encounterSeq }));
-    } catch (err) {
-      console.error('Advance turn failed:', err.message);
-      setError(`Could not advance the turn on the server — the tracker was not moved. (${err.message})`);
-    }
-  };
-
+  // Combat-loop fix: the engine advances every turn itself (the old
+  // Next Turn button and its route are gone); the tracker follows the
+  // turnState each message returns.
   const endCombat = () => setCombatState(null);
 
   const discardItem = async (itemName) => {
@@ -2920,10 +2913,10 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
         {combatState && (
           <CombatTracker
             combatState={combatState}
-            onAdvanceTurn={advanceTurn}
             onEndCombat={endCombat}
           />
         )}
+        <RollMathPanel entries={rollMathLog} onClear={() => setRollMathLog([])} />
 
         <div className="dm-messages">
           {messages.map((msg, idx) => (

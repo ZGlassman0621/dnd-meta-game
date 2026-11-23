@@ -128,54 +128,46 @@ async function run() {
 
   // Not dying → no save.
   await setHp(10);
-  assertEqual(await rollDeathSave(CHARACTER_ID), null, 'no death save while conscious');
+  assertEqual(await rollDeathSave(CHARACTER_ID, 15), null, 'no death save while conscious');
 
-  // Three failures kill. Roll until we observe a death, forcing the counter.
+  // Combat-loop fix P4: the death save is the player's reported d20 — the
+  // engine judges it and never rolls one itself.
+  await setHp(0, { unconscious: 1 });
+  assertEqual(await rollDeathSave(CHARACTER_ID), null, 'no reported die → no death save (the engine never rolls it)');
+
+  // Three failures kill: a reported 5 with two failures already.
   await setHp(0, { unconscious: 1, failures: 2 });
-  let sawDeath = false;
-  for (let i = 0; i < 40 && !sawDeath; i++) {
-    await setHp(0, { unconscious: 1, failures: 2 });
-    const save = await rollDeathSave(CHARACTER_ID);
-    if (save && save.died) {
-      sawDeath = true;
-      assertEqual(save.failures, 3, 'death occurs at three failures');
-      const dead = await getHpState(CHARACTER_ID);
-      assertEqual(dead.is_dead, 1, 'is_dead is persisted — the player CAN die');
-    }
-  }
-  assert(sawDeath, 'a failing death save eventually kills at 2 prior failures');
+  const fatal = await rollDeathSave(CHARACTER_ID, 5);
+  assert(fatal && fatal.died === true, 'a failing death save kills at 2 prior failures');
+  assertEqual(fatal?.failures, 3, 'death occurs at three failures');
+  const dead = await getHpState(CHARACTER_ID);
+  assertEqual(dead.is_dead, 1, 'is_dead is persisted — the player CAN die');
 
-  // Three successes stabilise.
-  let sawStable = false;
-  for (let i = 0; i < 40 && !sawStable; i++) {
-    await setHp(0, { unconscious: 1, successes: 2 });
-    const save = await rollDeathSave(CHARACTER_ID);
-    if (save && save.stabilised) {
-      sawStable = true;
-      assertEqual(save.successes, 3, 'stabilisation occurs at three successes');
-      assertEqual(save.currentHp, 0, 'stabilised but still at 0 HP');
-    }
-  }
-  assert(sawStable, 'a succeeding death save eventually stabilises at 2 prior successes');
+  // Three successes stabilise: a reported 14 with two successes already.
+  await setHp(0, { unconscious: 1, successes: 2 });
+  const stable = await rollDeathSave(CHARACTER_ID, 14);
+  assert(stable && stable.stabilised === true, 'a succeeding death save stabilises at 2 prior successes');
+  assertEqual(stable?.successes, 3, 'stabilisation occurs at three successes');
+  assertEqual(stable?.currentHp, 0, 'stabilised but still at 0 HP');
 
   // A dead character takes no further damage and cannot be healed by a marker.
   await setHp(0, { dead: 1 });
   r = await applyHpChange(CHARACTER_ID, 10, 'healing a corpse');
   assertEqual(r.applied, false, 'HP changes do not apply to a dead character');
   assertEqual(r.reason, 'character_is_dead', 'refusal reason is explicit');
-  assertEqual(await rollDeathSave(CHARACTER_ID), null, 'no death saves once dead');
+  assertEqual(await rollDeathSave(CHARACTER_ID, 15), null, 'no death saves once dead');
 
   // ============================================================
   console.log('\n=== Test 6: rolls go through the central RNG ===\n');
   // ============================================================
 
+  // The death save is the player's die now (combat-loop fix P4), so it
+  // must NOT draw from the engine's RNG at all.
   clearRollLog();
   await setHp(0, { unconscious: 1 });
-  await rollDeathSave(CHARACTER_ID);
-  const log = getRollLog();
-  assert(log.length === 1, 'the death save was recorded in the roll log');
-  assertEqual(log[0].sides, 20, 'it was a d20');
-  assert(/death save/.test(log[0].reason || ''), 'the roll log names the reason');
+  const reported = await rollDeathSave(CHARACTER_ID, 12);
+  assert(reported && reported.roll === 12, 'the reported 12 is the death save');
+  assertEqual(getRollLog().length, 0, 'the engine rolled no die for the player\'s death save');
 
   // ============================================================
   console.log('\n=== Test 7: HP_CHANGE dispatches through the marker pipeline ===\n');
