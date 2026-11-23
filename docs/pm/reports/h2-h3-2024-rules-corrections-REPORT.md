@@ -2,7 +2,7 @@
 
 Builder: Claude Code (Opus 5.5). Brief: `docs/pm/h2-h3-2024-rules-corrections/BRIEF.md`.
 Branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`. Version 1.0.201 → **1.0.202**.
-Commit: recorded by a follow-up commit (see the line added at the bottom of this file).
+Commit: `2e0db72` (the build); a follow-up commit adds this line.
 
 ## Understanding
 The project is a solo D&D 2024 "forever game": one human player character, with the DM, NPCs, companions and enemies played by an AI (gemma4:12b on the PC). The server owns the rules facts (HP, Hit Dice, spell slots, prepared-spell limits); the AI narrates.
