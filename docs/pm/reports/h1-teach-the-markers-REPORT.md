@@ -247,3 +247,31 @@ None for this job. Zach's part is the gate. Muse to scope: the marker-result fee
    - **Look for:** the DM's narration treats you as soaked and the cold as harsher.
 5. **Dungeon:** keep exploring wilderness. Let the DM's own world offer a ruin or cave; don't ask for one by name.
    - **Look for:** a stored dungeon can't be seen on screen. This check stays prompt-proved unless you happen to catch it in play.
+
+## Gate findings — Zach's :5173 session (added 2026-11-23, after the build commit)
+Zach played the "How to verify" steps at `:5173`. What he reported, then what I found. Nothing below has been fixed yet.
+
+**What worked:** room cover (the bar gave half cover), the cold scene, and wet/soaked status.
+
+### Finding 1 — raw markers appear in the player's chat (partly caused by H1)
+- **Zach saw:** bracketed markers printed in chat, for example `[SET_COVER: Target="Player" Cover="half" Feature="Bar"]`, `[ENEMY_ATTACK: Enemy="Thug" Target="Player" Multiattack="true"]`, `[COLD_SCENE: BaseLevel=3]`, `[COLD_WET: Target="Player" Status="soaked"]`.
+- **Cause (verified in the code):**
+  - The player-facing text is cleaned by one hand-kept list of strip lines in `server/routes/dmSession.js:2189-2227`. That list removes **28** markers by name; **99 of the 126** marker schemas are never removed.
+  - Among them: `ATTACK`, `ENEMY_ATTACK`, `SET_COVER`, `ROLL_REQUEST`, `SPELL_CAST`, `MOVE`, `TURN_ADVANCE`, every marker H1 taught, and every class-feature marker.
+  - There is no catch-all strip. CLAUDE.md's debt list already names this ("marker lists drift by hand"; the Prelude has a catch-all regex worth adopting).
+  - The markers still work (the engine reads them before the strip), which is why the cover, cold and wet effects applied. They are just shown as well.
+- **H1's part:** most of the leak predates H1 (`SET_COVER` and `ENEMY_ATTACK` were already taught and not stripped). But H1 taught about 15 more markers the strip list doesn't know, so it widened the leak.
+- **Proposed fix (small, needs a brief or Muse's OK, since H1 was "no route change"):** strip every marker named in the schemas from the player-facing text with one generated pattern, instead of the hand list. Add a test that no schema marker survives into the narrative the player sees.
+
+### Finding 2 — combat does not run as a turn-based fight in play (not caused by H1; not diagnosed)
+- **Zach saw:**
+  - (a) initiative didn't seem to work; combat felt purely narrative;
+  - (b) he was asked again and again to "make an attack roll", but never told what to roll for **damage**;
+  - (c) the thugs never attacked on their own turn; they acted only in response to his actions, so the fight never became turn-based.
+- **What I checked (not a diagnosis):**
+  - `COMBAT_START` does roll initiative (`server/services/combatMarkerService.js`), and the turn order is sent to the client (`DMSession.jsx:808, 888`).
+  - The DM prompt only covers damage for the player's dice when the player supplies a damage roll (`dmPromptBuilder.js:2983`), and for spells. No line tells the DM to ask for weapon damage after a hit.
+  - Enemy turns depend on the DM emitting `ENEMY_ATTACK` and `TURN_ADVANCE`. Zach's session suggests gemma4:12b does not drive that loop.
+- **Why it isn't fixed here:** it is outside H1, and it needs its own job — a real diagnosis of the combat loop in live play (initiative display, a weapon damage-roll prompt, enemies acting on their turns) before any fix.
+
+**Effect on this job's verdict:** H1's own changes are green, but Finding 1 is a visible defect that H1 made wider. I recommend not closing H1 at the gate until the strip fix lands.
