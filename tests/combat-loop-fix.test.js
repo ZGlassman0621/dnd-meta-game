@@ -192,12 +192,14 @@ try {
     let c = await cfgOf(sid)
     assert(c.pendingConcentration?.dcs?.[0] === 10, 'the damage queues a DC 10 concentration save — nothing rolled')
     assert((await dbGet('SELECT concentrating_on FROM characters WHERE id = ?', [f.characterId])).concentrating_on === 'Bless', 'concentration holds until the player rolls')
-    assert((r.body.rollPrompts || []).some((p) => /Roll a d20 Constitution saving throw to keep concentration on Bless — DC 10; the engine adds \+2 \(CON\)/.test(p)), 'the player is told the save, its DC and the +2 the engine adds')
+    assert((r.body.rollPrompts || []).some((p) => /Roll a d20 Constitution saving throw to keep concentration on Bless; the engine adds \+2 \(CON\)/.test(p)), 'the player is told the save and the +2 the engine adds')
+    assert(!(r.body.rollPrompts || []).some((p) => /\bDC\b/.test(p)), 'the DC is hidden from the player (Zach, 2026-11-23)')
     llm.reply('You grit your teeth and hold the blessing.')
     const before = llm.callCount
     r = await post({ action: '9' })
     c = await cfgOf(sid)
-    assert(!c.pendingConcentration && (r.body.rollMath || []).some((m) => /Concentration \(Bless\): d20 9 \+ 2 \(CON\) = 11 vs DC 10 — kept/.test(m)), 'the reported 9 + 2 = 11 keeps Bless')
+    assert(!c.pendingConcentration && (r.body.rollMath || []).some((m) => /Concentration \(Bless\): d20 9 \+ 2 \(CON\) = 11 — kept/.test(m)), 'the reported 9 + 2 = 11 keeps Bless')
+    assert(!(r.body.rollMath || []).some((m) => /^Concentration.*\bDC\b/.test(m)) && !/Concentration \(Bless\)[^\n]*\bDC\b/.test(r.body.narrative || r.body.response || ''), 'no DC in the math panel or the engine line')
     assert(!llm.calls.slice(before).some((c) => /COMBAT TURN/.test(c.lastUserMessage)) && r.body.turnState.turnOrder[r.body.turnState.currentTurn]?.type === 'player', 'settling the save leaves the player\'s turn open (no NPC turn)')
     await dbRun('UPDATE characters SET concentrating_on = NULL WHERE id = ?', [f.characterId])
   }

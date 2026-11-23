@@ -243,6 +243,29 @@ No migration. Version bumped in both `package.json` files. `CLAUDE.md` updated: 
 
    Which?
 
+## Zach's answers (2026-11-23)
+1. **DC in the math panel:** "No, DC is hidden from the player by the engine. Just make it for combat - AC, dodge, dexterity, to hit, spell to hit, damage, critical hits, critical misses, etc."
+2. **Out-of-combat rolls:** "ALWAYS - as a rule, the DM never rolls for the player. Except the hidden perception die. Well, that roll belongs to the player to establish a number, from how I understand that rule, but when it gets rolled is hidden."
+3. **`COMBAT_END` with enemies standing:** "Fights need some sort of resolution. If both thugs are still standing, there has to be a reason for it - they ran off, we ended up talking things out; something must happen in order for that outcome"
+
+### Done in this job (answer 1)
+The concentration DC was reaching the player in two places, which broke answer 1. Decision 10 claimed it was "public by the rules"; that is now withdrawn. Both places are fixed:
+- the roll prompt, which now reads "🎲 Roll a d20 Constitution saving throw to keep concentration on Bless; the engine adds +2 (CON) after" (`server/routes/dmSession.js`);
+- the math line in the panel and in the "⚙" engine line, which now reads "Concentration (Bless): d20 9 + 2 (CON) = 11 — kept" (`server/services/combatLoopService.js`).
+
+The DM's own `[CONCENTRATION — system fact]` block still carries the DC; the player never sees it.
+
+- **Tests:** `tests/combat-loop-fix.test.js` now asserts that no DC appears in the roll prompts or the concentration math (82 assertions, green). Full `npm test` after this fix: Files **251/251 green**, assertions **19,739 passed, 0 failed**. Windows notes: `creator-next-stage6-commit`, `downtime-rest`, `human-2024` and `levelup-subclass-prompts` were retried once and passed; `bestiary-full` and `roll-request` were counted `pass*`. No version bump: this is the same job (1.0.205).
+- **Unchanged:**
+  - The death-save line keeps "vs DC 10". That is the fixed rule every death save uses, not a DC the engine chose, and the prompt already says "10 or higher succeeds". To veto, delete four characters in `dmSession.js`.
+  - The panel already carries only combat math: initiative, to-hit vs AC, damage, crits, enemy and companion attacks, concentration, Second Wind and death saves. Out-of-combat checks never reach it.
+
+### Left for a brief (answers 2 and 3, new scope)
+- **Answer 2: every out-of-combat player roll becomes the player's.** The sites are the ones in Question 2: short-rest hit dice (`restTimeService.js:156`), hourly cold-exposure saves (`coldExposureService.js:451`) and crafting checks (`craftingService.js:416`).
+  - **The hidden Perception die stays secret in timing but becomes the player's number.** Today the engine rolls the replacement die silently (`perceptionPreRollService.js:354`). Your ruling reads as: the player rolls it up front, the engine banks the number, and when it is used stays hidden.
+  - **Design point for the brief:** the cold saves can be many per stretch of travel, so they need a batch prompt (one roll per hour, or one roll for the stretch).
+- **Answer 3: a fight can't end with enemies standing unless something resolved it.** That is option (b) from Question 3: refuse `COMBAT_END` while enemies stand, and add a way for an enemy to flee, surrender or settle by talking. Morale flight already exists; Thug 1 fled that way in run 4. Talking it out and surrender have no marker yet.
+
 ## How to verify
 **Gate:** `npm test` on the PC (expect 251 files green).
 
@@ -258,4 +281,4 @@ No migration. Version bumped in both `package.json` files. `CLAUDE.md` updated: 
    - Send your damage roll. The "⚙ … damage: rolled N + 3 = …" line appears, then both thugs act on their own turns, and the tracker comes back to you.
 5. Type "I step back and wait."
    - **Look for:** the thugs act again and the round number on the tracker goes up. Your HP falls once per hit.
-6. **Look for:** the **Roll math** panel at the lower right of the screen, listing each roll's arithmetic (die + modifiers = total vs AC or DC). Collapse it with ▾; Clear empties it.
+6. **Look for:** the **Roll math** panel at the lower right of the screen, listing each roll's arithmetic (die + modifiers = total vs AC; no DC is shown, apart from the fixed 10 on death saves). Collapse it with ▾; Clear empties it.

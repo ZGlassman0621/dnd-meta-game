@@ -2629,7 +2629,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       if (pcfg.pendingConcentration?.dcs?.length) {
         const pc = pcfg.pendingConcentration;
         const extra = pc.penalty ? ` and ${signedNum(pc.penalty)} (exhaustion)` : '';
-        rollPrompts.push(`🎲 Roll a d20 Constitution saving throw to keep concentration on ${pc.spell} — DC ${pc.dcs[0]}; the engine adds ${signedNum(pc.conMod)} (CON)${extra} after.`);
+        rollPrompts.push(`🎲 Roll a d20 Constitution saving throw to keep concentration on ${pc.spell}; the engine adds ${signedNum(pc.conMod)} (CON)${extra} after.`);
       }
       if (pcfg.pendingHeal) {
         rollPrompts.push(`🎲 Roll ${pcfg.pendingHeal.dice} for ${pcfg.pendingHeal.feature} — the engine adds ${signedNum(pcfg.pendingHeal.flat)} after.`);

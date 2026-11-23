@@ -174,7 +174,9 @@ export async function resolvePendingConcentration(sessionId, d20) {
   if (!res) return null;
   const sign = (n) => `${n >= 0 ? '+' : '−'} ${Math.abs(n)}`;
   const pen = res.penalty ? ` ${sign(res.penalty)} (exhaustion)` : '';
-  res.math = `Concentration (${res.spell}): d20 ${res.roll} ${sign(res.conMod)} (CON)${pen} = ${res.total} vs DC ${res.dc} — ${res.success ? 'kept' : 'broken'}`;
+  // No DC: the engine hides a DC from the player (Zach, 2026-11-23). The
+  // DM's fact block still carries it.
+  res.math = `Concentration (${res.spell}): d20 ${res.roll} ${sign(res.conMod)} (CON)${pen} = ${res.total} — ${res.success ? 'kept' : 'broken'}`;
   return res;
 }
 
