@@ -2,7 +2,7 @@
 
 Builder: Claude Code (Opus 5.5). Brief: `docs/pm/combat-loop-diagnosis/BRIEF.md`.
 Branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`. Version unchanged (**1.0.204**): this job changes no product code.
-Commit: recorded by a follow-up commit (see the "Commit:" line, filled in after the commit).
+Commit: `3da03a9` (the diagnosis); a follow-up commit adds this line.
 
 ## Understanding
 The project is a solo D&D 2024 "forever game": one human player character, with the DM, NPCs, companions and enemies played by an AI (gemma4:12b on the PC). In a fight the engine is meant to own the mechanics: who acts when, whether attacks hit, how much damage lands, HP. The AI narrates and drives the engine with markers.
