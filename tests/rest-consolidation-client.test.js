@@ -14,9 +14,9 @@
 //   - No client file under client/src still fetches the deleted route
 //     (recursive static scan).
 //   - The server strips [REST] / [TIME_ADVANCE] markers from the
-//     displayed narrative (sibling fix: they were the only markers
-//     missing from the strip list, and every rest-button press now
-//     routes through a turn carrying [REST]).
+//     displayed narrative (every rest-button press routes through a
+//     turn carrying [REST]); since the marker-strip fix that is the
+//     generated strip in server/services/markerStrip.js.
 //   - A real esbuild bundle of DMSession.jsx (react stubbed) — a
 //     broken named import fails the bundle, not a runtime render the
 //     tests never see.
@@ -133,37 +133,35 @@ group('(b) Deletion guard: no client file calls POST /api/character/rest/:id');
 }
 
 // (c) [REST] / [TIME_ADVANCE] markers are stripped from displayed narrative.
+// Since the marker-strip fix (2026-11-23) the route strips with ONE
+// pattern generated from MARKER_SCHEMAS (server/services/markerStrip.js)
+// instead of a hand list, so the pins read that strip, not its old lines.
 group('(c) Marker strip: [REST] / [TIME_ADVANCE] never reach the player as text');
 {
-  const hasRestStrip = (src) => src.includes('replace(/\\[REST(?::');
-  const hasTimeStrip = (src) => src.includes('replace(/\\[TIME_ADVANCE(?::');
-  check(hasRestStrip(dmRouteSrc), 'dmSession.js strips [REST: ...] from the displayed narrative');
-  check(hasTimeStrip(dmRouteSrc), 'dmSession.js strips [TIME_ADVANCE: ...] from the displayed narrative');
-  // The patterns themselves do the job on sample narrative — the
-  // same shapes as the route's strip lines, applied to text the DM
-  // could actually emit.
-  const restRe = /\[REST(?::[^\]]+)?\]\s*/gi;
-  const timeRe = /\[TIME_ADVANCE(?::[^\]]+)?\]\s*/gi;
-  const strip = (s) => s.replace(restRe, '').replace(timeRe, '').trim();
-  check(strip('[REST: Type=short] You catch your breath.') === 'You catch your breath.',
+  const { stripMarkers, STRIPPED_MARKER_NAMES } = await import(new URL('../server/services/markerStrip.js', import.meta.url).href);
+  const hasRouteStrip = (src) => src.includes('let cleanNarrative = stripMarkers(result.narrative);');
+  check(hasRouteStrip(dmRouteSrc), 'dmSession.js strips the displayed narrative with the generated strip');
+  check(STRIPPED_MARKER_NAMES.includes('REST') && STRIPPED_MARKER_NAMES.includes('TIME_ADVANCE'),
+    'REST and TIME_ADVANCE are among the stripped schema markers');
+  // The real strip on text the DM could actually emit.
+  check(stripMarkers('[REST: Type=short] You catch your breath.') === 'You catch your breath.',
     'a short-rest marker is stripped, leaving the narration');
-  check(strip('You make camp. [REST: Type=long] Dawn breaks.') === 'You make camp. Dawn breaks.',
+  check(stripMarkers('You make camp. [REST: Type=long] Dawn breaks.') === 'You make camp. Dawn breaks.',
     'a long-rest marker is stripped mid-narrative');
-  check(strip('[TIME_ADVANCE: Hours=6 Reason="the road north"] You walk on.') === 'You walk on.',
+  check(stripMarkers('[TIME_ADVANCE: Hours=6 Reason="the road north"] You walk on.') === 'You walk on.',
     'a time-advance marker is stripped');
-  check(strip('[REST] Nothing happened.') === 'Nothing happened.',
+  check(stripMarkers('[REST] Nothing happened.') === 'Nothing happened.',
     'a bare [REST] marker (invalid, never dispatched) is stripped too');
-  // Mutation check: delete the REST strip line from a temp copy —
-  // the pin must fail on the mutated route, proving it is sensitive
-  // to the strip itself and not to nearby text.
+  // Mutation check: drop the strip call from a temp copy of the route —
+  // the pin must fail, proving it is sensitive to the call itself.
   const mutatedRoute = path.join(tmpDir, 'dmSession-mutated.js');
   fs.writeFileSync(mutatedRoute, dmRouteSrc.replace(
-    "cleanNarrative = cleanNarrative.replace(/\\[REST(?::[^\\]]+)?\\]\\s*/gi, '').trim();\n", ''));
+    'let cleanNarrative = stripMarkers(result.narrative);', 'let cleanNarrative = result.narrative;'));
   const mutatedSrc = fs.readFileSync(mutatedRoute, 'utf8');
-  check(!hasRestStrip(mutatedSrc),
-    'mutation check: the REST-strip pin fails when the strip line is deleted');
-  check(hasTimeStrip(mutatedSrc),
-    'mutation check: the TIME_ADVANCE strip survives the REST mutation (the deletion is localized)');
+  check(!hasRouteStrip(mutatedSrc),
+    'mutation check: the strip pin fails when the strip call is removed');
+  check(mutatedSrc.includes('let cleanNarrative = result.narrative;'),
+    'mutation check: the mutation is localized (only the call changed)');
 }
 
 // (d) Real esbuild bundle of DMSession.jsx (react stubbed).

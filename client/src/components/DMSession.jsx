@@ -392,8 +392,10 @@ export default function DMSession({ character, onBack, onCharacterUpdated }) {
           }
         }
 
-        // Convert messages to display format
-        const displayMessages = data.session.messages
+        // Convert messages to display format. display_messages is the
+        // server's copy with DM markers stripped (marker-strip fix); the
+        // raw history is the fallback for an older server.
+        const displayMessages = (data.session.display_messages || data.session.messages)
           .filter(m => m.role !== 'system')
           .map(m => ({
             type: m.role === 'user' ? 'action' : 'narrative',

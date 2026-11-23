@@ -105,6 +105,7 @@ import { getCurrentEncounterSeq } from '../services/enemyCombatService.js';
 // marker handlers at module load; the named imports drive the next-turn
 // time-event injection in /message and the measured session-end span.
 import { formatTimeEventBlock, sessionEndDays } from '../services/restTimeService.js';
+import { stripMarkers } from '../services/markerStrip.js';
 import { getPartyConditions } from '../services/conditionService.js';
 import { ensureCompanionSheet } from '../services/companionSheetService.js';
 import {
@@ -471,6 +472,13 @@ router.get('/:sessionId', async (req, res) => {
     }
     session.messages = safeParse(session.messages, []);
     if (session.rewards) session.rewards = safeParse(session.rewards, {});
+    // Display copy for a reloaded session (marker-strip fix, 2026-11-23):
+    // the stored history keeps the DM's markers on purpose, so the client
+    // shows this copy instead, with markers stripped from the DM's turns.
+    // session.messages itself is unchanged.
+    session.display_messages = (Array.isArray(session.messages) ? session.messages : [])
+      .filter((m) => m && m.role !== 'system')
+      .map((m) => (m.role === 'assistant' ? { ...m, content: stripMarkers(m.content) } : m));
     res.json({ session });
   } catch (error) {
     handleServerError(res, error, 'fetch session');
@@ -1264,7 +1272,9 @@ The character ${charName} is currently at ${currentLoc}. Pick up the story from 
     res.json({
       sessionId,
       title,
-      openingNarrative: result.openingNarrative,
+      // Display only (marker-strip fix): the opening can carry markers too;
+      // the stored history keeps them.
+      openingNarrative: stripMarkers(result.openingNarrative),
       startingLocation,
       era,
       gameDate,
@@ -2185,46 +2195,13 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     // internally). Inline block deleted; the handlerResults extraction
     // below pushes the inventoryContext to result.messages.
 
-    // Strip all system markers from displayed narrative
-    let cleanNarrative = result.narrative;
-    cleanNarrative = cleanNarrative.replace(/\[MERCHANT_SHOP:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[MERCHANT_REFER:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[ADD_ITEM:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[LOOT_DROP:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[COMBAT_START:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[COMBAT_END\]\s*/gi, '').trim();
-    // Rest consolidation (2026-11-07): [REST] / [TIME_ADVANCE] move
-    // the clock and apply the rest — the DM narrates the outcome
-    // from the system's next-turn note, so the raw markers must
-    // never reach the player as text. They were the only markers
-    // missing from this strip list; every rest-button press now
-    // routes through a turn whose narrative carries [REST].
-    cleanNarrative = cleanNarrative.replace(/\[REST(?::[^\]]+)?\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[TIME_ADVANCE(?::[^\]]+)?\]\s*/gi, '').trim();
-    // Phase 3.1 — HP_CHANGE drives real damage now, so the marker must not
-    // reach the player as raw text.
-    cleanNarrative = cleanNarrative.replace(/\[HP_CHANGE:[^\]]+\]\s*/gi, '').trim();
-    // Prelude-flow skill checks. The AI is instructed to emit these when a
-    // check is required, but the marker itself must never reach the player.
-    cleanNarrative = cleanNarrative.replace(/\[SKILL_CHECK:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[CONDITION_ADD:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[CONDITION_REMOVE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[WEATHER_CHANGE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[SHELTER_FOUND:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[SWIM:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[EAT:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[DRINK:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[FORAGE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[RECIPE_FOUND:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[MATERIAL_FOUND:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[CRAFT_PROGRESS:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[RECIPE_GIFT:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[MYTHIC_TRIAL:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[PIETY_CHANGE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[ITEM_AWAKEN:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[MYTHIC_SURGE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[PROMISE_MADE:[^\]]+\]\s*/gi, '').trim();
-    cleanNarrative = cleanNarrative.replace(/\[PROMISE_FULFILLED:[^\]]+\]\s*/gi, '').trim();
+    // Strip every DM marker from the displayed narrative (marker-strip fix,
+    // 2026-11-23). One pattern generated from MARKER_SCHEMAS replaces the
+    // hand-kept list of 28 strip lines that used to live here and had
+    // drifted: 99 of 126 markers reached the player as raw text. The engine
+    // has already read the markers above (processResponseMarkers); this is
+    // display only — the stored history keeps them.
+    let cleanNarrative = stripMarkers(result.narrative);
 
     // Structural #9: Fiction-marker reconciliation (strict both directions).
     // If narration claims damage without a marker, auto-apply it.
@@ -3764,6 +3741,9 @@ router.post('/:sessionId/resume', requireSessionCampaign, async (req, res) => {
           systemPrompt, recapMessages, 3, 'summary'
         );
 
+        // The recap is written with the DM's own prompt, so it can carry
+        // markers; it is display-only, so strip before saving (marker-strip fix).
+        recap = stripMarkers(recap);
         // Save the recap so we don't regenerate it each time
         await dbRun('UPDATE dm_sessions SET recap = ? WHERE id = ?', [recap, sessionId]);
       } catch (e) {
@@ -3782,7 +3762,8 @@ router.post('/:sessionId/resume', requireSessionCampaign, async (req, res) => {
     res.json({
       success: true,
       message: 'Adventure resumed. Continue where you left off!',
-      recap,
+      // Also covers a recap saved before the strip existed.
+      recap: stripMarkers(recap),
       downtimeAcknowledged: pendingNarratives.length > 0 ? pendingNarratives.length : 0
     });
   } catch (error) {
