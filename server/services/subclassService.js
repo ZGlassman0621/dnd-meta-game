@@ -1322,6 +1322,18 @@ function actorFromRow(row, { isCompanion = false } = {}) {
   };
 }
 
+// H1 (2026-11-23): the marker line for a subclass feature whose handler
+// is wired and working end to end (subclassMarkerService.js). Shown only
+// under that feature, only for an actor who has it. Feature markers that
+// are NOT working end to end (HEROIC_REROLL, BEND_LUCK, TIDES_OF_CHAOS,
+// TAMED_SURGE, HOUND_OF_ILL_OMEN, ACCURSED_SPECTER, FAITHFUL_SUMMONS) are
+// deliberately absent — see docs/pm/reports/h1-teach-the-markers-REPORT.md.
+export const FEATURE_MARKER_LINES = {
+  preserve_life: (name) => `    Marker: [PRESERVE_LIFE: Target="${name}" Allocations="Mira=10, Bram=8"] — spends one Channel Divinity; the engine checks each recipient is Bloodied, stays within 5 × cleric level total and half each one's maximum, and applies the healing.`,
+  telepathic_speech: (name) => `    Marker: [TELEPATHIC_SPEECH: Target="${name}" Creature="Name"] — the engine records the link and its range; the conversation itself is yours to voice.`,
+  awakened_mind: (name) => `    Marker: [AWAKENED_MIND: Target="${name}" Creature="Name"] — the engine records the link, its range and duration; the conversation itself is yours to voice.`,
+};
+
 function sectionForActor(actor) {
   if (!actor || !actor.subclassName) return null;
   const entry = getSubclass(actor.className, actor.subclassName);
@@ -1329,7 +1341,10 @@ function sectionForActor(actor) {
     return `${actor.isCompanion ? 'Companion' : 'Player'} ${actor.name}: subclass "${actor.subclassName}" is not yet in the subclass registry — do not invent its features.`;
   }
   const feats = featuresAtLevel(actor.className, actor.subclassName, actor.level);
-  const lines = feats.map((f) => `  L${f.level} ${f.prompt}`);
+  const lines = feats.flatMap((f) => {
+    const marker = FEATURE_MARKER_LINES[f.key];
+    return marker ? [`  L${f.level} ${f.prompt}`, marker(actor.name)] : [`  L${f.level} ${f.prompt}`];
+  });
   // Informational origin label only — no subclass needs an origin
   // explanation ("a class is a class", Zach 2026-11-12).
   const origin = formatSubclassOrigin(entry);

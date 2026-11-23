@@ -18,6 +18,7 @@ import { buildProfessionPromptLine } from './npcProfessionService.js';
 import { buildCompanionPromptBlock } from './companionPrompt.js';
 import { calculateCombatStats } from './combatStatsService.js';
 import { artificerPromptSection } from './artificerService.js';
+import { attunementPromptSection, attunementStateFromResources, attunementCapFor } from './attunementService.js';
 import { spellshotPromptSection } from './spellshotService.js';
 import { wardenPromptSection } from './wardenService.js';
 import { magusPromptSection, societyKeyForName, spellcastingAbilityForSociety } from './magusService.js';
@@ -313,6 +314,20 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     } catch { /* a malformed resources blob never breaks the prompt */ }
   }
 
+  // H1 (2026-11-23): the general attunement line. attunementPromptSection
+  // was built as the prompt seam for [ATTUNE] / [UNATTUNE] but had no
+  // caller, so those markers were never taught. Artificers attune through
+  // their own ARTIFICER_ATTUNE line (artificer section above) instead.
+  let attunementSection = '';
+  if (String(character.class || '').toLowerCase() !== 'artificer') {
+    try {
+      attunementSection = attunementPromptSection(
+        attunementStateFromResources(character.class_resources_json),
+        { cap: attunementCapFor(character) }
+      );
+    } catch { /* a malformed resources blob never breaks the prompt */ }
+  }
+
   // Overnight 7-class merge: same pattern as the artificer section above —
   // dynamic state belongs in dynamicText, not the cached static block.
   let newClassSection = '';
@@ -360,6 +375,7 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     `- Current Location: ${character.current_location || 'Unknown'}`,
     `- Current Quest: ${character.current_quest || 'None'}`,
     ...(artificerSection ? [artificerSection] : []),
+    ...(attunementSection ? [`- Attunement: ${attunementSection}`] : []),
     ...(newClassSection ? [newClassSection] : []),
     // Loot wiring (R-02): unidentified magic items are listed WITHOUT
     // their names (describe, never name). Malformed inventory never
@@ -2127,6 +2143,42 @@ three failures kill. There is no instant death from a single big hit.
 `;
 }
 
+/**
+ * World, scene and lair markers (H1, 2026-11-23) — ALWAYS ON, outside
+ * formatMechanicalMarkers for the same reason as formatPlayerHpRules:
+ * applyLeanTransforms strips that section, and these markers drive
+ * built systems (dungeons, rooms, cold, lairs, enemy displays) that
+ * must not go dark in lean mode. One trigger line per marker, terse on
+ * purpose: gemma4:12b reads this every turn.
+ *
+ * Deliberately NOT taught (see docs/pm/reports/h1-teach-the-markers-REPORT.md):
+ * EVOLVE_PLACE and the Scene=/Room= forms of SET_ROOM, COMBAT_START and
+ * LAIR_CREATE all need a scene id, and no scene id ever reaches the DM.
+ */
+function formatWorldMarkers() {
+  return `
+═══════════════════════════════════════════════════════════════
+WORLD, SCENE & LAIR MARKERS
+═══════════════════════════════════════════════════════════════
+INLINE, the moment the trigger happens. The engine does the work; never narrate its numbers yourself.
+
+[GENERATE_DUNGEON: Name="Sunken Temple" Purpose="rescue" Region="Sword Coast" SiteEra="sealed"] — when YOUR world places a dungeon the party may find. Never because the player asks for one. It builds and stores the dungeon; it never puts the party inside — they choose to enter. SiteEra: sealed, active or mixed. If the place is unusual for its region, add Justification="the story that explains it".
+
+[SET_ROOM: Name="Tavern common room" Features="Bar:cover_half:half, Fireplace:flammable" Exits="North:street"] — right after COMBAT_START when the fight is in a named room, and again if the fight moves to another room. Features are name:kind[:cover]; kinds: cover_half, cover_three_quarters, cover_full, difficult_terrain, elevation, darkness, hazard_zone, flammable, water, secret. Cover, displays and hazards then read the room.
+
+[COLD_SCENE: BaseLevel=2] — when the party enters freezing country. BaseLevel is the place's Cold Level: every exposed hour is a CON save at DC 10 + Cold Level, and failures add Frost Exhaustion. Add Campfire=true, InsulatedTent=true, Blizzard=true (MagicalBlizzard=true for a magical one) or Elevation=N when they apply, and re-emit the whole marker when they change. It bites on every hour that passes from then on — cold is real danger, never soften it. When the party leaves the cold: [COLD_SCENE: BaseLevel=-10].
+[COLD_WET: Target="Player" Status="wet"] — a character gets wet in the cold. Target is the word Player for the player character, or a companion's exact full name. Wading is wet; immersion or a drenching is soaked. Status="dry" once they dry off.
+
+Lair structure (a fight in a lair that can come down around them):
+[LAIR_CREATE: Lair="dragon-lair" Name="The Dragon's Lair" Features="Pillars:cover_half, Lava vent:hazard_zone"] — once, when that fight begins. Lair= is a short key you reuse below.
+[LAIR_DAMAGE: Lair="dragon-lair" Amount=40 Source="the fireball strikes the pillars"] — when an effect hits the structure itself (walls, pillars, floor), not a creature.
+[LAIR_STABILIZE: Lair="dragon-lair" Method="magic"] halts the decay; Method="mechanical" (shoring, rebuilding) restores the structure.
+[LAIR_HAZARD_ROLL: Lair="dragon-lair"] — test whether the failing structure threatens this round (foreshadowing; it hurts no one).
+
+[ENEMY_DISPLAY: Enemy="Mage" Spell="Fireball" Target="the floor beside Lyra" Beside="Lyra"] — in combat, an enemy casts a real spell at a spot instead of a creature, as a show of force. It spends the slot and the action; the engine rolls the placement and the outcome arrives as a SPELL NOTICE next turn. Add Intimidate=true Dc=14 when it is meant to cow someone.
+`;
+}
+
 function formatMechanicalMarkers(sessionContext, character) {
   const blocks = [];
 
@@ -2654,7 +2706,7 @@ WRONG (vague threat without a source):
 RIGHT (specific and engageable):
 > At the far end of the alley, a silhouette shifts behind a stack of crates. A boot scrapes wet stone.
 
-${formatMemoryHierarchy()}${formatPlayerHpRules()}${formatMechanicalMarkers(sessionContext, character)}
+${formatMemoryHierarchy()}${formatPlayerHpRules()}${formatWorldMarkers()}${formatMechanicalMarkers(sessionContext, character)}
 
 ──────────── STORY MEMORY & QUEST WEAVING ────────────
 Past sessions (STORY CHRONICLE, NPC CONVERSATIONS, PROMISES) are canonical — see MEMORY HIERARCHY above for precedence. Reference past events, NPCs, conversations, promises naturally. NPCs remember prior interactions. The world remembers the player's choices. Never contradict established canon.
@@ -2970,7 +3022,7 @@ export function applyLeanTransforms(systemPrompt) {
   // (1) Strip the entire MECHANICAL MARKERS section.
   result = result.replace(
     /═══+\s*\nMECHANICAL MARKERS\s*\n═══+[\s\S]*?(?=\n═══+\s*\nEND OF CORE RULES|\n──────────── STORY MEMORY)/,
-    '═══════════════════════════════════════════════════════════════\nMECHANICAL MARKERS — MOSTLY DISABLED THIS SESSION\n═══════════════════════════════════════════════════════════════\nLean prompt mode is active. System markers (combat, loot, merchant, conditions, promises) are disabled — narrate cleanly without bracketed system tags. Those game-state systems will not update from this session.\n\nEXCEPTION: [HP_CHANGE] is still live. Hit points are tracked for real even in lean mode — keep emitting it on every change to the player\'s HP, exactly as described in the HIT POINTS section above.\n\n'
+    '═══════════════════════════════════════════════════════════════\nMECHANICAL MARKERS — MOSTLY DISABLED THIS SESSION\n═══════════════════════════════════════════════════════════════\nLean prompt mode is active. System markers (combat, loot, merchant, conditions, promises) are disabled — narrate cleanly without bracketed system tags. Those game-state systems will not update from this session.\n\nEXCEPTION: [HP_CHANGE] is still live. Hit points are tracked for real even in lean mode — keep emitting it on every change to the player\'s HP, exactly as described in the HIT POINTS section above. The WORLD, SCENE & LAIR MARKERS section above, the attunement line and the class-feature marker lines also stay live.\n\n'
   );
 
   // (2) Replace Cardinal Rule 2 (HARD STOPS) with the soft version.

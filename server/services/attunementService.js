@@ -208,7 +208,7 @@ export function attunementStateIntoResources(raw, state) {
   return res;
 }
 
-// --- DM prompt section (seam for dmPromptBuilder; not wired here) ------------
+// --- DM prompt section (wired by dmPromptBuilder formatCharacterInfo, H1) ----
 export function attunementPromptSection(state, { name, cap } = {}) {
   const s = state || defaultAttunementState();
   const c = Number(cap) || BASE_ATTUNEMENT_CAP;

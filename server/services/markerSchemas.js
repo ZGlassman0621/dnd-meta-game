@@ -786,8 +786,8 @@ PERCEPTION_PREROLL: {
   // Level context that TIME_ADVANCE then spends; COLD_WET sets a
   // Wet/Soaked status (depth-aware in the fiction: ankle-deep = Wet,
   // immersion = Soaked). Handlers live in coldExposureService.js.
-  // The DM prompt does not yet teach these markers (handover open
-  // item) — they work through the pipeline and direct service calls.
+  // Taught to the DM since H1 (2026-11-23): dmPromptBuilder
+  // formatWorldMarkers.
   COLD_SCENE: {
     position: 'inline',
     fields: {

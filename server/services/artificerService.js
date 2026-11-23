@@ -581,15 +581,17 @@ export function artificerPromptSection(state, { level, intMod, name }) {
   const fLeft = s.flashUsesMax ? s.flashUsesLeft : fMax;
   const pb = 2 + Math.floor(((Math.trunc(level) || 1) - 1) / 4);
   const lines = [`Artificer (level ${level}, Int mod ${intMod}):`];
-  lines.push(`- Plans known (${s.plansKnown.length}/${plansKnownForLevel(level)}): ${s.plansKnown.join(', ') || 'none'}`);
+  // H1 (2026-11-23): REPLACE_PLAN / ATTUNE / RIGHT_TOOL / RELEASE taught
+  // inline on their own lines, the same shape as the ARTIFICER_FLASH line.
+  lines.push(`- Plans known (${s.plansKnown.length}/${plansKnownForLevel(level)}): ${s.plansKnown.join(', ') || 'none'} (one known plan may be replaced per artificer level gained: [ARTIFICER_REPLACE_PLAN: Old="Bag of Holding" Plan="Wand of Web"] — items made from the old plan vanish)`);
   lines.push(`- Created items (${s.createdItems.length}/${magicItemsForLevel(level)}): ${s.createdItems.map(i => `${i.name}${i.attuned ? ' [attuned]' : ''}`).join(', ') || 'none'}`);
-  lines.push(`- Attuned ${attunedCount(s)}/${attunementCapForLevel(level)} (origin: Eberron/Khorvaire${s.origin?.explanation ? ` — ${s.origin.explanation}` : ''})`);
+  lines.push(`- Attuned ${attunedCount(s)}/${attunementCapForLevel(level)} (origin: Eberron/Khorvaire${s.origin?.explanation ? ` — ${s.origin.explanation}` : ''}) — attune to a created or found magic item with [ARTIFICER_ATTUNE: Item="name"]; over the cap is refused`);
   lines.push(`- Flash of Genius uses left: ${fLeft}/${fMax} (Reaction after a known failure within 30 ft, add Int mod; spend with [ARTIFICER_FLASH: Target="Name" Total="13" DC="15"])`);
   lines.push(`- Tinker's Magic uses left: ${tLeft}/${tMax} (create a mundane item with Tinker's Tools in hand; item vanishes at Long Rest)`);
   if ((Math.trunc(level) || 1) >= 6) lines.push(`- Tool Expertise: double proficiency bonus on tool checks (base +${pb}, doubled +${pb * 2}) — apply to the reported total, never silently added`);
-  if (s.storedSpell) lines.push(`- Spell-Storing Item: ${s.storedSpell.spell} (${s.storedSpell.usesLeft} uses left)`);
+  if (s.storedSpell) lines.push(`- Spell-Storing Item: ${s.storedSpell.spell} (${s.storedSpell.usesLeft} uses left; the holder produces it with a Magic action — [ARTIFICER_RELEASE: Turn="3"], Turn= the current round, once per holder turn)`);
   if (s.homunculus) lines.push(`- Homunculus Servant: ${s.homunculus.hp}/${s.homunculus.maxHp} HP, AC 13`);
-  if (s.rightTool) lines.push(`- Right Tool for the Job: ${s.rightTool}`);
+  if ((Math.trunc(level) || 1) >= 3) lines.push(`- Right Tool for the Job: ${s.rightTool || 'none made'} (record a set made with [ARTIFICER_RIGHT_TOOL: Tool="Smith's Tools"])`);
   return lines.join('\n');
 }
 
