@@ -238,6 +238,21 @@ Nothing changes in play. This job produced a diagnosis: what breaks in a fight, 
 
   (i) is reliable and fast but less varied; (ii) keeps the DM in charge but costs one extra model call (about 2-4 s each on this PC) per enemy per round, and depends on the model writing the marker. Which should the fix build?
 
+### Zach's answers (2026-11-23, after this report was first pushed)
+- **Q1 — answered: the engine never rolls for the player.** In Zach's words: "The engine should never roll for the player. Tell me what to roll, and I'll find the correct die and roll what I need to. When it comes to benefits or drawbacks from advantage or disadvantage or anything like that, the engine will calculate that after the roll. Maybe in a side chat that just shows the math?"
+  - **What this settles for the fix job:** option (ii).
+    - After a hit, the engine tells the player the exact dice to roll, taken from the weapon profile: for example "Roll 1d10 for damage".
+    - It waits for the number, then applies the modifiers, advantage or disadvantage, crits and feature bonuses itself, after the roll.
+    - The engine's own damage roll for the player (`partyAttackService.js:1719-1728`) goes; the player's dice are the only source.
+  - **The "side chat that shows the math"** is Zach's suggested display (a separate panel showing the engine's arithmetic: die + modifiers = total vs AC or DC). It is a display item for the fix job; its exact form is still to be designed.
+  - **Possible scope beyond damage:** "never roll for the player" reads as covering every player roll, not just weapon damage. Muse to confirm the scope.
+- **Q2 — answered: the DM controls every NPC.** In Zach's words: "The DM should control each and every NPC. That's what keeps things fresh and interesting."
+  - **What this settles for the fix job:** option (ii).
+    - On each enemy's (and each NPC's) turn, the route makes a DM call for that combatant.
+    - The DM chooses the action: attack, flee, talk, anything.
+    - The engine resolves the marker, and the turn advances.
+  - **P1's engine-driven loop keeps the turn order and the trigger in the engine; the choice stays with the DM.** The cost noted above (one extra model call per enemy per round, about 2-4 s each) is accepted with this choice.
+
 ## How to verify
 **Gate:** `npm test` on the PC (expect 250 files green). The real check for this job is the report: each finding can be reproduced from the cited code and the probe output.
 
