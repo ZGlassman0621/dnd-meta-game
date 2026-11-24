@@ -360,3 +360,4 @@ Zach's run is the gate.
 |---|---|---|---|
 | `server/data/featRegistry.js` | edited | 23718 | `58140e6858bb736f2585c6d2f8b0a47ce9621e6dc8b414c0c30af26c9109c794` |
 | `tests/feat-registry.test.js` | edited | 4154 | `5fff69073ef7dd0455f19d79fa256519e61c1f04066405311670f1cb6762e2ea` |
+- Manual-of-Martial-Mastery fence commit: `64b1da7`, branch `phase-4-hybrid-combat`, pushed.
