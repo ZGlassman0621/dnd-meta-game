@@ -827,7 +827,7 @@ export default function Stage1OriginIdentity({ state, set, mode, payload, specie
               <div style={{ marginTop: 6 }}>
                 <label style={{ display: 'block', fontFamily: 'var(--serif)', fontSize: 15, margin: '14px 0 6px' }}>
                   Affinity (choose 1)
-                  <Tip text="Homebrew origin feat. Mind: psychic resistance and the Mind Sliver cantrip. Soul: radiant resistance and the Sacred Flame cantrip. Death: necrotic resistance and the Toll the Dead cantrip. Only the chosen affinity applies. The cantrip is granted, never counted against your cantrips known or prepared." />
+                  <Tip text="Mind: psychic resistance and the Mind Sliver cantrip. Soul: radiant resistance and the Sacred Flame cantrip. Death: necrotic resistance and the Toll the Dead cantrip. Only the chosen affinity applies. The cantrip is granted, never counted against your cantrips known or prepared." />
                 </label>
                 <select
                   className="select"

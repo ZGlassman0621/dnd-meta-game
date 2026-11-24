@@ -530,6 +530,54 @@ group('15. Markers, schema order and the DM prompt');
   ok(!/FEAT STATE AND USE/.test(p2), 'a character without these feats gets no feat-use teaching');
 }
 
+// ===========================================================================
+group('16. Provenance fence: no source tag in anything the player (or the DM) sees');
+{
+  // Muse 2026-11-24: the source tag is internal metadata — never in the
+  // creator picker, the level-up list, the sheet, a tooltip/description,
+  // or DM narration. Scan every rendered string for provenance words.
+  const PROV = /DNDBlue|Revised Feats|Fantastic Feats|Homebrew Feats|Xanathar|homebrew|feat pdf|PM research|Panache|Swashbuckler|\bWoW\b|2014/i;
+  const leaks = [];
+  const scan = (where, s) => { if (s && PROV.test(String(s))) leaks.push(`${where}: ${String(s).slice(0, 80)}`); };
+  // Level-up list: every field LevelUpPage renders (name, description, prerequisites, benefits).
+  for (const k of ADDED.filter((x) => clientFeats[x])) {
+    const f = clientFeats[k];
+    scan(`feats.json ${k}.name`, f.name); scan(`feats.json ${k}.description`, f.description); scan(`feats.json ${k}.prerequisites`, f.prerequisites);
+    (f.benefits || []).forEach((b, i) => scan(`feats.json ${k}.benefits[${i}]`, b));
+  }
+  ok(leaks.length === 0, `level-up list: no provenance in any rendered field (${leaks.join(' | ') || 'clean'})`);
+  const lu = fs.readFileSync(path.join(REPO, 'client/src/components/LevelUpPage.jsx'), 'utf8');
+  ok(!/featsData\[[^\]]+\]\.source|\bf\.source\b/.test(lu), 'LevelUpPage never renders a feat\'s source field');
+  // Creator picker: the origin list text, and the Stage 1 Energy Affinity block.
+  leaks.length = 0;
+  const ea = clientMixed.ORIGIN_FEATS.find((f) => f.key === 'energy_affinity');
+  scan('ORIGIN_FEATS energy_affinity.name', ea.name); scan('ORIGIN_FEATS energy_affinity.effect', ea.effect);
+  const s1 = fs.readFileSync(path.join(REPO, 'client/src/components/creator-next/Stage1OriginIdentity.jsx'), 'utf8');
+  const block = s1.slice(s1.indexOf("versatileFeatKey === 'energy_affinity'"), s1.indexOf("versatileFeatKey === 'musician'"));
+  scan('Stage1 Energy Affinity block', block.replace(/\/\/[^\n]*/g, ''));
+  ok(block.length > 0 && leaks.length === 0, `creator picker + tooltip: clean (${leaks.join(' | ') || 'clean'})`);
+  // DM side: the rendered feat effects and the full system prompt for a character holding all fourteen.
+  leaks.length = 0;
+  const rendered = reg.renderFeatEffectsForPrompt(ADDED.map((k) => reg.getFeatEffect(k).name));
+  scan('DM feat effects', rendered);
+  ok(leaks.length === 0 && ADDED.every((k) => rendered.includes(reg.getFeatEffect(k).name)), `DM feat effects list all fourteen with no source (${leaks.join(' | ') || 'clean'})`);
+  ok(!/HOMEBREW FEAT EFFECTS/.test(rendered), 'the fourteen are not under a ruleset-named header');
+  const { createDMSystemPrompt } = await import(svc('server/services/dmPromptBuilder.js'));
+  const all = await addPc({ name: 'Every Feat Ori', feats: J(ADDED.filter((k) => k !== 'energy_affinity').map((k) => feat(k))) });
+  let prompt = ''; try { prompt = createDMSystemPrompt(all, {}); } catch (e) { prompt = String(e.message); }
+  const featPart = prompt.slice(prompt.indexOf('- Feats:'), prompt.indexOf('- Feats:') + 6000);
+  leaks.length = 0; scan('DM system prompt feat section', featPart);
+  ok(featPart.length > 0 && leaks.length === 0, `DM system prompt feat section: clean (${leaks.join(' | ') || 'clean'})`);
+  // Engine words the player or DM receives (⚙ lines, notes, directives, prompt state lines).
+  const fmSrc = fs.readFileSync(path.join(REPO, 'server/services/featMechanicsService.js'), 'utf8');
+  const literals = (fmSrc.match(/`[^`]*`|'[^'\n]*'/g) || []).filter((s) => !/import|\.js'/.test(s));
+  ok(!literals.some((s) => PROV.test(s)), 'no engine message string in featMechanicsService names a source');
+  const directives = ['I use Winning Words', 'Elegant Maneuver', 'Seismic Touch', 'Sage Advice', 'smell', 'climb', 'track', "free Trapper Hunter's Mark"]
+    .map((a) => fm.featActionDirective(J(ADDED.map((k) => feat(k))), a)).join(' ');
+  ok(directives.length > 0 && !PROV.test(directives), 'the per-action feat directives name no source');
+  ok(reg.getFeatEffect('trapper').sourcePdf === 'Book of Revised Feats' && reg.getFeatEffect('silver_tongue').rulesetId === 'homebrew_xge_adaptations', 'the tags stay in the data');
+}
+
 server.close();
 console.log(`\nfeat-addition-14: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

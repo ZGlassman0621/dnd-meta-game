@@ -279,7 +279,15 @@ export function getFeatEffects(feats) {
 }
 
 export function renderFeatEffectsForPrompt(feats) {
-  const { core, homebrew } = getFeatEffects(feats);
+  const split = getFeatEffects(feats);
+  // Provenance fence (Muse, 2026-11-24): a feat's source tag is internal
+  // metadata — it never reaches anything the player sees, DM narration
+  // included. The fourteen added feats override no book rule, so they
+  // render in the plain FEAT EFFECTS list with no ruleset name. (The
+  // Manual of Martial Mastery header below is unchanged.)
+  const isAdded = (f) => f.rulesetId === PDF_FEATS_RULESET.rulesetId || f.rulesetId === XGE_ADAPTATION_RULESET.rulesetId;
+  const core = [...split.core, ...split.homebrew.filter(isAdded)];
+  const homebrew = split.homebrew.filter((f) => !isAdded(f));
   const sections = [];
   if (core.length > 0) {
     sections.push(

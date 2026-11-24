@@ -557,7 +557,7 @@ registerMarkerHandler('WINNING_WORDS', async (parsed, context) => {
     }
     return {
       type: 'winning_words', success: true, pending: true, target: npc?.name || targetRaw,
-      systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Winning Words — ${character.name} speaks to ${npc?.name || targetRaw}. The engine rolled ${npc?.name || targetRaw}'s Wisdom (Insight) in secret and is asking the player for their Charisma (Persuasion) d20. Do not narrate the outcome until the result arrives. This contest REPLACES the Influence DC (R-29) for this charm — do not also call an Influence check.`,
+      systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Winning Words — ${character.name} speaks to ${npc?.name || targetRaw}. The engine rolled ${npc?.name || targetRaw}'s Wisdom (Insight) in secret and is asking the player for their Charisma (Persuasion) d20. Do not narrate the outcome until the result arrives. This contest REPLACES the Influence DC for this charm — do not also call an Influence check.`,
     };
   } catch (e) {
     console.error('[featMechanicsService] WINNING_WORDS failed:', e.message);

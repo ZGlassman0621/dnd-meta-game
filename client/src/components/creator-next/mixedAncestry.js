@@ -40,8 +40,10 @@ export const ORIGIN_FEATS = [
   { key: 'tavern_brawler', name: 'Tavern Brawler', effect: 'When you hit with an Unarmed Strike and deal damage, deal 1d4 + Strength bludgeoning instead of the normal damage; reroll any 1 on an Unarmed Strike damage die (must use the new roll); proficiency with improvised weapons; once per turn, when you hit a creature with an Unarmed Strike as part of the Attack action, push it 5 ft away in addition to dealing damage' },
   { key: 'tough', name: 'Tough', effect: 'Your Hit Point maximum increases by twice your character level when you gain this feat; thereafter it increases by 2 each time you level up' },
   // HOMEBREW feat-addition-14 (feat PDFs, Zach 2026-11-21): not a 2024
-  // book feat — the registry tags it source 'homebrew'.
-  { key: 'energy_affinity', name: 'Energy Affinity', homebrew: true, effect: 'Homebrew. Choose one: Mind — psychic resistance + the Mind Sliver cantrip; Soul — radiant resistance + the Sacred Flame cantrip; Death — necrotic resistance + the Toll the Dead cantrip. The cantrip is granted, never counted against cantrips known or prepared' }
+  // book feat — the registry tags it source 'homebrew'. `homebrew` is
+  // data only; the provenance fence (Muse 2026-11-24) keeps every source
+  // tag out of anything the player sees, so the effect text names none.
+  { key: 'energy_affinity', name: 'Energy Affinity', homebrew: true, effect: 'Choose one: Mind — psychic resistance + the Mind Sliver cantrip; Soul — radiant resistance + the Sacred Flame cantrip; Death — necrotic resistance + the Toll the Dead cantrip. The cantrip is granted, never counted against cantrips known or prepared' }
 ]
 
 /** Energy Affinity's granted cantrip for a choices object, or null. */

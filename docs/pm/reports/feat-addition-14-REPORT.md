@@ -287,3 +287,41 @@ At **:5173** (never :3000), after `npm run dev`:
 
 The version stays 1.0.209: this is a follow-up inside the same job.
 - Follow-up commit: `89a4c56`, branch `phase-4-hybrid-combat`, pushed.
+
+## Addendum — provenance fence (Muse, 2026-11-24)
+
+**Rule:** a feat's source tag (DNDBlue, Book of Revised Feats, Fantastic Feats, Homebrew Feats 2024, and the Xanathar / WoW origin of Silver Tongue and Elegant Maneuver) is internal metadata. It stays in the registry data and in this report, and never appears in anything the player sees, DM narration included.
+
+**Surfaces checked, and the result:**
+
+| Surface | What renders there | Result |
+|---|---|---|
+| Level-up feat list (`client/src/components/LevelUpPage.jsx` + `client/src/data/feats.json`) | name, description, prerequisites, benefits, the +1 picker | **Clean.** The `source` field in `feats.json` is data only, and `LevelUpPage` never reads it. Test-pinned. |
+| Creator: Human Versatile / Mixed Ancestry origin picker (`creator-next/Stage1OriginIdentity.jsx`, `ORIGIN_FEATS` in `mixedAncestry.js`) | feat name, effect text, the Energy Affinity tooltip and choice | **Two leaks found and fixed.** Both were added earlier in this job. The Energy Affinity effect text began "Homebrew." and its tooltip began "Homebrew origin feat." Both words are gone; the `homebrew: true` flag stays as data. |
+| Creator: Stage 3 theme origin feat (`Stage3PastPath.jsx`) | the theme's feat name and effect | **Clean.** No theme grants one of the fourteen, and registry effect texts name no source. |
+| Creator: Stage 4 granted spells and Stage 6 review | "granted by versatile feat (Energy Affinity)" | **Clean.** It names the feat, not its source. |
+| Character sheet (`CharacterSheet.jsx`) | its feat sections: Fighting Style and ancestry feats | **Clean.** None of the fourteen renders a source there. The sheet has no general-feat section. |
+| Tooltips and descriptions | every string the fourteen feats render | **Clean** after the two fixes above. |
+| DM prompt, feat effects (`renderFeatEffectsForPrompt`) | the feat list the DM sees | **Fixed.** The fourteen used to render under a header naming their ruleset ("HOMEBREW FEAT EFFECTS (Feat PDFs (Zach-supplied; PM research 2026-11-20))…"), which the DM could repeat in narration. They now render in the plain "FEAT EFFECTS" list with no ruleset name; they override no book rule. |
+| DM prompt, "FEAT STATE AND USE" block, per-action feat directives, FEAT_USE / WINNING_WORDS system notes, ⚙ engine lines, roll prompts | text sent to the DM and the player | **Clean.** The Winning Words note's rule id "(R-29)" was also dropped, as an internal tag the DM need not see. |
+| The tags themselves | `sourcePdf`, `rulesetId` | **Still in the data** (test-pinned). |
+
+**Proof:** new group 16 in `tests/feat-addition-14.test.js` scans every one of those rendered strings for the provenance words. That covers the level-up fields, the origin picker text, the Stage 1 Energy Affinity block, the rendered DM feat effects, the full DM system prompt's feat section for a character holding all thirteen general feats, every string literal in `featMechanicsService`, and the per-action directives. The words scanned are DNDBlue, Revised Feats, Fantastic Feats, Homebrew Feats, Xanathar, homebrew, feat pdf, PM research, Panache, Swashbuckler, WoW and 2014. The group also checks that the tags are still in the data. `feat-addition-14.test.js` is 142/142.
+
+**Found, not changed — a decision for Muse:** the **Manual of Martial Mastery** feats predate this job and are not among the fourteen. They still render to the DM under "HOMEBREW FEAT EFFECTS (Nardo's Manual of Martial Mastery) — these OVERRIDE standard D&D 5e rules…", so that source name reaches the DM prompt for a character who holds one. The header carries the override instruction, and `tests/feat-registry.test.js` pins it. Should the fence cover those feats too? Doing so means dropping the ruleset name from that header while keeping the override instruction.
+
+**Tests:** the builder's full `npm test` is 254/254 files green, 19,746 passed, 0 failed.
+- Retried after Windows' native crash, and passed: `h2-h3-2024-rules`, `mixed-ancestry`.
+- `pass*`: `artificer-class`, `lair-hazard-auto`, `subclass-scanned2`, `weapons-mastery`.
+
+The client build is green.
+
+**Files changed in this follow-up:**
+
+| File | New / edited | Bytes | SHA-256 |
+|---|---|---|---|
+| `server/data/featRegistry.js` | edited | 23920 | `0d96d16c523cca99201c816ead9d3dd256dd46c9add10243e64da16d88fe491b` |
+| `server/services/featMechanicsService.js` | edited | 43062 | `c948fd258866df8ffca9a8e5ba5c06c004e6982b1f7f9193b55ded9b22487154` |
+| `client/src/components/creator-next/Stage1OriginIdentity.jsx` | edited | 73272 | `f1e2f1dc3ad7d73a76e3ec53d58e7ae213f96c282e898ba0a3b74654ce116b01` |
+| `client/src/components/creator-next/mixedAncestry.js` | edited | 23092 | `b27550583673aa7a465db2c4d9a3d6a839019e4a2df0522d37e250c141394d42` |
+| `tests/feat-addition-14.test.js` | edited | 47066 | `4d6c5fa2b7d16cbfe7035aa10856635e06f0897fc69286f0492a77797d0a8db1` |
