@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Tip from './Tooltip.jsx'
 import classesData from '../../data/classes.json'
 import deitiesData from '../../data/deities.json'
+import { ALIGNMENT_DESCRIPTIONS, LIFESTYLES as LIFESTYLE_DETAILS, formatDailyCost } from '../../data/storyChoices.js'
 import equipmentData from '../../data/equipment.json' with { type: 'json' }
 import { THEME_GOLD_MODIFIERS, applyGoldModifier } from '../../data/themeGoldModifiers.js'
 import { choiceCountOf, describeSentinel, isHeldOption, normalizeChoiceValues, resolveChoiceOptions } from './choiceOptions.js'
@@ -801,33 +802,46 @@ export default function Stage5GearStory({ state, set, themes = null, speciesEntr
       )}
     </div>
   )
-  const selectField = (key, label, tip, options) => (
-    <div key={key}>
-      <label style={labelStyle}>{label}</label>
-      <div className="help" style={{ fontStyle: 'normal', marginTop: 2 }}>{tip}</div>
-      <select
-        aria-label={label}
-        value={state[key] || ''}
-        onChange={e => update({ [key]: e.target.value })}
-        style={selectStyle}
-      >
-        <option value="">—</option>
-        {options.map(o => (
-          <option key={o} value={o}>{o}</option>
-        ))}
-      </select>
-    </div>
-  )
+  // creator-round-3 items 5–6: `describe(value)` returns the chosen
+  // option's own description (alignment, deity, lifestyle + daily cost),
+  // shown under the select — a native select has no per-option slot.
+  const selectField = (key, label, tip, options, describe = null) => {
+    const chosen = state[key] || ''
+    const chosenText = chosen && describe ? describe(chosen) : null
+    return (
+      <div key={key}>
+        <label style={labelStyle}>{label}</label>
+        <div className="help" style={{ fontStyle: 'normal', marginTop: 2 }}>{tip}</div>
+        <select
+          aria-label={label}
+          value={chosen}
+          onChange={e => update({ [key]: e.target.value })}
+          style={selectStyle}
+        >
+          <option value="">—</option>
+          {options.map(o => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+        {chosenText && (
+          <div className="help" data-choice-description={key} style={{ fontStyle: 'normal', marginTop: 4, color: 'var(--ink-2)' }}>
+            <strong>{chosen}:</strong> {chosenText}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="card">
       <div className="eyebrow">Stage 5 of 6</div>
       <h1 className="h-step">Gear &amp; Story</h1>
       <p className="lede" style={{ marginTop: 12 }}>
-        Take your class&apos;s starting equipment — or gold instead — then
-        say who this person is. The gear choice locks at creation; the
-        story text stays editable later in edit mode. Nothing here is
-        pre-picked: the fork starts empty, and every story field starts blank.
+        Choose your starting equipment — your class&apos;s gear, or gold to
+        buy your own — and then describe who your character is. Your
+        equipment choice is final once you create your character; what you
+        write about yourself can be changed later. Nothing is chosen for
+        you: every option and every story field starts empty.
       </p>
 
       {!classId && (
@@ -961,36 +975,39 @@ export default function Stage5GearStory({ state, set, themes = null, speciesEntr
         <Tip text="Who this person is, for the DM to play with. All of it is optional at this stage — alignment, faith, lifestyle, and physical description are required at Review (Stage 6), the rest can stay blank — and all of it stays editable later in edit mode. Nothing here touches mechanics." />
       </h2>
 
-      {selectField('alignment', 'Alignment', 'Your moral compass: the nine alignments, or Unaligned if none of them fit. It shapes how the DM plays the world around you, never a mechanic — no class or feature reads it. Required at Review, changeable later in edit mode.', ALIGNMENTS)}
-      {selectField('faith', 'Faith', 'Who you worship, if anyone — the Faerûnian pantheon, or None. Picking None is a real choice, not a missing value: an atheist and a devout cleric meet the world differently, and the DM plays that. Required at Review, changeable later in edit mode.', ['None', ...Object.values(deitiesData).map(d => d.name)])}
-      {selectField('lifestyle', 'Lifestyle', 'How you live day to day, from Wretched to Aristocratic. It sets what a night, a meal, and a roof cost you between adventures — flavor with a price tag, not a lock. Required at Review, changeable later in edit mode.', LIFESTYLES)}
+      {selectField('alignment', 'Alignment', 'Your character’s moral outlook: one of the nine alignments, or Unaligned if none of them fits. It guides how you play your character and how the world responds to you; it never changes your abilities. Choose one before you finish. You can change it later.', ALIGNMENTS, (v) => ALIGNMENT_DESCRIPTIONS[v] || null)}
+      {selectField('faith', 'Faith', 'The god you follow, if any, from the deities of the Forgotten Realms. None is a real answer: a character who follows no god meets the world differently from a devout one. Choose one before you finish. You can change it later.', ['None', ...Object.values(deitiesData).map(d => d.name)], (v) => Object.values(deitiesData).find(d => d.name === v)?.description || null)}
+      {selectField('lifestyle', 'Lifestyle', 'How you live between adventures, from Wretched to Aristocratic. It sets what you pay each day for food, lodging, and upkeep. Choose one before you finish. You can change it later.', LIFESTYLES, (v) => {
+        const l = LIFESTYLE_DETAILS.find(x => x.name === v)
+        return l ? `${l.description} Cost: ${formatDailyCost(l.costPerDayCp)}.` : null
+      })}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-        {textField('age', 'Age', 'How old you are, in years or in your species’ own reckoning. Flavor for the DM — it never changes a number. Optional, changeable later in edit mode.')}
-        {textField('height', 'Height', 'How tall you are — feet and inches, or your species’ own measure. Flavor for the DM, never a mechanic. Optional, changeable later in edit mode.')}
-        {textField('weight', 'Weight', 'How much you weigh. Flavor for the DM, never a mechanic. Optional, changeable later in edit mode.')}
-        {textField('physical_build', 'Build', 'Your build — slim, heavy, wiry, broad, or your own words. Flavor for the DM, never a mechanic. Optional, changeable later in edit mode.')}
-        {textField('eye_color', 'Eyes', 'Your eye color. Flavor for the DM, never a mechanic. Optional, changeable later in edit mode.')}
-        {textField('hair_color', 'Hair', 'Your hair color and style, or bald, or something stranger. Flavor for the DM, never a mechanic. Optional, changeable later in edit mode.')}
-        {textField('skin_color', 'Skin', 'Your skin color and texture. Flavor for the DM, never a mechanic. Optional, changeable later in edit mode.')}
+        {textField('age', 'Age', 'How old you are, in years or by your people’s own reckoning. Optional; you can change it later.')}
+        {textField('height', 'Height', 'How tall you are, in feet and inches or your people’s own measure. Optional; you can change it later.')}
+        {textField('weight', 'Weight', 'How much you weigh. Optional; you can change it later.')}
+        {textField('physical_build', 'Build', 'Your build: slender, stocky, wiry, broad, or in your own words. Optional; you can change it later.')}
+        {textField('eye_color', 'Eyes', 'The color of your eyes. Optional; you can change it later.')}
+        {textField('hair_color', 'Hair', 'Your hair’s color and style — or none at all, or something stranger. Optional; you can change it later.')}
+        {textField('skin_color', 'Skin', 'The color and texture of your skin. Optional; you can change it later.')}
       </div>
 
-      {textField('personality_traits', 'Personality traits', 'How you act — habits, tics, the things people notice first. Free text; the DM plays off it, nothing in the rules reads it. Optional, changeable later in edit mode.', true, [
+      {textField('personality_traits', 'Personality traits', 'How you act: your habits, mannerisms, and the things people notice first. The DM uses this to shape how the world reacts to you. Optional; you can change it later.', true, [
         'What do people notice about you first?',
         'What habit gives you away?',
-        'What do you do when you\u2019re nervous?',
+        'What do you do when you’re nervous?',
       ])}
-      {textField('ideals', 'Ideals', 'What you believe in — the principles you would not give up. Free text; the DM plays off it, nothing in the rules reads it. Optional, changeable later in edit mode.', true)}
-      {textField('bonds', 'Bonds', 'Who and what you are tied to — people, places, promises. Free text; the DM plays off it, nothing in the rules reads it. Optional, changeable later in edit mode.', true)}
-      {textField('flaws', 'Flaws', 'Where you go wrong — the weakness the world can press on. Free text; the DM plays off it, nothing in the rules reads it. Optional, changeable later in edit mode.', true)}
-      {textField('organizations', 'Organizations', 'Groups you belong to — a guild, an order, a crew. Free text; the DM plays off it, nothing in the rules reads it. Optional, changeable later in edit mode.', true)}
-      {textField('allies', 'Allies', 'People on your side — friends, patrons, debts owed to you. Free text; the DM plays off it, nothing in the rules reads it. Optional, changeable later in edit mode.', true)}
-      {textField('enemies', 'Enemies', 'People against you — rivals, hunters, debts you owe. Free text; the DM plays off it, nothing in the rules reads it. Optional, changeable later in edit mode.', true)}
-      {textField('backstory', 'Backstory', 'Your story so far, in your own words — where you came from, what brought you here. The DM reads it and works it into the adventure. Optional, changeable later in edit mode.', true)}
-      {textField('other_notes', 'Other notes', 'Anything else the DM should know that fits nowhere above. Free text, never a mechanic. Optional, changeable later in edit mode.', true)}
+      {textField('ideals', 'Ideals', 'The principles you live by — the beliefs you would never give up. The DM will put them to the test. Optional; you can change it later.', true)}
+      {textField('bonds', 'Bonds', 'The people, places, and promises you are tied to. The DM weaves them into your story. Optional; you can change it later.', true)}
+      {textField('flaws', 'Flaws', 'Your weaknesses — the fears, vices, and blind spots the world can use against you. Optional; you can change it later.', true)}
+      {textField('organizations', 'Organizations', 'The groups you belong to: a guild, a temple, an order, a crew. Optional; you can change it later.', true)}
+      {textField('allies', 'Allies', 'The people on your side: friends, patrons, and those who owe you a favor. Optional; you can change it later.', true)}
+      {textField('enemies', 'Enemies', 'The people against you: rivals, hunters, and those you owe. Optional; you can change it later.', true)}
+      {textField('backstory', 'Backstory', 'Your story so far, in your own words: where you come from and what brought you here. The DM reads it and weaves it into the adventure. Optional; you can change it later.', true)}
+      {textField('other_notes', 'Other notes', 'Anything else you would like the DM to know about your character. Optional; you can change it later.', true)}
 
       <div className="help" style={{ fontStyle: 'normal' }}>
-        Locked at creation: the equipment package or gold. Changeable later: everything on this page below the gear — appearance and story text never touch mechanics.
+        Your equipment choice is final once you create your character. Everything else on this page — alignment, faith, lifestyle, appearance, and story — can be changed later.
       </div>
     </div>
   )

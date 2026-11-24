@@ -4,6 +4,8 @@ import spellsData from '../../data/spells.json' with { type: 'json' }
 import { THEME_GOLD_MODIFIERS } from '../../data/themeGoldModifiers.js'
 import { themeLocationOptions } from './themeLocation.js'
 import { resolveChoiceOptions, isHeldOption } from './choiceOptions.js'
+import SpellPickRow from './SpellPickRow.jsx'
+import { catalogSpellRow } from './spellBlurb.js'
 import { versatileThemeConflict } from './mixedAncestry.js'
 import { deferredNoteFor, isDeferredSpecies } from './speciesAdapter.js'
 
@@ -509,20 +511,19 @@ export default function Stage3PastPath({ state, set, themes = null, speciesEntry
                     No cantrips found for this spell list in the spell catalog.
                   </div>
                 ) : (
+                  // creator-round-3 item 9: the shared spell row — checkbox
+                  // beside the name, description and facts line under it.
                   cantripOptions.map(c => {
                     const held = isHeldOption(c, heldCantrips)
+                    const picked = Array.isArray(choices.cantrips) ? choices.cantrips : []
+                    const checked = picked.includes(c)
                     return (
-                      <label key={c} style={{ ...checkStyle, opacity: held ? 0.55 : 1 }}>
-                        <input type="checkbox" style={checkInputStyle} disabled={held} checked={Array.isArray(choices.cantrips) && choices.cantrips.includes(c)} onChange={() => toggleFeatMulti('cantrips', c, 2)} /> {held ? `${c} — already granted` : c}
-                      </label>
+                      <SpellPickRow key={c} spell={catalogSpellRow(spellsData, c)} held={held} checked={checked}
+                        inputStyle={checkInputStyle} atLimit={!checked && picked.length >= 2}
+                        onToggle={() => toggleFeatMulti('cantrips', c, 2)} />
                     )
                   })
                 )}
-                {(Array.isArray(choices.cantrips) ? choices.cantrips : []).map(c => (
-                  <div key={c} className="help" style={{ fontStyle: 'normal', marginTop: 6 }}>
-                    <strong>{c}</strong>{spellDescriptionFor(c) ? ` — ${spellDescriptionFor(c)}` : ''}
-                  </div>
-                ))}
               </div>
 
               <label style={labelStyle} htmlFor="stage3-mi-spell">
@@ -586,9 +587,13 @@ export default function Stage3PastPath({ state, set, themes = null, speciesEntry
             <Tip text="Proficiency with three artisan's tools of your choice. They lock at creation, and the feat's crafting — a 20% discount on nonmagical items and one piece of gear crafted at the end of a Long Rest — needs the tools you pick here." />
           </span>
           {(resolveChoiceOptions({ options: 'any_artisan_tool' }) || []).map(o => (
-            <label key={o.value} style={checkStyle}>
-              <input type="checkbox" style={checkInputStyle} checked={Array.isArray(choices.artisan_tools) && choices.artisan_tools.includes(o.value)} onChange={() => toggleFeatMulti('artisan_tools', o.value, 3)} /> {o.label || o.value}
-            </label>
+            <div key={o.value} style={{ margin: '6px 0' }}>
+              <label style={{ ...checkStyle, margin: 0 }}>
+                <input type="checkbox" style={checkInputStyle} checked={Array.isArray(choices.artisan_tools) && choices.artisan_tools.includes(o.value)} onChange={() => toggleFeatMulti('artisan_tools', o.value, 3)} /> {o.label || o.value}
+              </label>
+              {/* creator-round-3 item 3: what the tool is for. */}
+              {o.description && <div style={{ fontSize: 14, lineHeight: 1.45, color: 'var(--ink-2)', margin: '2px 0 0 26px' }}>{o.description}</div>}
+            </div>
           ))}
         </div>
       )}

@@ -270,7 +270,8 @@ group('spell picker rows (layout, full descriptions, facts line, no ruleset talk
   const c2 = stage2Src.slice(c2Start, stage2Src.indexOf('Granted cantrips', c2Start));
   ok(c2Start > 0, 'the cantrip row builds its description with the shared helper');
   ok(c2.includes('{desc}') && c2.includes('{facts}') && !c2.includes('<Tip'), 'a cantrip row shows the description and the facts line, with no tooltip');
-  const rowSrc = stage4Src.slice(stage4Src.indexOf('function SpellPickRow'), stage4Src.indexOf('function prettify'));
+  // creator-round-3 item 9: the shared row moved to its own file (Stages 1, 3 and 4 use it).
+  const rowSrc = fs.readFileSync(path.join(REPO, CN + 'SpellPickRow.jsx'), 'utf8');
   ok(rowSrc.includes('spellDescriptionText(spell.description)') && rowSrc.includes('spellFactsLine(spell)') && !rowSrc.includes('<Tip'), 'Stage 4 spell rows show the description and facts line, no tooltip');
   ok((stage4Src.match(/<SpellPickRow /g) || []).length === 3, 'known, spellbook and prepared pickers all use the shared row');
   // Counters and gray-out once the picks are used up.

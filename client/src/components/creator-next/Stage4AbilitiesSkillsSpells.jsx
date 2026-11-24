@@ -3,7 +3,8 @@ import Tip from './Tooltip.jsx'
 import classesData from '../../data/classes.json'
 import { ABILITY_SCORES, SKILLS, TOOLS, LANGUAGES, concreteLanguages, skillKey } from '../../data/references.js'
 import { isHeldOption } from './choiceOptions.js'
-import { spellDescriptionText, spellFactsLine } from './spellBlurb.js'
+import SpellPickRow from './SpellPickRow.jsx'
+import { groupSpellsBySchool } from './spellBlurb.js'
 import { deferredNoteFor, isDeferredSpecies, resolveSpeciesGrants } from './speciesAdapter.js'
 import { isMagicInitiateOriginFeat } from './stage1Persistence.js'
 import { energyAffinityCantrip } from './mixedAncestry.js'
@@ -128,30 +129,10 @@ export const LEVEL_1_CAP = 18
 const ABILITY_FULL = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' }
 const ABILITY_SHORT = { str: 'Str', dex: 'Dex', con: 'Con', int: 'Int', wis: 'Wis', cha: 'Cha' }
 
-/**
- * One spell row, shared by the known / spellbook / prepared pickers so they
- * read exactly like the Stage 2 cantrip picker: a checkbox beside the spell
- * name, and the first sentence of the book description under it. The
- * checkbox resets the global `input { width: 100% }` rule (inputStyle).
- */
-function SpellPickRow({ spell, held, checked, onToggle, inputStyle, note, atLimit = false }) {
-  const desc = spellDescriptionText(spell.description)
-  const facts = spellFactsLine(spell)
-  return (
-    <div style={{ margin: '10px 0', opacity: held ? 0.55 : (atLimit ? 0.45 : 1) }}>
-      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8, margin: 0, fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 600, color: 'inherit' }}>
-        <input type="checkbox" style={inputStyle} disabled={held || atLimit} checked={checked} onChange={onToggle} />
-        <span>
-          {held ? `${spell.name} — already granted` : spell.name}
-          {note ? <span style={{ fontWeight: 400, opacity: 0.75 }}> {note}</span> : null}
-          {spell.school ? <span style={{ fontWeight: 400, opacity: 0.75 }}> ({spell.school})</span> : null}
-        </span>
-      </label>
-      {desc ? <div style={{ fontSize: 15, lineHeight: 1.5, color: 'var(--ink-2)', margin: '2px 0 0 26px' }}>{desc}</div> : null}
-      {facts ? <div style={{ fontSize: 13, color: 'var(--ink-3)', margin: '2px 0 0 26px' }}>{facts}</div> : null}
-    </div>
-  )
-}
+// SpellPickRow (the shared spell row) lives in ./SpellPickRow.jsx since
+// creator-round-3 item 9 — the Magic Initiate pickers on Stages 1 and 3
+// use the same row. The checkbox resets the global `input { width: 100% }`
+// rule through the inputStyle prop.
 
 function prettify(id) {
   if (!id) return ''
@@ -628,6 +609,8 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
   // --- Spells: fetch from /api/spells when class/subclass changes ------
   const [spellData, setSpellData] = useState(null)
   const [spellsLoading, setSpellsLoading] = useState(false)
+  // creator-round-3 item 4: which spellbook school groups the player has opened.
+  const [openSchools, setOpenSchools] = useState(() => new Set())
   const [spellsFailed, setSpellsFailed] = useState(false)
   // Where the spell list came from: 'live' (endpoint), 'cached' (the
   // last-good fetch this browser saved), or 'bundled' (the generated
@@ -1318,17 +1301,46 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
                 <div className="help" style={{ fontStyle: 'normal' }}>
                   The server served a spellbook count but no spell list, so no spells can be picked here yet.
                 </div>
-              ) : spellOptions.map(s => {
-                const held = isHeldOption(s.name, [...grantedSpellNames])
-                const checked = knownSpells.includes(s.key)
-                const isPrepared = preparedSpells.includes(s.key)
-                return (
-                  <SpellPickRow key={s.key} spell={s} held={held} checked={checked} inputStyle={checkInputStyle}
-                    note={isPrepared ? '— prepared ✓' : ''}
-                    atLimit={!checked && knownSpells.length >= bookCount}
-                    onToggle={() => toggleBookSpell(s.key)} />
-                )
-              })}
+              ) : (
+                // creator-round-3 item 4: the first-level list grouped by
+                // school of magic, each school a group you open, so the
+                // choice reads as bounded; a group holding a pick opens.
+                <>
+                  <div className="help" style={{ fontStyle: 'normal' }}>
+                    {spellOptions.length} first-level wizard spells, grouped by school of magic. Open a school to see its spells.
+                  </div>
+                  {groupSpellsBySchool(spellOptions).map(({ school, spells }) => {
+                    const inBook = spells.filter(s => knownSpells.includes(s.key)).length
+                    const open = openSchools.has(school) || inBook > 0
+                    return (
+                      <details key={school} open={open} style={{ margin: '6px 0' }}
+                        onToggle={e => {
+                          const isOpen = e.currentTarget.open
+                          setOpenSchools(prev => {
+                            const next = new Set(prev)
+                            if (isOpen) next.add(school); else next.delete(school)
+                            return next
+                          })
+                        }}>
+                        <summary style={{ fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                          {school} ({spells.length}){inBook > 0 ? ` — ${inBook} in your book` : ''}
+                        </summary>
+                        {spells.map(s => {
+                          const held = isHeldOption(s.name, [...grantedSpellNames])
+                          const checked = knownSpells.includes(s.key)
+                          const isPrepared = preparedSpells.includes(s.key)
+                          return (
+                            <SpellPickRow key={s.key} spell={s} held={held} checked={checked} inputStyle={checkInputStyle}
+                              note={isPrepared ? '— prepared ✓' : ''}
+                              atLimit={!checked && knownSpells.length >= bookCount}
+                              onToggle={() => toggleBookSpell(s.key)} />
+                          )
+                        })}
+                      </details>
+                    )
+                  })}
+                </>
+              )}
             </div>
           )}
           {preparedCount > 0 && (

@@ -292,7 +292,9 @@ group('#13/#18/#19 shared checkbox-row style + skill descriptions');
   }
   // Spell rows are one shared component: checkbox + name on one flex row, description under it.
   ok((stage4.match(/<SpellPickRow /g) || []).length === 3, 'Stage 4 known, spellbook and prepared spell rows all use the shared SpellPickRow');
-  ok(/function SpellPickRow[\s\S]*?alignItems: 'center'[\s\S]*?<input type="checkbox"/.test(stage4), 'SpellPickRow keeps the checkbox on the same flex row as the name');
+  // creator-round-3 item 9: the shared row moved to its own file (Stages 1, 3 and 4 use it).
+  const sharedRow = fs.readFileSync(path.join(HERE, '..', 'client/src/components/creator-next/SpellPickRow.jsx'), 'utf8');
+  ok(/import SpellPickRow from '\.\/SpellPickRow\.jsx'/.test(stage4) && /alignItems: 'center'[\s\S]*?<input type="checkbox"/.test(sharedRow), 'SpellPickRow keeps the checkbox on the same flex row as the name');
   ok(!stage4.includes('marginLeft: 22'), 'no marginLeft:22 description indent remains (descriptions live in the text wrapper)');
   ok(stage4.includes('SKILLS[k]?.description'), 'Stage 4 skill rows render the skill description');
   ok(stage2.includes('style={checkRowStyle}'), 'Stage 2 cantrip/multi-choice labels use the shared row style');

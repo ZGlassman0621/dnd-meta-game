@@ -54,7 +54,7 @@
  * This module never filters the list — the held check is the separate
  * isHeldOption function the renderer applies per option.
  */
-import { SKILLS } from '../../data/references.js'
+import { SKILLS, TOOLS } from '../../data/references.js'
 import equipmentData from '../../data/equipment.json' with { type: 'json' }
 import { resolveSpeciesGrants } from './speciesAdapter.js'
 
@@ -130,8 +130,16 @@ export function describeSentinel(sentinel) {
   return SENTINEL_LABELS[sentinel] || String(sentinel).replace(/_/g, ' ')
 }
 
+// creator-round-3 item 3: a tool option carries its references.js TOOLS
+// description (every artisan's tool, kit, gaming set and instrument has
+// one), so a picker can show what the chosen tool is for. Value and label
+// are unchanged; options without a TOOLS entry carry none.
 function normalize(list) {
-  return (list || []).map(o => (typeof o === 'string' ? { value: o, label: o } : o))
+  return (list || []).map(o => {
+    const opt = typeof o === 'string' ? { value: o, label: o } : o
+    const description = opt && TOOLS[opt.value]
+    return description && !opt.description ? { ...opt, description } : opt
+  })
 }
 
 /**

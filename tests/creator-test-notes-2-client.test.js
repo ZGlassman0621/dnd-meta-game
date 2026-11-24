@@ -340,7 +340,9 @@ group('R2-11(a) Magic Initiate spell descriptions render');
   ok(spellDescriptionFor('No Such Spell') === '', 'bundled spellDescriptionFor returns empty for an unknown name, never invented');
   ok(spellDescriptionFor('') === '', 'bundled spellDescriptionFor returns empty for a blank name');
   ok(stage3.includes('spellDescriptionFor(choices.spell)'), 'the picked level-1 spell description renders under the select');
-  ok(stage3.includes('spellDescriptionFor(c)'), 'each picked cantrip description renders under the checkboxes');
+  // creator-round-3 item 9: every cantrip option now shows its description in
+  // its own row (the shared SpellPickRow), not only the picked ones.
+  ok(stage3.includes('<SpellPickRow key={c} spell={catalogSpellRow(spellsData, c)}'), 'each cantrip option renders its description in its row');
 }
 
 // --- R2-11(b)-(g): generic path choice + origin regions + Soldier second field ----------------
@@ -422,9 +424,10 @@ group('R2-14 story descriptions inline + personality guide');
   ok(!stage5.includes('<Tip text={tip} />'), 'no Tip button remains in the story-field helpers');
   ok(stage5.includes('What do people notice about you first?'), 'the personality guide asks what people notice first');
   ok(stage5.includes('What habit gives you away?'), 'the personality guide asks what habit gives you away');
-  ok(stage5.includes('What do you do when you\\u2019re nervous?'), 'the personality guide asks what you do when nervous');
+  ok(stage5.includes('What do you do when you\\u2019re nervous?') || stage5.includes('What do you do when you’re nervous?'), 'the personality guide asks what you do when nervous');
   ok(!stage5.includes('sample personality') && !stage5.includes('Sample personalities'), 'the guide is prompt questions, never a sample-personality list');
-  ok(stage5.includes('How you act — habits, tics, the things people notice first.'), 'the personality description text itself is unchanged');
+  // creator-round-3 item 8 rewrote this helper (Zach's intent, professional wording).
+  ok(stage5.includes('How you act: your habits, mannerisms, and the things people notice first. The DM uses this to shape how the world reacts to you.'), 'the personality description reads as rewritten in creator round 3');
 }
 
 // --- R2-15: language picker ----------------------------------------------------------------------------

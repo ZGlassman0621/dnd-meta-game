@@ -3,11 +3,13 @@ import { Field } from '../creator/creatorPrimitives.jsx'
 import CelebrationCard from '../creator/CelebrationCard.jsx'
 import Tip from './Tooltip.jsx'
 import spellsData from '../../data/spells.json' with { type: 'json' }
-import { deferredNoteFor, findSpeciesEntry, isDeferredSpecies, isOutsideFR, resolveOriginSetting } from './speciesAdapter.js'
+import { deferredNoteFor, dragonmarkHouses, findSpeciesEntry, isDeferredSpecies, isOutsideFR, resolveOriginSetting } from './speciesAdapter.js'
 import { LANGUAGES, concreteLanguages, languageChoiceCount } from '../../data/references.js'
 import { ARRIVAL_OPTIONS, ORIGIN_SETTINGS, OTHER_ARRIVAL_VALUE, OTHER_REGION_VALUE, OTHER_SETTING_VALUE, isListedArrival, isListedRegion, regionDescription, regionFieldMode, regionsForSetting, settingDescription } from '../../data/originSettings.js'
 import { validateStage1 } from './stage1Validation.js'
 import { choiceCountOf, heldValuesForChoice, isHeldOption, normalizeChoiceValues, resolveChoiceOptions } from './choiceOptions.js'
+import SpellPickRow from './SpellPickRow.jsx'
+import { catalogSpellRow } from './spellBlurb.js'
 import {
   ORIGIN_FEATS, blankMixedAncestry, effectiveTraitCost, fetchMixedAncestryFeatUnion,
   fetchMixedAncestryTables, hasMixedVersatileTrait, isDowngradableDarkvision,
@@ -792,12 +794,15 @@ export default function Stage1OriginIdentity({ state, set, mode, payload, specie
                       <span style={{ display: 'block', fontFamily: 'var(--serif)', fontSize: 15, margin: '14px 0 6px' }}>Cantrips (choose 2)
                         <Tip text="Two cantrips from the list above. They are granted by the feat, never counted against your class cantrips known or prepared. A cantrip your species already grants is grayed out — it is already yours, so it is not picked again here." />
                       </span>
+                      {/* creator-round-3 item 9: the shared spell row — checkbox beside the name, description and facts under it. */}
                       {versatileCantripOptions.map(c => {
                         const held = isHeldOption(c, versatileHeldCantrips)
+                        const picked = Array.isArray(versatileChoices.cantrips) ? versatileChoices.cantrips : []
+                        const checked = picked.includes(c)
                         return (
-                          <label key={c} style={{ display: 'block', fontFamily: 'var(--serif)', fontSize: 15, margin: '4px 0', opacity: held ? 0.55 : 1 }}>
-                            <input type="checkbox" disabled={held} checked={Array.isArray(versatileChoices.cantrips) && versatileChoices.cantrips.includes(c)} onChange={() => toggleVersatileMulti('cantrips', c, 2)} /> {held ? `${c} — already granted` : c}
-                          </label>
+                          <SpellPickRow key={c} spell={catalogSpellRow(spellsData, c)} held={held} checked={checked}
+                            inputStyle={{ width: 'auto', flex: '0 0 auto', margin: 0 }} atLimit={!checked && picked.length >= 2}
+                            onToggle={() => toggleVersatileMulti('cantrips', c, 2)} />
                         )
                       })}
                     </div>
@@ -818,6 +823,12 @@ export default function Stage1OriginIdentity({ state, set, mode, payload, specie
                         )
                       })}
                     </select>
+                    {/* creator-round-3 item 9: the chosen spell's description, as on Stage 3. */}
+                    {versatileChoices.level1_spell && catalogSpellRow(spellsData, versatileChoices.level1_spell).description && (
+                      <div className="help" style={{ fontStyle: 'normal', marginTop: 10 }}>
+                        {catalogSpellRow(spellsData, versatileChoices.level1_spell).description}
+                      </div>
+                    )}
                   </>
                 )}
               </>
@@ -848,8 +859,8 @@ export default function Stage1OriginIdentity({ state, set, mode, payload, specie
                   <Tip text="Three musical instruments you gain proficiency with. Proficiency here is permanent — it locks at creation and travels with you. Playing one as you finish a rest gives Heroic Inspiration to allies who hear it." />
                 </span>
                 {(resolveChoiceOptions({ options: 'any_instrument' }) || []).map(o => (
-                  <label key={o.value} style={{ display: 'block', fontFamily: 'var(--serif)', fontSize: 15, margin: '4px 0' }}>
-                    <input type="checkbox" checked={Array.isArray(versatileChoices.instruments) && versatileChoices.instruments.includes(o.value)} onChange={() => toggleVersatileMulti('instruments', o.value, 3)} /> {o.label || o.value}
+                  <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--serif)', fontSize: 15, margin: '4px 0' }}>
+                    <input type="checkbox" style={{ width: 'auto', flex: '0 0 auto', margin: 0 }} checked={Array.isArray(versatileChoices.instruments) && versatileChoices.instruments.includes(o.value)} onChange={() => toggleVersatileMulti('instruments', o.value, 3)} /> {o.label || o.value}
                   </label>
                 ))}
               </div>
@@ -861,8 +872,8 @@ export default function Stage1OriginIdentity({ state, set, mode, payload, specie
                   <Tip text="Proficiency in any combination of three skills or tools of your choice. These are new proficiencies — they lock at creation. If one duplicates a proficiency you already hold, Stage 4 dedup turns the duplicate into a replacement pick of the same type instead of a stack." />
                 </span>
                 {(resolveChoiceOptions({ options: 'any_skill_or_tool' }) || []).map(o => (
-                  <label key={o.value} style={{ display: 'block', fontFamily: 'var(--serif)', fontSize: 15, margin: '4px 0' }}>
-                    <input type="checkbox" checked={Array.isArray(versatileChoices.skills_or_tools) && versatileChoices.skills_or_tools.includes(o.value)} onChange={() => toggleVersatileMulti('skills_or_tools', o.value, 3)} /> {o.label || o.value}
+                  <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--serif)', fontSize: 15, margin: '4px 0' }}>
+                    <input type="checkbox" style={{ width: 'auto', flex: '0 0 auto', margin: 0 }} checked={Array.isArray(versatileChoices.skills_or_tools) && versatileChoices.skills_or_tools.includes(o.value)} onChange={() => toggleVersatileMulti('skills_or_tools', o.value, 3)} /> {o.label || o.value}
                   </label>
                 ))}
               </div>
@@ -874,9 +885,13 @@ export default function Stage1OriginIdentity({ state, set, mode, payload, specie
                   <Tip text="Proficiency with three artisan's tools of your choice. They lock at creation, and the feat's crafting — a 20% discount on nonmagical items and one piece of gear crafted at the end of a Long Rest — needs the tools you pick here." />
                 </span>
                 {(resolveChoiceOptions({ options: 'any_artisan_tool' }) || []).map(o => (
-                  <label key={o.value} style={{ display: 'block', fontFamily: 'var(--serif)', fontSize: 15, margin: '4px 0' }}>
-                    <input type="checkbox" checked={Array.isArray(versatileChoices.artisan_tools) && versatileChoices.artisan_tools.includes(o.value)} onChange={() => toggleVersatileMulti('artisan_tools', o.value, 3)} /> {o.label || o.value}
-                  </label>
+                  <div key={o.value} style={{ margin: '6px 0' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--serif)', fontSize: 15, margin: 0 }}>
+                      <input type="checkbox" style={{ width: 'auto', flex: '0 0 auto', margin: 0 }} checked={Array.isArray(versatileChoices.artisan_tools) && versatileChoices.artisan_tools.includes(o.value)} onChange={() => toggleVersatileMulti('artisan_tools', o.value, 3)} /> {o.label || o.value}
+                    </label>
+                    {/* creator-round-3 item 3: what the tool is for. */}
+                    {o.description && <div style={{ fontSize: 14, lineHeight: 1.45, color: 'var(--ink-2)', margin: '2px 0 0 26px' }}>{o.description}</div>}
+                  </div>
                 ))}
               </div>
             )}
@@ -905,6 +920,17 @@ export default function Stage1OriginIdentity({ state, set, mode, payload, specie
                 </button>
               ))}
             </div>
+            {/* creator-round-3 item 2: a visible dragonmark explainer, on screen
+                before any pick. Houses come from each mark's own description
+                (eberronMarks.js: "House Medani's mark, …"). */}
+            {dragonmarkHouses(sortedVariants).length > 0 && (
+              <div className="help" style={{ fontStyle: 'normal' }}>
+                The variants named &ldquo;Mark of …&rdquo; are dragonmarks, from Eberron: a dragonmark is a magical sigil
+                that appears on the skin of certain bloodlines and grants innate magic. Each one ties you to the
+                dragonmarked house that bears it:{' '}
+                {dragonmarkHouses(sortedVariants).map(m => `${m.mark}${m.house ? ` (House ${m.house})` : ''}`).join(', ')}.
+              </div>
+            )}
             {selectedVariant && (
               <div className="help" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
                 {selectedVariant.description}
@@ -1278,6 +1304,18 @@ export default function Stage1OriginIdentity({ state, set, mode, payload, specie
                   <div className="help">Pick {count} — each one different.</div>
                 </>
               )}
+              {/* creator-round-3 item 3: the chosen option's description
+                  (artisan's tools under Clan's Craft, and any other tool
+                  choice) shows under the picker — a native select has no
+                  per-option slot. */}
+              {Array.isArray(options) && values.filter(Boolean).map(v => {
+                const o = options.find(x => String(x.value).toLowerCase() === String(v).toLowerCase())
+                return o?.description ? (
+                  <div key={`desc-${v}`} className="help" style={{ fontStyle: 'normal', color: 'var(--ink-2)' }}>
+                    <strong>{o.label || o.value}:</strong> {o.description}
+                  </div>
+                ) : null
+              })}
             </Field>
           )
         })}

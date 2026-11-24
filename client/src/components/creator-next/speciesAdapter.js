@@ -231,3 +231,19 @@ export function resolveSpeciesGrants(speciesEntry, subrace) {
   else pushGrants(speciesEntry.grants)
   return out
 }
+
+/**
+ * creator-round-3 item 2: the dragonmark variants in a species' variant list,
+ * each with the house its own description names ("House Medani's mark, …" in
+ * server/data/species/eberronMarks.js). A mark whose description names no
+ * house keeps house null — nothing is invented.
+ */
+export function dragonmarkHouses(variants) {
+  return (Array.isArray(variants) ? variants : [])
+    .filter(v => v && /^Mark of /.test(String(v.name || '')))
+    .map(v => {
+      // "House Medani's mark" or "House Phiarlan's (and Thuranni's) mark".
+      const m = String(v.description || '').match(/^House ([A-Z][A-Za-z-]*)'s (?:\(and ([A-Z][A-Za-z-]*)'s\) )?mark/)
+      return { mark: v.name, house: m ? (m[2] ? `${m[1]} and House ${m[2]}` : m[1]) : null }
+    })
+}
