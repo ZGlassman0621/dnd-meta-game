@@ -444,7 +444,7 @@
       "After rolling initiative but before the first turn, you may swap initiative with a willing creature, once per combat"
     ],
     "prerequisites": null,
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — DNDBlue Feat Collection v2.4"
   },
   "sage_advice": {
     "name": "Sage Advice",
@@ -455,7 +455,7 @@
       "Uses equal to your proficiency bonus; regain on a long rest"
     ],
     "prerequisites": null,
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — Fantastic Feats of Forgotten Realms"
   },
   "hound": {
     "name": "Hound",
@@ -470,7 +470,7 @@
       "ability": "wis",
       "amount": 1
     },
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — DNDBlue Feat Collection v2.4"
   },
   "feather_foot": {
     "name": "Feather Foot",
@@ -488,7 +488,7 @@
       "ability": "dex",
       "amount": 1
     },
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — DNDBlue Feat Collection v2.4"
   },
   "seismic_touch": {
     "name": "Seismic Touch",
@@ -497,7 +497,7 @@
       "As an action, touch a solid surface and gain 60 ft tremorsense until the start of your next turn"
     ],
     "prerequisites": null,
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — DNDBlue Feat Collection v2.4"
   },
   "trapper": {
     "name": "Trapper",
@@ -513,7 +513,7 @@
       "ability": "wis",
       "amount": 1
     },
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — Book of Revised Feats"
   },
   "friend_of_the_forest": {
     "name": "Friend of the Forest",
@@ -523,7 +523,7 @@
       "Beasts can give you information about nearby locations and monsters, including what they perceived within the past day"
     ],
     "prerequisites": null,
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — DNDBlue Feat Collection v2.4"
   },
   "elusive": {
     "name": "Elusive",
@@ -541,7 +541,7 @@
       "ability": "dex",
       "amount": 1
     },
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — DNDBlue Feat Collection v2.4"
   },
   "sling_expert": {
     "name": "Sling Expert",
@@ -552,7 +552,7 @@
       "After taking the Attack action with a sling, you can make one additional sling attack as a bonus action"
     ],
     "prerequisites": null,
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — Book of Revised Feats"
   },
   "mountaineer": {
     "name": "Mountaineer",
@@ -563,7 +563,7 @@
       "Advantage on Athletics checks for climbing"
     ],
     "prerequisites": null,
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — DNDBlue Feat Collection v2.4"
   },
   "quick_draw": {
     "name": "Quick Draw",
@@ -573,7 +573,7 @@
       "Ranged weapons used as improvised weapons deal d4 damage and you are proficient with them"
     ],
     "prerequisites": null,
-    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+    "source": "Homebrew — Fantastic Feats of Forgotten Realms"
   },
   "silver_tongue": {
     "name": "Silver Tongue",

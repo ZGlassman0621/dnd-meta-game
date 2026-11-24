@@ -114,6 +114,16 @@ group('1. Catalog: fourteen feats, right slots, homebrew-tagged');
   ok(!reg.getFeatEffect('mountaineer').abilityIncrease && !/\+5|strength or constitution/i.test(reg.getFeatEffect('mountaineer').effect)
     && !/\+5|Strength or Constitution/.test(J(clientFeats.mountaineer)), 'Mountaineer: no ASI, and the "+5" typo is nowhere');
   ok(reg.getFeatEffect('mountaineer').sourcePdf === 'DNDBlue Feat Collection v2.4', 'Mountaineer names its source copy (DNDBlue)');
+  // Muse 2026-11-24 (PM research report §1): each feat's source PDF.
+  const SRC = {
+    tactician: 'DNDBlue Feat Collection v2.4', sage_advice: 'Fantastic Feats of Forgotten Realms', hound: 'DNDBlue Feat Collection v2.4',
+    feather_foot: 'DNDBlue Feat Collection v2.4', seismic_touch: 'DNDBlue Feat Collection v2.4', trapper: 'Book of Revised Feats',
+    friend_of_the_forest: 'DNDBlue Feat Collection v2.4', elusive: 'DNDBlue Feat Collection v2.4', sling_expert: 'Book of Revised Feats',
+    mountaineer: 'DNDBlue Feat Collection v2.4', energy_affinity: 'Homebrew Feats 2024', quick_draw: 'Fantastic Feats of Forgotten Realms',
+  };
+  ok(Object.entries(SRC).every(([k, v]) => reg.getFeatEffect(k).sourcePdf === v), 'all twelve PDF feats carry their source PDF (none "unknown")');
+  ok(Object.entries(SRC).filter(([k]) => k !== 'energy_affinity').every(([k, v]) => clientFeats[k].source === `Homebrew — ${v}`), 'the level-up catalog shows the same source per feat');
+  ok(ADDED.every((k) => reg.getFeatEffect(k).sourcePdf), 'no feat is left without a source');
   ok(reg.getFeatEffect('silver_tongue').rulesetId === 'homebrew_xge_adaptations' && reg.getFeatEffect('elegant_maneuver').rulesetId === 'homebrew_xge_adaptations', 'the two WoW feats are tagged as Xanathar adaptations');
   ok(reg.getFeatEffect('feather_foot').prerequisite?.min === 13 && reg.getFeatEffect('elusive').prerequisite?.ability === 'dex' && reg.getFeatEffect('silver_tongue').prerequisite?.ability === 'cha', 'prerequisites: Feather Foot/Elusive Dex 13, Silver Tongue Cha 13');
   const gen = ADDED.filter((k) => k !== 'energy_affinity');

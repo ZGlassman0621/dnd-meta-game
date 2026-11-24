@@ -20,7 +20,7 @@ Differences between the brief and the live build, stated up front:
    - Energy Affinity was added to the origin list, which makes it pickable through Human Versatile.
 
    No theme grants Energy Affinity. Assigning it to a theme would be a theme-design decision, and that is not mine to make.
-3. **The source PDF per feat is not in the brief.** The brief names a copy only for Mountaineer (DNDBlue). The PM research report (`feat-pdfs-2026-11-20/REPORT.md`) is in Muse's workspace, not the repo. Each of the eleven other PDF feats therefore carries `sourcePdf: null` rather than a guess (question 1 below).
+3. **The source PDF per feat was not in the brief.** The brief named a copy only for Mountaineer (DNDBlue). Muse supplied the rest on 2026-11-24 from the PM research report §1, and each feat is now tagged with its source PDF (see the addendum).
 
 ## Verdict
 
@@ -54,7 +54,7 @@ Fixes found along the way (fix-as-you-find-it):
 | What | Where (live bytes, before this job) | Notes |
 |---|---|---|
 | DM-prompt feat catalog | `server/data/featRegistry.js` — `CORE_FEATS` (21), `FIGHTING_STYLE_FEATS` (10), Manual of Martial Mastery JSON (53) | The prompt text plus the server's origin-feat check (`category`) |
-| Level-up feat catalog | `client/src/data/feats.json` (42 entries, mostly 2014 text, e.g. Alert "+5 initiative") | The only general-feat picker. The 2014 text is stale, but it is not this job (question 3) |
+| Level-up feat catalog | `client/src/data/feats.json` (42 entries, mostly 2014 text, e.g. Alert "+5 initiative") | The only general-feat picker. The 2014 text is stale, but it is not this job (separate-job candidate, Not done 10a) |
 | Origin feats | Theme-fixed (`themes.js` `origin_feat`; server refusal at `character.js:463`). Human Versatile picks from `ORIGIN_FEATS` (`creator-next/mixedAncestry.js:31`, server check `entry.category === 'origin'`) | Stored in `character_origin_feats` (`persistOriginFeatSelection`, `character.js:3675`) |
 | Half-feat +1 flow | Client: `LevelUpPage.jsx` (dropdown — broken, see above). Server: `POST /level-up/:id` feat branch (`character.js:7145`) applies +1, capped at 20 | It exists, so it was used. The broken client side was fixed |
 | Prerequisites | Shown as text (`LevelUpPage.jsx`), **enforced nowhere** | Now enforced for the three structured prerequisites (client disables the pick, server refuses with 400). Free-text prerequisites stay shown, not enforced |
@@ -193,7 +193,8 @@ I can't measure this session's cost or the remaining usage from inside the sessi
    - Harm ends it through `[WINNING_WORDS … End="true"]` (the DM's call) or `endCharmOnHarm`. No attack or spell hook calls `endCharmOnHarm` automatically yet.
 8. **Sage Advice: a stat-block (non-class) companion's proficiency is unknown,** so the bonus is not applied to them rather than guessed. Tool checks are DM-applied.
 9. **Sling Expert's bonus-action attack** rides the existing generic `Bonus="true"` attack. That path does not check which feature grants a bonus attack, for any feature.
-10. **Ranger Favored Enemy and Magic Initiate free casts are still untracked.** The tracker built here could carry them. I did not move them, because that changes class and book behaviour outside these fourteen feats. Flagged as the next fix.
+10. **Ranger Favored Enemy and Magic Initiate free casts are still untracked.** Muse, 2026-11-24: out of scope here. The Trapper tracker stays scoped to Trapper's Hunter's Mark. Generalizing it is a **separate-job candidate**.
+10a. **Separate-job candidate, catalog-text corrections:** the level-up feat list (`client/src/data/feats.json`) carries 2014 text for the book feats (Alert still says "+5 initiative"), and origin feats such as Alert and Lucky are tagged and offered as general feats. Muse, 2026-11-24: out of scope here. It goes on the catalog-text-corrections pile, origin-feat tagging included.
 11. **Existing defect found:** `durationTrackerService.tickTimedEffects` has no caller, so turn-counted timed effects never tick. It is outside this job and reported here.
 12. **The :5173 visual check was not clicked through by me.** The client build is green and the steps are below. Zach's click-through is part of the gate.
 
@@ -202,7 +203,7 @@ I can't measure this session's cost or the remaining usage from inside the sessi
 1. **The fourteen-feat variant was built** from the file as couriered, even though its header says draft. Reversal: remove Silver Tongue and Elegant Maneuver. That is two registry entries, two `feats.json` entries, the `WINNING_WORDS` handler and schema, and one branch of `FEAT_USE`, about an hour of work.
 2. **Energy Affinity is reachable only through Human Versatile** (and the Mixed Ancestry versatile pick). No theme was given it. Reversal: set a theme's `origin_feat` to `energy_affinity`; the validators already accept it.
 3. **Energy Affinity is not offered as a level-up feat.** The brief calls it origin, so it isn't in `feats.json`. Reversal: one `feats.json` entry, plus a choice picker on the level-up page.
-4. **Sling Expert's "one size larger" is read as written: exactly one size larger.** A Huge target against a Medium slinger gets no die. Reversal: one comparison in `slingExpertDice` (`t - a === 1` becomes `t - a >= 1`). See question 2.
+4. **Sling Expert's "one size larger" is read as written: exactly one size larger.** A Huge target against a Medium slinger gets no die. **Confirmed by Muse, 2026-11-24:** the book text is "one size larger than you".
 5. **Winning Words:**
    - The player must **beat** the Insight total; a tie means no charm. This is the general contest rule, with the status quo on a tie.
    - The NPC's Insight uses the stored NPC modifier, or an `Insight=` value the DM gives.
@@ -218,10 +219,7 @@ I can't measure this session's cost or the remaining usage from inside the sessi
 
 ## Needs Zach's decision
 
-1. **Which PDF does each of the eleven other PDF feats come from?** The brief names a source copy only for Mountaineer (DNDBlue Feat Collection v2.4). The PM research report that maps each feat to its PDF is in Muse's workspace, not the repo, so I did not guess. Each feat carries `sourcePdf: null`. I need the PDF name for each of Tactician, Sage Advice, Hound, Feather Foot, Seismic Touch, Trapper, Friend of the Forest, Elusive, Sling Expert, Energy Affinity and Quick Draw. It is a one-line fill per feat.
-2. **Sling Expert: does "one size larger than you" mean exactly one size, or at least one?** As built it is exactly one size larger, because that is how the brief's text reads. So a Halfling slinger gets the extra d4 against a Medium goblin but not against a Huge giant. If "at least one size larger" was meant, it is a one-line change.
-3. **The level-up feat list carries 2014 text for the book feats, and most of them have no 2024 update.** For example, Alert there still says "+5 initiative, can't be surprised", which is the 2014 feat, and origin feats such as Alert and Lucky are offered as general feats. That catalog is what a player reads when picking a feat at level 4. It is outside this job and needs the 2024 book to correct, so it should be a job of its own. Do you want it queued?
-4. **Ranger Favored Enemy and Magic Initiate free casts.** The app tracks neither of these free casts today. The tracker built for Trapper could carry both. Should that be a job?
+All four questions were answered by Muse on 2026-11-24 (see the addendum). Nothing else needs a decision here. The origin call for Sage Advice and Friend of the Forest stays Zach's, at the gate:
 
 Sage Advice and Friend of the Forest as origin feats — exactly what would change (build step 13; built as general, the call is Zach's):
 - **Registry:** set `category: 'origin'` on each entry in `server/data/featRegistry.js`. The server's origin check (`entry.category === 'origin'`, `character.js:458/515`, `mixedAncestryService.js:380`) then accepts them.
@@ -259,3 +257,32 @@ At **:5173** (never :3000), after `npm run dev`:
 - Commit `15e38a4` "Feat addition: the fourteen approved feats (v1.0.209)", branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`, pushed to `origin`.
 - SHA-256 per file: see the Files changed table. The hashes were taken before the commit, of the bytes that were committed.
 - Tests: the Test results section. Live behaviour: the Live probe section.
+
+## Addendum — Muse's answers (2026-11-24)
+
+1. **Source PDFs: applied.** Each feat now carries its source PDF: `sourcePdf` in `server/data/featRegistry.js`, and the `source` line in `client/src/data/feats.json`. None is "unknown" any more.
+
+   | PDF | Feats |
+   |---|---|
+   | DNDBlue Feat Collection v2.4 | Tactician, Hound, Feather Foot, Seismic Touch, Friend of the Forest, Elusive, Mountaineer |
+   | Fantastic Feats of Forgotten Realms | Sage Advice, Quick Draw |
+   | Book of Revised Feats | Trapper, Sling Expert |
+   | Homebrew Feats 2024 | Energy Affinity |
+
+   Silver Tongue and Elegant Maneuver keep their Xanathar adaptation tags. New assertions in `feat-addition-14.test.js` group 1 pin all twelve sources, matching in both catalogs.
+2. **Sling Expert stays at exactly one size larger,** as built. The book text is "one size larger than you". No code change.
+3. **The 2014 book-feat text in the level-up list is out of scope.** It is recorded as a separate-job candidate on the catalog-text-corrections pile, origin-feat tagging included (Not done 10a).
+4. **Favored Enemy and Magic Initiate free casts are out of scope.** The Trapper tracker stays scoped to Trapper's Hunter's Mark. Generalizing it is recorded as a separate-job candidate (Not done 10).
+
+**Tests:** `feat-addition-14.test.js` is 133/133. The builder's full `npm test` is 254/254 files green, 19,745 assertions passed, 0 failed.
+- The total is one lower than the first run's 19,746, although this change added three assertions. Five files took the Windows `pass*` exit this time (`arms-armor-variants`, `item-4-movement`, `item-7-damage-tables`, `item-8-conditions`, `subclass-tier0`), and two of them reported no count. No assertion failed.
+
+**Files changed in this follow-up:**
+
+| File | New / edited | Bytes | SHA-256 |
+|---|---|---|---|
+| `server/data/featRegistry.js` | edited | 23334 | `82f897a4d2b34e72c65faeb484de475fc7376056c29368666d817484deca507b` |
+| `client/src/data/feats.json` | edited | 26973 | `5b0ec127ab7d1a31e7c9373183e8f08913969ce011d2607d806f9134941af953` |
+| `tests/feat-addition-14.test.js` | edited | 42832 | `2ddbee2507b7dd9107781efdf1d6a945dda4df8c8fe4c7ce956e48c1273532ad` |
+
+The version stays 1.0.209: this is a follow-up inside the same job.
