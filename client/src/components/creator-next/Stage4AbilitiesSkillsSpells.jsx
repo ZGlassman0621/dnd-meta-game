@@ -6,6 +6,7 @@ import { isHeldOption } from './choiceOptions.js'
 import { spellDescriptionText, spellFactsLine } from './spellBlurb.js'
 import { deferredNoteFor, isDeferredSpecies, resolveSpeciesGrants } from './speciesAdapter.js'
 import { isMagicInitiateOriginFeat } from './stage1Persistence.js'
+import { energyAffinityCantrip } from './mixedAncestry.js'
 import { bundledSpellData, knownCountFor, loadCachedSpellData, preparedCountFor, preparedCountRuleText, saveCachedSpellData, spellbookSizeFor, spellcastingAbilityForClass } from './spellCatalogFallback.js'
 
 /**
@@ -506,6 +507,10 @@ export default function Stage4AbilitiesSkillsSpells({ state, set, themes = null,
     // origin slot's, so the granted list must include them too —
     // otherwise the player could re-pick one as a prepared spell and
     // the commit would refuse it as already granted.
+    // HOMEBREW feat-addition-14: Energy Affinity's granted cantrip.
+    if (state.versatileFeat === 'energy_affinity' && energyAffinityCantrip(state.versatileFeatChoices)) {
+      push(energyAffinityCantrip(state.versatileFeatChoices), 0, 'versatile feat (Energy Affinity)')
+    }
     if (isMagicInitiateOriginFeat(state.versatileFeat)) {
       const vSpell = (state.versatileFeatChoices || {}).spell
       if (typeof vSpell === 'string' && vSpell.trim()) push(vSpell.trim(), 1, 'versatile feat (Magic Initiate)')

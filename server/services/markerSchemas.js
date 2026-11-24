@@ -318,7 +318,10 @@ export const MARKER_SCHEMAS = {
       Bonus: { type: 'bool', required: false },
       Targets: { type: 'string', required: false },
       Reaction: { type: 'bool', required: false },
-      Choice: { type: 'string', required: false }
+      Choice: { type: 'string', required: false },
+      // feat-addition-14 (Trapper): cast Hunter's Mark with one of the
+      // feat's free casts instead of a slot.
+      Free: { type: 'bool', required: false }
     }
   },
 
@@ -458,6 +461,29 @@ export const MARKER_SCHEMAS = {
     }
   },
 
+  // feat-addition-14: declared BEFORE ROLL_REQUEST (dispatch runs in
+  // declaration order) so an Elegant Maneuver used in the same reply as
+  // its Acrobatics/Athletics ROLL_REQUEST is in place when the roll is
+  // asked for.
+  FEAT_USE: {
+    position: 'inline',
+    fields: {
+      Feat: { type: 'string', required: true },
+      Skill: { type: 'string', required: false },
+      Tool: { type: 'string', required: false },
+      Allies: { type: 'string', required: false }
+    }
+  },
+  WINNING_WORDS: {
+    position: 'inline',
+    fields: {
+      Target: { type: 'string', required: true },
+      Insight: { type: 'number', required: false },
+      Attitude: { type: 'string', required: false },
+      End: { type: 'bool', required: false }
+    }
+  },
+
   ROLL_REQUEST: {
     position: 'inline',
     fields: {
@@ -471,7 +497,11 @@ export const MARKER_SCHEMAS = {
       Disadvantage: { type: 'string', required: false },
       // Combat item 8: a hearing-tagged request auto-fails for a
       // deafened roller (no roll, no pending).
-      Hearing: { type: 'bool', required: false }
+      Hearing: { type: 'bool', required: false },
+      // feat-addition-14: a feat situation ("Hound smell", "Hound track",
+      // "Trapper track", "Trapper harvest", "Mountaineer climb", "Elusive")
+      // — the engine checks the feat and applies its exact mechanic.
+      Feat: { type: 'string', required: false }
     }
   },
 

@@ -111,6 +111,7 @@ import { formatTurnAdvanceNote } from '../services/combatMarkerService.js';
 // Combat resolution (2026-11-23): registers ENEMY_FLEE / ENEMY_SURRENDER /
 // COMBAT_SETTLE, and records how a fight ended.
 import { encounterEnemies, fightOutcome } from '../services/combatResolutionService.js';
+import '../services/featMechanicsService.js'; // feat-addition-14: registers FEAT_USE + WINNING_WORDS
 // Player-rolls-out-of-combat (2026-11-23): Hit Dice and cold saves.
 import { settleOutOfCombatRoll, outOfCombatRollPrompts, reportedNumberList } from '../services/playerRollService.js';
 import { formatTurnStateBlock } from '../services/turnLedgerService.js';
@@ -1440,6 +1441,15 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       return res.status(400).json({ error: 'Session is not active' });
     }
 
+    // feat-addition-14: count the player's actions — outside a turn order
+    // the "this turn" feats (Elegant Maneuver, Seismic Touch) lapse on it.
+    try {
+      const { notePlayerAction } = await import('../services/featMechanicsService.js');
+      await notePlayerAction(parseInt(sessionId));
+      const freshCfg = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+      if (freshCfg) session.session_config = freshCfg.session_config;
+    } catch { /* the counter is best-effort */ }
+
     // ROLL_REQUEST resolution: if the DM asked for a check last turn, the
     // roll is pending on session_config. The player reports real dice —
     // structured (checkRoll/checkRoll2 body fields, the same channel as
@@ -1544,6 +1554,12 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     const engineLines = [];
     const engineFacts = [];
     if (perceptionBankNote) engineLines.push(perceptionBankNote);
+    if (rollOutcome?.contest) {
+      const c = rollOutcome.contest;
+      engineLines.push(c.won
+        ? `⚙ Winning Words: your Persuasion ${c.playerTotal} beats ${c.target}'s Insight — ${c.target} is charmed for 1 minute.`
+        : `⚙ Winning Words: your Persuasion ${c.playerTotal} does not beat ${c.target}'s Insight — no charm.`);
+    }
     let initiativeRes = null;
     let deathSaveRes = null;
     let concentrationRes = null;
@@ -1572,13 +1588,31 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     }
     if (!rollOutcome && !oocRoll) {
       try {
-        const d = reportedD20(action, Number.isInteger(checkRoll) ? checkRoll : dice.value.attackRoll);
+        let d = reportedD20(action, Number.isInteger(checkRoll) ? checkRoll : dice.value.attackRoll);
+        // feat-addition-14: while an initiative is pending, "14 3" (d20 +
+        // Tactician d4) and "14, swap with Lyra" also report the d20.
+        if (!d) {
+          const { getPendingInitiative } = await import('../services/combatLoopService.js');
+          const lead = String(action || '').trim().match(/^(\d{1,2})\b/);
+          if (lead && Number(lead[1]) >= 1 && Number(lead[1]) <= 20 && await getPendingInitiative(sidN)) d = [Number(lead[1])];
+        }
         if (d) {
-          initiativeRes = await resolvePlayerInitiative(sidN, d[0]);
-          if (initiativeRes) {
+          // feat-addition-14: Tactician's d4 is the player's second number;
+          // "swap with <ally>" (Alert / Tactician) rides the same reply.
+          const nums = (String(action || '').match(/\b\d{1,2}\b/g) || []).map(Number);
+          const { parseInitiativeSwap } = await import('../services/featMechanicsService.js');
+          initiativeRes = await resolvePlayerInitiative(sidN, d[0], {
+            extraRoll: nums.length >= 2 ? nums[1] : null,
+            swapWith: parseInitiativeSwap(action),
+          });
+          if (initiativeRes?.needsExtraDie) {
+            engineLines.push(`⚙ Initiative not settled: send your d20 AND your ${initiativeRes.needsExtraDie} (Tactician), e.g. "14 3".`);
+            initiativeRes = null;
+          } else if (initiativeRes) {
             rollMath.push(initiativeRes.math);
             engineFacts.push(formatInitiativeFact(initiativeRes));
             engineLines.push(`⚙ ${initiativeRes.math}. Turn order: ${initiativeRes.state.turnOrder.map((c) => `${c.name} ${c.initiative}`).join(', ')}.`);
+            if (initiativeRes.swap?.error) engineLines.push(`⚙ Initiative swap refused: ${initiativeRes.swap.error}.`);
           } else if ((concentrationRes = await resolvePendingConcentration(sidN, d[0]))) {
             rollMath.push(concentrationRes.math);
             engineLines.push(`⚙ ${concentrationRes.math}.${concentrationRes.broken ? ` ${concentrationRes.spell} ends.` : ''}`);
@@ -1872,6 +1906,11 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       let rollBlock = rollOutcome
         ? (rollOutcome.perceptionBank ? formatPerceptionBankBlock(rollOutcome) : formatRollOutcomeBlock(rollOutcome))
         : '';
+      // feat-addition-14 (Silver Tongue): the contest's result is a fact.
+      if (rollOutcome?.contest) {
+        const { formatContestFact } = await import('../services/featMechanicsService.js');
+        rollBlock += `\n\n${formatContestFact(rollOutcome.contest)}`;
+      }
       const freshCfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
       if (Array.isArray(freshCfg.recentRolls) && freshCfg.recentRolls.length > 0) {
         for (const r of freshCfg.recentRolls) rollBlock += r.perceptionUse ? formatPerceptionUseBlock(r) : formatRollOutcomeBlock(r);
@@ -2049,6 +2088,14 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       const apiSystemPromptBase = leanPrompt ? applyLeanTransforms(systemPrompt) : systemPrompt;
       const observationVerbInjection = detectObservationVerbs(action) ? OBSERVATION_AS_CHECK_BLOCK : '';
       const apiSystemPrompt = apiSystemPromptBase + observationVerbInjection;
+      // feat-addition-14: a held feat the player names in this action gets
+      // its marker directive next to the action (recency); the clean action
+      // is what persists (the swap-back below matches actionForLlm).
+      try {
+        const { featActionDirective } = await import('../services/featMechanicsService.js');
+        const fr = await dbGet('SELECT feats FROM characters WHERE id = ?', [session.character_id]);
+        actionForLlm += featActionDirective(fr?.feats, action);
+      } catch { /* the directive is best-effort */ }
       // Phase 4a SC-4a.1 — wrap with the call logger. wrapLlmCallWithId
       // returns { result: <continueSession return>, logId } so the marker
       // dispatch pass below can amend the row with markers_detected,
@@ -2741,7 +2788,13 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
         rollPrompts.push(`🎲 Roll ${two ? `two d20s (${pr.advantage}${pr.advantageReason ? `: ${pr.advantageReason}` : ''}) and send both` : 'a d20'} for ${/^[aeiou]/i.test(what) ? 'an' : 'a'} ${what} — the engine adds ${signedNum(add)} after.`);
       }
       if (pcfg.pendingInitiative) {
-        rollPrompts.push(`🎲 Roll a d20 for initiative — the engine adds ${signedNum(pcfg.pendingInitiative.modifier)} (Dex) after.`);
+        // feat-addition-14: Tactician adds the player's own d4; Alert's +PB
+        // is in the modifier; either feat offers the swap.
+        const pi = pcfg.pendingInitiative;
+        const modWhy = (pi.featReasons || []).length ? `(Dex${(pi.featReasons || []).map((r) => `, ${r.split(' ')[0]}`).join('')})` : '(Dex)';
+        rollPrompts.push(pi.extraDie
+          ? `🎲 Roll a d20 and a ${pi.extraDie} (Tactician) for initiative — send both, d20 first (e.g. "14 3"); the engine adds ${signedNum(pi.modifier)} ${modWhy} after.${pi.canSwap ? ' To swap with a willing ally, add "swap with <name>".' : ''}`
+          : `🎲 Roll a d20 for initiative — the engine adds ${signedNum(pi.modifier)} ${modWhy} after.${pi.canSwap ? ` ${(pi.swapSources || []).join('/')}: to swap with a willing ally, add "swap with <name>".` : ''}`);
       }
       if (pcfg.pendingConcentration?.dcs?.length) {
         const pc = pcfg.pendingConcentration;
@@ -2796,6 +2849,14 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       }
       // A Perception ROLL_REQUEST refused because the player holds a bank.
       if (hr.schemaKey === 'ROLL_REQUEST' && hr.result.refusedBankedPerception && hr.result.systemNote) {
+        result.messages.push({ role: 'user', content: hr.result.systemNote });
+      }
+      // feat-addition-14: feat markers always tell the DM what happened
+      // (used, refused, or a Feat= rider that did not apply).
+      if ((hr.schemaKey === 'FEAT_USE' || hr.schemaKey === 'WINNING_WORDS') && hr.result.systemNote) {
+        result.messages.push({ role: 'user', content: hr.result.systemNote });
+      }
+      if (hr.schemaKey === 'ROLL_REQUEST' && !hr.result.refusedBankedPerception && hr.result.systemNote) {
         result.messages.push({ role: 'user', content: hr.result.systemNote });
       }
     }

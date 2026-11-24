@@ -79,29 +79,64 @@ function sortOrder(order) {
  * modifier, slots the player into the order, and restarts round 1 at the
  * top. Returns { entry, state, math } or null when nothing is pending.
  */
-export async function resolvePlayerInitiative(sessionId, d20) {
+export async function resolvePlayerInitiative(sessionId, d20, { extraRoll = null, swapWith = null } = {}) {
   const die = Number(d20);
   if (!Number.isInteger(die) || die < 1 || die > 20) return null;
   const cfg = await readCfg(sessionId);
   const p = cfg.pendingInitiative;
   if (!p) return null;
+  // feat-addition-14 (Tactician): the player's own d4 joins the d20. A
+  // report without it leaves the initiative pending (refused, not guessed).
+  let extra = 0;
+  if (p.extraDie) {
+    const sides = Number(String(p.extraDie).replace(/^d/i, '')) || 4;
+    const x = Number(extraRoll);
+    if (!Number.isInteger(x) || x < 1 || x > sides) {
+      return { needsExtraDie: p.extraDie, name: p.name };
+    }
+    extra = x;
+  }
   delete cfg.pendingInitiative;
   await writeCfg(sessionId, cfg);
   const state = await getTurnState(sessionId, p.encounterSeq);
   const npcs = (state?.turnOrder || []).filter((c) => c.type !== 'player');
-  const entry = { name: p.name, type: 'player', key: p.key, roll: die, modifier: p.modifier || 0, initiative: die + (p.modifier || 0) };
-  const order = sortOrder([...npcs, entry]);
+  const total = die + extra + (p.modifier || 0);
+  const entry = { name: p.name, type: 'player', key: p.key, roll: die, modifier: p.modifier || 0, initiative: total, ...(p.extraDie ? { extraDie: p.extraDie, extraRoll: extra } : {}) };
+  let order = sortOrder([...npcs, entry]);
+  // Alert / Tactician swap: right after rolling, before the first turn,
+  // with a willing party member — once per combat (this is the one roll).
+  let swap = null;
+  if (swapWith) {
+    if (!p.canSwap) {
+      swap = { error: 'no feat lets the player swap initiative (Alert or Tactician)' };
+    } else {
+      const { applyInitiativeSwap } = await import('./featMechanicsService.js');
+      const r = applyInitiativeSwap(order, p.key, swapWith);
+      if (r.error) swap = { error: r.error };
+      else {
+        order = sortOrder(r.order);
+        swap = { ...r.swapped, source: (p.swapSources || []).join('/') };
+        entry.initiative = r.swapped.playerNow;
+      }
+    }
+  }
   await initializeTurnOrder(sessionId, p.encounterSeq, order);
   const fresh = await getTurnState(sessionId, p.encounterSeq);
-  const mod = p.modifier || 0;
-  const math = `Initiative: d20 ${die} ${mod >= 0 ? '+' : '−'} ${Math.abs(mod)} (Dex) = ${entry.initiative}`;
-  return { entry, state: fresh, encounterSeq: p.encounterSeq, math };
+  const dex = p.dexModifier ?? (p.modifier || 0);
+  const signed = (n) => `${n >= 0 ? '+' : '−'} ${Math.abs(n)}`;
+  const featPart = (p.featReasons || []).length ? ` ${(p.featReasons || []).map((r) => r.replace(/\+(\d+)/, '+ $1')).join(' ')}` : '';
+  const math = `Initiative: d20 ${die}${p.extraDie ? ` + ${p.extraDie} ${extra} (Tactician)` : ''} ${signed(dex)} (Dex)${featPart} = ${total}` +
+    (swap && !swap.error ? `; swapped with ${swap.with} (${swap.source}) → ${swap.playerNow}` : '');
+  return { entry, state: fresh, encounterSeq: p.encounterSeq, math, swap };
 }
 
 export function formatInitiativeFact(res) {
   if (!res?.state) return '';
   const order = res.state.turnOrder.map((c) => `${c.name} (${c.initiative})`).join(', ');
-  return `[INITIATIVE — system fact: ${res.entry.name} rolled ${res.entry.roll} + ${res.entry.modifier} = ${res.entry.initiative}. ` +
+  const d4 = res.entry.extraDie ? ` + ${res.entry.extraRoll} (Tactician ${res.entry.extraDie})` : '';
+  const swap = res.swap && !res.swap.error ? ` Then ${res.entry.name} swapped initiative with ${res.swap.with} (${res.swap.source}): ${res.entry.name} ${res.swap.playerNow}, ${res.swap.with} ${res.swap.allyNow}.` : '';
+  const swapRefused = res.swap?.error ? ` The initiative swap was refused: ${res.swap.error}.` : '';
+  return `[INITIATIVE — system fact: ${res.entry.name} rolled ${res.entry.roll}${d4} + ${res.entry.modifier} = ${res.entry.roll + (res.entry.extraRoll || 0) + res.entry.modifier}.${swap}${swapRefused} ` +
     `Turn order: ${order}. ${res.state.currentTurn?.name} acts first. The engine runs every turn from here.]`;
 }
 

@@ -435,5 +435,172 @@
     ],
     "prerequisites": null,
     "abilityIncrease": { "choice": ["str", "dex"], "amount": 1 }
+  },
+  "tactician": {
+    "name": "Tactician",
+    "description": "You read the start of a fight faster than anyone:",
+    "benefits": [
+      "When you roll initiative, roll a d4 and add it to your initiative",
+      "After rolling initiative but before the first turn, you may swap initiative with a willing creature, once per combat"
+    ],
+    "prerequisites": null,
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "sage_advice": {
+    "name": "Sage Advice",
+    "description": "Your counsel makes others better at what you know:",
+    "benefits": [
+      "Spend 10 minutes advising: choose a skill or tool you are proficient with",
+      "Up to 6 friendly creatures within 30 ft who can hear and understand you may each, once within the next hour, add their proficiency bonus to one ability check with that skill or tool, if they are not already proficient in it",
+      "Uses equal to your proficiency bonus; regain on a long rest"
+    ],
+    "prerequisites": null,
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "hound": {
+    "name": "Hound",
+    "description": "Your nose leads you where eyes cannot:",
+    "benefits": [
+      "Increase your Wisdom by 1 (max 20)",
+      "Advantage on Perception checks based on smell",
+      "Smell an object worn or used by a creature within the last 10 days: +5 to Perception and Survival checks to track that creature, until a long rest"
+    ],
+    "prerequisites": null,
+    "abilityIncrease": {
+      "ability": "wis",
+      "amount": 1
+    },
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "feather_foot": {
+    "name": "Feather Foot",
+    "description": "You move so lightly the ground barely notices:",
+    "benefits": [
+      "Increase your Dexterity by 1 (max 20)",
+      "Use Dexterity instead of Strength for jump distance and height",
+      "Your footsteps do not trigger non-magical pressure-based traps"
+    ],
+    "prerequisites": "Dexterity 13 or higher",
+    "prerequisiteScore": {
+      "dex": 13
+    },
+    "abilityIncrease": {
+      "ability": "dex",
+      "amount": 1
+    },
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "seismic_touch": {
+    "name": "Seismic Touch",
+    "description": "You feel the world through the ground:",
+    "benefits": [
+      "As an action, touch a solid surface and gain 60 ft tremorsense until the start of your next turn"
+    ],
+    "prerequisites": null,
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "trapper": {
+    "name": "Trapper",
+    "description": "You hunt like the wild things you track:",
+    "benefits": [
+      "Increase your Wisdom by 1 (max 20)",
+      "You learn Hunter's Mark: cast it twice per long rest as a 1st-level spell without a spell slot, and with spell slots beyond that, using Wisdom as your spellcasting ability",
+      "Advantage on Survival checks to track or hunt beasts and creatures with Intelligence 8 or lower",
+      "Advantage on checks to skin, extract, and preserve precious organs from creatures you have researched or hunted for at least 1 week of downtime"
+    ],
+    "prerequisites": null,
+    "abilityIncrease": {
+      "ability": "wis",
+      "amount": 1
+    },
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "friend_of_the_forest": {
+    "name": "Friend of the Forest",
+    "description": "The beasts of the wild talk to you:",
+    "benefits": [
+      "You understand and can speak with beasts",
+      "Beasts can give you information about nearby locations and monsters, including what they perceived within the past day"
+    ],
+    "prerequisites": null,
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "elusive": {
+    "name": "Elusive",
+    "description": "You and yours leave no trail:",
+    "benefits": [
+      "Increase your Dexterity by 1 (max 20)",
+      "You and up to 10 companions within 60 ft travel at a normal pace while stealthing (at a slow pace, +5 to Stealth instead)",
+      "Creatures have disadvantage on Perception and Survival checks to track you"
+    ],
+    "prerequisites": "Dexterity 13 or higher",
+    "prerequisiteScore": {
+      "dex": 13
+    },
+    "abilityIncrease": {
+      "ability": "dex",
+      "amount": 1
+    },
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "sling_expert": {
+    "name": "Sling Expert",
+    "description": "In your hand a sling is a deadly weapon:",
+    "benefits": [
+      "Sling attacks deal +1d4 damage when the target is within the sling's first range increment",
+      "+1d4 more if the target is one size larger than you",
+      "After taking the Attack action with a sling, you can make one additional sling attack as a bonus action"
+    ],
+    "prerequisites": null,
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "mountaineer": {
+    "name": "Mountaineer",
+    "description": "Cliffs and crags are your road:",
+    "benefits": [
+      "Climbing speed equals your walking speed",
+      "Reduce falling damage by your level",
+      "Advantage on Athletics checks for climbing"
+    ],
+    "prerequisites": null,
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "quick_draw": {
+    "name": "Quick Draw",
+    "description": "Your ranged weapon is never out of the fight:",
+    "benefits": [
+      "While wielding a ranged or thrown weapon, creatures provoke an opportunity attack from you when they move within 5 feet of you",
+      "Ranged weapons used as improvised weapons deal d4 damage and you are proficient with them"
+    ],
+    "prerequisites": null,
+    "source": "Homebrew — feat PDFs (Zach-supplied; PM research 2026-11-20)"
+  },
+  "silver_tongue": {
+    "name": "Silver Tongue",
+    "description": "Your words can win over almost anyone:",
+    "benefits": [
+      "Increase your Charisma by 1 (max 20)",
+      "Winning Words: as an action, make a Charisma (Persuasion) check contested by a creature's Wisdom (Insight) check. The creature must be able to hear you and you must share a language",
+      "If you succeed and the creature isn't hostile to you, it is Charmed for 1 minute and regards you as a friendly acquaintance; it ends immediately if you or your companions do anything harmful to it",
+      "No usage limit"
+    ],
+    "prerequisites": "Charisma 13 or higher",
+    "prerequisiteScore": {
+      "cha": 13
+    },
+    "abilityIncrease": {
+      "ability": "cha",
+      "amount": 1
+    },
+    "source": "Homebrew — adaptation of Xanathar's Guide to Everything"
+  },
+  "elegant_maneuver": {
+    "name": "Elegant Maneuver",
+    "description": "You move with a duelist's grace:",
+    "benefits": [
+      "As a bonus action, gain advantage on the next Dexterity (Acrobatics) or Strength (Athletics) check you make this turn"
+    ],
+    "prerequisites": null,
+    "source": "Homebrew — adaptation of Xanathar's Guide to Everything"
   }
 }

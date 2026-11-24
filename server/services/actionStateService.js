@@ -146,7 +146,10 @@ export async function getEntry(sessionId, encounterSeq, key) {
   if (!entry || typeof entry !== 'object') return {};
   const pos = await currentPos(sessionId, encounterSeq);
   let changed = false;
-  for (const field of ['dodge', 'disengage', 'help', 'ready', 'shield', 'absorb']) {
+  // feat-addition-14: 'elegant' (Elegant Maneuver, ends with this turn)
+  // and 'tremorsense' (Seismic Touch, ends at the start of the owner's
+  // next turn) expire on the same lazy `until` read.
+  for (const field of ['dodge', 'disengage', 'help', 'ready', 'shield', 'absorb', 'elegant', 'tremorsense']) {
     if (entry[field] && !timedActive(entry[field], pos)) {
       // A readied spell expiring unused ends the hold: the
       // concentration on the held spell ends with it (the slot

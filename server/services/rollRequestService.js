@@ -194,7 +194,7 @@ export async function getNpcCheckModifier(actorName, kind, name, characterId = n
             { ability_scores: scoresJson, skills: skillsJson, level: comp.companion_level || 1, class: comp.companion_class, frost_exhaustion: comp.frost_exhaustion }, 
             kind, name
           );
-          if (mod) return { modifier: mod.modifier, actorType: 'companion' };
+          if (mod) return { modifier: mod.modifier, actorType: 'companion', proficient: mod.proficient };
         }
         // npc_stats companions keep their stat block: CR-scaled competence.
         const snap = safeParse(comp.original_stats_snapshot, null);
@@ -401,7 +401,7 @@ export async function getPendingRoll(sessionId) {
 
 /** Create the pending roll for a PC [ROLL_REQUEST]. One at a time — a new
  *  request replaces an unresolved one (the DM re-asked; the fiction moved). */
-export async function requestPcRoll({ sessionId, characterId, kind, name, dc, looks, advantage = null, advantageReason = null }) {
+export async function requestPcRoll({ sessionId, characterId, kind, name, dc, looks, advantage = null, advantageReason = null, featBonus = 0 }) {
   const mod = await getPcCheckModifier(characterId, kind, name);
   if (!mod) return { success: false, reason: `unknown ${kind}: ${name}` };
   // Conditions: poisoned / frightened impose disadvantage (merged with
@@ -457,6 +457,9 @@ export async function requestPcRoll({ sessionId, characterId, kind, name, dc, lo
     advantage: effAdvantage, advantageReason: effReason,
     modifier: mod.modifier, proficient: mod.proficient,
     penalty, subclassBonus, subclassBonusDice,
+    // feat-addition-14: a flat feat rider (Hound +5 tracking), folded
+    // into the total at resolution like the subclass bonus.
+    ...(featBonus ? { featBonus } : {}),
     requestedAt: new Date().toISOString()
   };
   const cfg = await readSessionConfig(sessionId);
@@ -493,7 +496,8 @@ export async function resolveReportedRoll(sessionId, dice) {
   // records the effective modifier so total = takenDie + modifier holds.
   // Family 6: the stored subclass bonus folds in the same way.
   const penalty = pending.penalty || 0;
-  const subclassBonus = pending.subclassBonus || 0;
+  // feat-addition-14: the feat rider's flat bonus joins the subclass bonus.
+  const subclassBonus = (pending.subclassBonus || 0) + (pending.featBonus || 0);
   const res = resolveDice({ dice, modifier: pending.modifier + penalty + subclassBonus, dc: pending.dc, advantage: pending.advantage });
   const rollId = await logRoll({
     sessionId, campaignId: character?.campaign_id ?? null,
@@ -517,9 +521,21 @@ export async function resolveReportedRoll(sessionId, dice) {
     heroicInspiration = { available: !!held.held };
   } catch { /* best-effort — the resolved roll stands either way */ }
 
+  // feat-addition-14 (Silver Tongue): a contested roll settles here — the
+  // NPC's Insight total was rolled at request time; the charm is applied
+  // on a win.
+  let contestResult = null;
+  if (pending.contest) {
+    try {
+      const { settleContest } = await import('./featMechanicsService.js');
+      contestResult = await settleContest(sessionId, pending.contest, res);
+    } catch (e) { console.warn('[rollRequestService] contest settle failed (non-fatal):', e.message); }
+  }
+
   return { rollId, check: pending.name, kind: pending.kind, dc: pending.dc,
            modifier: pending.modifier, penalty, subclassBonus, dice, ...res,
            ...(pending.reroll ? { rerolledFrom: pending.rerollFrom || null, reroll: pending.reroll } : {}),
+           ...(contestResult ? { contest: contestResult } : {}),
            heroicInspiration };
 }
 
@@ -527,8 +543,17 @@ export async function resolveReportedRoll(sessionId, dice) {
 // Server-side rolls (companions / NPCs / enemies)
 // ---------------------------------------------------------------------------
 
-export async function rollForNpc({ sessionId = null, characterId = null, actorName, kind, name, dc, advantage = null, context = null, hearing = false, rerollWithHeroic = false }) {
+export async function rollForNpc({ sessionId = null, characterId = null, actorName, kind, name, dc, advantage = null, context = null, hearing = false, rerollWithHeroic = false, featBonus = 0, featReason = null }) {
   const modInfo = await getNpcCheckModifier(actorName, kind, name, characterId);
+  // feat-addition-14 (Sage Advice): an advised ally who is not proficient
+  // adds the advisor's PB once; spent on this roll.
+  if (kind === 'skill' && sessionId) {
+    try {
+      const { consumeSageAdvice } = await import('./featMechanicsService.js');
+      const sa = await consumeSageAdvice(sessionId, actorName, kind, name, modInfo.proficient);
+      if (sa) { featBonus += sa.bonus; featReason = [featReason, sa.reason].filter(Boolean).join('; '); }
+    } catch { /* best-effort */ }
+  }
   // Conditions (v1.0.190): companions carry durable conditions like the
   // PC. Auto-fail saves short-circuit — no roll is possible — and
   // condition disadvantage merges with any marker-declared state.
@@ -631,6 +656,12 @@ export async function rollForNpc({ sessionId = null, characterId = null, actorNa
         }
       }
     } catch { /* best-effort; fall through to the normal roll */ }
+  }
+  // feat-addition-14: a flat feat bonus (Sage Advice) rides the subclass
+  // bonus slot, so the log's total = takenDie + modifier still holds.
+  if (featBonus) {
+    subBonus += featBonus;
+    if (featReason) { subReasons = [...subReasons, featReason]; context = [context, featReason].filter(Boolean).join('; '); }
   }
   let dice = effAdvantage ? [rollD20(`roll-request:${actorName}`), rollD20(`roll-request:${actorName}`)]
                           : [rollD20(`roll-request:${actorName}`)];
@@ -871,7 +902,10 @@ registerMarkerHandler('ROLL_REQUEST', async (parsed, context) => {
       // searches on ROLL_REQUEST).
       // A hearing-tagged request (listening for the patrol) is not the
       // hidden layer, and a deafened roller auto-fails it below.
+      // feat-addition-14: a Hound scent check is a declared sense, like a
+      // hearing-tagged one — it rolls openly.
       if (kind === 'skill' && /^perception$/i.test(String(name).trim()) && !parsed?.Hearing
+          && !/^\s*hound\b/i.test(String(parsed?.Feat || ''))
           && !ACTIVE_SEARCH_RE.test(String(context.playerAction || ''))
           && !(await pcHasCheckHelp(context, kind, name))) {
         const { pcCoveredByBank, getActiveDungeon, bankAtDoor } = await import('./perceptionPreRollService.js');
@@ -988,13 +1022,39 @@ registerMarkerHandler('ROLL_REQUEST', async (parsed, context) => {
           pcAdvantageReason = [pcAdvantageReason, dodge.reason].filter(Boolean).join('; ');
         }
       }
+      // feat-addition-14: Elegant Maneuver's stored advantage is spent on
+      // the next Acrobatics/Athletics check (this turn only — the field
+      // lapses with the turn), and a Feat= situation applies its rider.
+      let featBonus = 0;
+      let featNote = null;
+      if (kind !== 'save') {
+        try {
+          const fm = await import('./featMechanicsService.js');
+          const em = await fm.consumeElegantManeuver(context.sessionId, context.characterId, kind, name);
+          if (em) {
+            pcAdvantage = mergeAdvantageState(pcAdvantage, 'advantage');
+            pcAdvantageReason = [pcAdvantageReason, em.reason].filter(Boolean).join('; ');
+          }
+          if (parsed?.Feat) {
+            const rider = await fm.judgeFeatRider(context.characterId, parsed.Feat, kind, name, true);
+            if (rider?.applies) {
+              if (rider.effect === 'advantage') pcAdvantage = mergeAdvantageState(pcAdvantage, 'advantage');
+              if (rider.effect === 'bonus') featBonus += rider.bonus;
+              pcAdvantageReason = [pcAdvantageReason, rider.reason].filter(Boolean).join('; ');
+            } else if (rider) {
+              featNote = `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Feat="${parsed.Feat}" did not apply to this ${name} check — ${rider.reason}. The roll goes ahead without it.`;
+            }
+          }
+        } catch { /* feat riders are best-effort; the roll itself must not fail */ }
+      }
       const r = await requestPcRoll({
         sessionId: context.sessionId, characterId: context.characterId,
-        kind, name, dc, looks: parsed?.Looks || null, advantage: pcAdvantage, advantageReason: pcAdvantageReason
+        kind, name, dc, looks: parsed?.Looks || null, advantage: pcAdvantage, advantageReason: pcAdvantageReason, featBonus
       });
       if (!r.success) return { type: 'roll_request', success: false, reason: r.reason };
       return { type: 'roll_request', success: true, pending: true, actor: 'Player',
-               check: name, kind, modifier: r.pending.modifier, advantage: r.pending.advantage };
+               check: name, kind, modifier: r.pending.modifier, advantage: r.pending.advantage,
+               ...(featBonus ? { featBonus } : {}), ...(featNote ? { systemNote: featNote } : {}) };
     }
 
     // Everyone else rolls server-side, immediately. The outcome is stashed
@@ -1023,6 +1083,21 @@ registerMarkerHandler('ROLL_REQUEST', async (parsed, context) => {
         npcContext = [npcContext, dodge.reason].filter(Boolean).join('; ');
       }
     }
+    // feat-addition-14 (Elusive): a creature tracking the player rolls
+    // Perception/Survival with disadvantage when the player has Elusive.
+    let npcFeatNote = null;
+    if (parsed?.Feat && kind !== 'save') {
+      try {
+        const { judgeFeatRider } = await import('./featMechanicsService.js');
+        const rider = await judgeFeatRider(context.characterId, parsed.Feat, kind, name, false);
+        if (rider?.applies && rider.effect === 'disadvantage') {
+          npcAdvantage = mergeAdvantageState(npcAdvantage, 'disadvantage');
+          npcContext = [npcContext, rider.reason].filter(Boolean).join('; ');
+        } else if (rider && !rider.applies) {
+          npcFeatNote = `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Feat="${parsed.Feat}" did not apply to ${actor}'s ${name} check — ${rider.reason}.`;
+        }
+      } catch { /* best-effort */ }
+    }
     const r = await rollForNpc({
       sessionId: context.sessionId, characterId: context.characterId,
       actorName: actor, kind, name, dc, advantage: npcAdvantage, context: npcContext,
@@ -1034,7 +1109,7 @@ registerMarkerHandler('ROLL_REQUEST', async (parsed, context) => {
       cfg.recentRolls = [...prior, r].slice(-5);
       await writeSessionConfig(context.sessionId, cfg);
     } catch { /* best-effort — the roll is still in roll_log */ }
-    return { type: 'roll_request', success: true, pending: false, ...r };
+    return { type: 'roll_request', success: true, pending: false, ...r, ...(npcFeatNote ? { systemNote: npcFeatNote } : {}) };
   } catch (e) {
     console.error('[rollRequestService] ROLL_REQUEST handler failed:', e.message);
     return null;

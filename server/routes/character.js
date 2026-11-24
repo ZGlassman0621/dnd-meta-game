@@ -88,7 +88,8 @@ import { ARMOR_DATA } from '../services/combatStatsService.js';
 import { shieldBonusForOffHand } from '../data/armsArmorVariants.js';
 import { STARTING_PACKAGES } from '../data/startingPackages.js';
 import { resolvePackage, validatePackageChoice, listPackageOptions, computeGoldFork } from '../services/packageResolutionService.js';
-import { getFeatEffect, listFightingStyleFeats, normalizeFeatName } from '../data/featRegistry.js';
+import { getFeatEffect, listFightingStyleFeats, normalizeFeatName, featPrerequisiteMet } from '../data/featRegistry.js';
+import { initialFeatUses, energyAffinityGrant } from '../services/featMechanicsService.js';
 import {
   validateMixedAncestry,
   mixedAncestrySpeciesLabel,
@@ -315,6 +316,14 @@ function originSubchoicePicks(choices) {
 function validateOriginFeatChoices(entry, choices, field, fixedList, themeName) {
   const errs = [];
   if (choices == null) return errs;
+  // HOMEBREW feat-addition-14: Energy Affinity's one choice.
+  if (entry.key === 'energy_affinity') {
+    const raw = typeof choices === 'object' && !Array.isArray(choices) ? (choices.affinity ?? null) : null;
+    if (raw != null && !['mind', 'soul', 'death'].includes(String(raw).trim().toLowerCase())) {
+      errs.push(`${field}: Energy Affinity's affinity must be Mind, Soul, or Death`);
+    }
+    return errs;
+  }
   if (entry.key === 'magic_initiate') {
     if (typeof choices !== 'object' || Array.isArray(choices)) {
       errs.push(`${field}: Magic Initiate choices must be an object { spell_list, spellcasting_ability, cantrips, level1_spell }`);
@@ -2199,6 +2208,13 @@ function creatorNextAncestryListInfo(race, subrace) {
 function stage6OriginFeatChoicesComplete(entry, choices, field, fixedList, themeName) {
   const errs = [];
   if (!entry) return errs;
+  if (entry.key === 'energy_affinity') {
+    const raw = choices && typeof choices === 'object' && !Array.isArray(choices) ? choices.affinity : null;
+    if (!['mind', 'soul', 'death'].includes(String(raw || '').trim().toLowerCase())) {
+      errs.push(`${field}: Energy Affinity needs its affinity at Review — Mind, Soul, or Death`);
+    }
+    return errs;
+  }
   if (entry.key === 'magic_initiate') {
     if (choices == null || typeof choices !== 'object' || Array.isArray(choices)) {
       errs.push(`${field}: Magic Initiate needs its full choices at Review — spell list, spellcasting ability, 2 cantrips, and a level 1 spell`);
@@ -2257,6 +2273,17 @@ async function stage6CheckCantrips(merged, cls, subclass, race, subrace, mixedCo
       for (const c of choicesRaw.cantrips) {
         if (typeof c === 'string' && c.trim()) featCantrips.push(c.trim());
       }
+    }
+  }
+  // HOMEBREW feat-addition-14: Energy Affinity grants the chosen
+  // affinity's cantrip (granted — never counts against cantrips known).
+  for (const [featRaw, choicesRaw] of [
+    [merged.origin_feat ?? merged.originFeat ?? null, merged.origin_feat_choices ?? merged.originFeatChoices ?? null],
+    [merged.versatile_feat ?? merged.versatileFeat ?? null, merged.versatile_feat_choices ?? merged.versatileFeatChoices ?? null],
+  ]) {
+    if (featRaw && normFeatKey(canonicalOriginFeatKey(featRaw)) === 'energy affinity') {
+      const g = energyAffinityGrant(choicesRaw);
+      if (g) featCantrips.push(g.cantrip);
     }
   }
   const ancFeatId = merged.ancestry_feat_id ?? merged.ancestryFeatId ?? null;
@@ -7116,16 +7143,39 @@ router.post('/level-up/:id', async (req, res) => {
           }
         }
       } else if (asiChoice.type === 'feat' && asiChoice.feat) {
+        // feat-addition-14: registry feats that carry structured fields are
+        // checked here — the prerequisite (Feather Foot / Elusive Dex 13+,
+        // Silver Tongue Cha 13+), the half-feat +1 (only the feat's own
+        // ability), and no +1 at all for a registry feat without one
+        // (Mountaineer). Feats known only to the client catalog keep the
+        // old trust-the-client behavior.
+        const regEntry = getFeatEffect(asiChoice.featName || asiChoice.feat) || getFeatEffect(asiChoice.feat);
+        if (regEntry && regEntry.source === 'homebrew' && regEntry.rulesetId && regEntry.engine) {
+          if (!featPrerequisiteMet(regEntry, abilityScores)) {
+            return res.status(400).json({ error: `${regEntry.name} requires ${regEntry.prerequisite?.text || 'a prerequisite you do not meet'}` });
+          }
+          const want = regEntry.abilityIncrease?.ability || null;
+          const sent = asiChoice.featAbilityChoice ? String(asiChoice.featAbilityChoice).toLowerCase() : null;
+          if (!want && sent) {
+            return res.status(400).json({ error: `${regEntry.name} grants no ability score increase` });
+          }
+          if (want && sent && sent !== want) {
+            return res.status(400).json({ error: `${regEntry.name} increases ${want.toUpperCase()} only` });
+          }
+          if (want && !sent) asiChoice.featAbilityChoice = want;
+        }
         // Feat-instead-of-ASI: append the chosen feat to the character's feats
         // JSON array using the same shape as the character creation wizard
         // (so downstream consumers — character sheet, DM prompt — see a unified list).
         const existingFeats = safeParse(character.feats, []);
+        const featUses = regEntry ? initialFeatUses(regEntry, newTotalLevel) : null;
         existingFeats.push({
           key: asiChoice.feat,
           name: asiChoice.featName || asiChoice.feat,
           abilityChoice: asiChoice.featAbilityChoice || null,
           choices: asiChoice.featChoices || null,
-          acquiredAtLevel: newTotalLevel
+          acquiredAtLevel: newTotalLevel,
+          ...(featUses ? { uses: featUses } : {})
         });
 
         // Some feats grant +1 to a chosen ability score (half-ASI feats like

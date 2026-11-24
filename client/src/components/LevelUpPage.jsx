@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import classesData from '../data/classes.json'
 import spellsData from '../data/spells/index.js'
 import featsData from '../data/feats.json'
+import { featAbilityOptions, featPrerequisiteMet } from './featPickHelpers.js'
 import { STANDARD_TEXTS, RARE_TEXTS, RECITATIONS, SUBCLASS_TEXTS } from '../data/keeperTexts.js'
 import { SPELLBOOK_START_SIZE } from './spellbookHelpers.js'
 
@@ -1333,7 +1334,9 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                         value={selectedFeatKey}
                         onChange={e => {
                           setSelectedFeatKey(e.target.value)
-                          setSelectedFeatAbility('')
+                          // A fixed +1 (Actor: Cha) needs no choice — preselect it.
+                          const opts = featAbilityOptions(featsData[e.target.value])
+                          setSelectedFeatAbility(opts.length === 1 ? opts[0] : '')
                         }}
                         style={{
                           width: '100%', padding: '0.5rem',
@@ -1343,9 +1346,14 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                         }}
                       >
                         <option value="">Select a feat...</option>
-                        {Object.entries(featsData).map(([key, f]) => (
-                          <option key={key} value={key}>{f.name}</option>
-                        ))}
+                        {Object.entries(featsData).map(([key, f]) => {
+                          const ok = featPrerequisiteMet(f, currentAbilityScores)
+                          return (
+                            <option key={key} value={key} disabled={!ok}>
+                              {f.name}{ok ? '' : ` (requires ${f.prerequisites})`}
+                            </option>
+                          )
+                        })}
                       </select>
                     </div>
 
@@ -1387,10 +1395,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                               }}
                             >
                               <option value="">Select ability...</option>
-                              {(Array.isArray(featsData[selectedFeatKey].abilityIncrease)
-                                ? featsData[selectedFeatKey].abilityIncrease
-                                : Object.keys(featsData[selectedFeatKey].abilityIncrease || {})
-                              ).map(ab => (
+                              {featAbilityOptions(featsData[selectedFeatKey]).map(ab => (
                                 <option key={ab} value={ab}>{ab.toUpperCase()}</option>
                               ))}
                             </select>

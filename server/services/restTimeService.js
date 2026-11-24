@@ -784,6 +784,16 @@ export async function applyRest({ sessionId = null, characterId, type, actor = n
   const results = [];
   if (pcTarget) results.push(await restPc(pc, type, dice));
   for (const comp of compTargets) results.push(await restCompanion(comp, type, dice));
+  // HOMEBREW feat-addition-14: long-rest feat counters (Sage Advice,
+  // Trapper's free Hunter's Mark) refill on the PC's long rest.
+  if (pcTarget && type === 'long') {
+    try {
+      const { resetFeatUses } = await import('./featMechanicsService.js');
+      const reset = await resetFeatUses(pc.id, 'long');
+      const pcDetail = results.find(r => r.kind === 'pc');
+      if (pcDetail && reset.length) pcDetail.featUsesReset = reset;
+    } catch (e) { console.error('[restTimeService] feat use reset failed:', e.message); }
+  }
 
   // The player's Hit Dice wait on their own dice (pendingHitDice). A
   // new short rest replaces an unanswered ask; a long rest clears it.
@@ -923,6 +933,11 @@ export async function applyDowntimeRest({ characterId, type }) {
       await resetMythicPower(pc.id);
       mythicPowerReset = true;
     } catch { /* no mythic record is fine */ }
+    // HOMEBREW feat-addition-14: same feat counter refill as a DM long rest.
+    try {
+      const { resetFeatUses } = await import('./featMechanicsService.js');
+      await resetFeatUses(pc.id, 'long');
+    } catch { /* best-effort — the rest already landed */ }
     await applyResourceRest('characters', pc.id, pc.class_resources_json, pc.class, pc.level, 'long', {
       subclassName: pc.subclass ?? null, classLevels: pc.class_levels ?? null,
       abilityScores: pc.ability_scores, species: pc.race ?? null, subrace: pc.subrace ?? null,

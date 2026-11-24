@@ -80,6 +80,94 @@ const FIGHTING_STYLE_FEATS = [
   { key: 'unarmed_fighting', name: 'Unarmed Fighting', category: 'fighting_style', effect: 'Unarmed strikes deal 1d6 + Strength bludgeoning damage, or 1d8 if you are not wielding weapons or a shield' },
 ];
 
+// HOMEBREW — feat-addition-14 (Zach 2026-11-21 / 2026-11-22; brief
+// docs/pm/feat-addition-14/BRIEF.md). Fourteen feats that are NOT 2024
+// book feats: twelve from the four feat PDFs Zach supplied (PM research
+// 2026-11-20) and two homebrew adaptations of Xanathar's Guide to
+// Everything. Kept in their own list, tagged source 'homebrew' with a
+// ruleset id, so the 2024 CORE_FEATS above stay pure book text and these
+// can be listed, toggled and audited separately. `effect` is the brief's
+// mechanic, verbatim in substance. Structured fields the engine reads:
+//   abilityIncrease { ability, max } — the half-feat +1 (five feats only)
+//   prerequisite    { ability, min, text } — enforced at level-up
+//   choices         — the origin pick's sub-choice (Energy Affinity)
+//   engine          — the enforcement route, stated per feat (report §per-feat)
+// sourcePdf: the brief names a PDF only for Mountaineer (the DNDBlue copy);
+// for the other eleven PDF feats it does not say which of the four PDFs
+// each came from, so the field is null rather than guessed (report
+// question). Mountaineer has NO ability increase (the Book of Revised
+// Feats "+5" is a typo, not taken).
+const PDF_FEATS_RULESET = { rulesetId: 'feat_pdfs_2026_11', rulesetName: 'Feat PDFs (Zach-supplied; PM research 2026-11-20)' };
+const XGE_ADAPTATION_RULESET = { rulesetId: 'homebrew_xge_adaptations', rulesetName: "Homebrew adaptations of Xanathar's Guide to Everything" };
+const ADDED_FEATS = [
+  { key: 'tactician', name: 'Tactician', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: null,
+    effect: 'When you roll initiative, roll a d4 and add it to your initiative. After rolling initiative but before the first turn, you may swap initiative with a willing creature, once per combat (stacks with Alert)',
+    engine: 'initiative' },
+  { key: 'sage_advice', name: 'Sage Advice', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: null,
+    effect: 'Spend 10 minutes advising: choose a skill or tool you are proficient with; up to 6 friendly creatures within 30 ft who can hear and understand you each, once within the next hour, may add their proficiency bonus to one ability check with the chosen skill or tool, if they are not already proficient in it. Uses equal to your proficiency bonus; regain on a long rest',
+    uses: { max: 'pb', reset: 'long' }, engine: 'feat_use' },
+  { key: 'hound', name: 'Hound', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: null,
+    abilityIncrease: { ability: 'wis', max: 20 },
+    effect: '+1 Wisdom (max 20). Advantage on Perception checks based on smell. Smell an object worn or used by a creature within the last 10 days: +5 to Perception/Survival checks to track that creature, until a long rest',
+    engine: 'check_rider' },
+  { key: 'feather_foot', name: 'Feather Foot', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: null,
+    abilityIncrease: { ability: 'dex', max: 20 }, prerequisite: { ability: 'dex', min: 13, text: 'Dexterity 13 or higher' },
+    effect: '+1 Dexterity (max 20). Use Dexterity instead of Strength for jump distance and height. Your footsteps do not trigger non-magical pressure-based traps',
+    engine: 'dm_prompt' },
+  { key: 'seismic_touch', name: 'Seismic Touch', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: null,
+    effect: 'As an action, touch a solid surface and gain 60 ft tremorsense until the start of your next turn',
+    engine: 'feat_use' },
+  { key: 'trapper', name: 'Trapper', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: null,
+    abilityIncrease: { ability: 'wis', max: 20 },
+    grantedSpells: ["Hunter's Mark"], uses: { max: 2, reset: 'long', spell: "Hunter's Mark", level: 1 },
+    effect: "+1 Wisdom (max 20). You learn Hunter's Mark: cast it twice per long rest as a 1st-level spell without expending a slot, and with spell slots beyond that, using Wisdom as your spellcasting ability. Advantage on Survival checks to track or hunt beasts and creatures with Intelligence 8 or lower. Advantage on checks to skin, extract, and preserve precious organs from creatures you have researched or hunted for at least 1 week of downtime",
+    engine: 'free_cast+check_rider' },
+  { key: 'friend_of_the_forest', name: 'Friend of the Forest', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: null,
+    effect: 'You understand and can speak with beasts. Beasts can give you information about nearby locations and monsters, including what they perceived within the past day',
+    engine: 'dm_prompt' },
+  { key: 'elusive', name: 'Elusive', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: null,
+    abilityIncrease: { ability: 'dex', max: 20 }, prerequisite: { ability: 'dex', min: 13, text: 'Dexterity 13 or higher' },
+    effect: '+1 Dexterity (max 20). You and up to 10 companions within 60 ft travel at a normal pace while stealthing (at a slow pace, +5 to Stealth instead); creatures have disadvantage on Perception/Survival checks to track you',
+    engine: 'check_rider+dm_prompt' },
+  { key: 'sling_expert', name: 'Sling Expert', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: null,
+    effect: 'Sling attacks deal +1d4 damage when the target is within the sling\'s first range increment, +1d4 more if the target is one size larger than you. After taking the Attack action with a sling, you can make one additional sling attack as a bonus action',
+    engine: 'damage_dice' },
+  { key: 'mountaineer', name: 'Mountaineer', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: 'DNDBlue Feat Collection v2.4',
+    effect: 'Climbing speed equals your walking speed. Reduce falling damage by your level. Advantage on Athletics checks for climbing',
+    engine: 'check_rider+dm_prompt' },
+  { key: 'energy_affinity', name: 'Energy Affinity', category: 'origin', ...PDF_FEATS_RULESET, sourcePdf: null,
+    choices: { affinity: { mind: { resistance: 'psychic', cantrip: 'Mind Sliver' }, soul: { resistance: 'radiant', cantrip: 'Sacred Flame' }, death: { resistance: 'necrotic', cantrip: 'Toll the Dead' } } },
+    effect: 'Choose one: Mind — psychic resistance + the Mind Sliver cantrip; Soul — radiant resistance + the Sacred Flame cantrip; Death — necrotic resistance + the Toll the Dead cantrip. The cantrip is granted, never counted against cantrips known or prepared',
+    engine: 'resistance+granted_cantrip' },
+  { key: 'quick_draw', name: 'Quick Draw', category: 'general', ...PDF_FEATS_RULESET, sourcePdf: null,
+    effect: 'While wielding a ranged or thrown weapon, creatures provoke an opportunity attack from you when they move within 5 feet of you. Ranged weapons used as improvised weapons deal d4 damage and you are proficient with them',
+    engine: 'opportunity_attack+dm_prompt' },
+  { key: 'silver_tongue', name: 'Silver Tongue', category: 'general', ...XGE_ADAPTATION_RULESET, sourcePdf: "Homebrew adaptation of Xanathar's Guide to Everything (Panache)",
+    abilityIncrease: { ability: 'cha', max: 20 }, prerequisite: { ability: 'cha', min: 13, text: 'Charisma 13 or higher' },
+    effect: "+1 Charisma (max 20). Winning Words: as an action, make a Charisma (Persuasion) check contested by a creature's Wisdom (Insight) check; the creature must be able to hear you and you must share a language; if you succeed and the creature isn't hostile to you, it has the Charmed condition for 1 minute and regards you as a friendly acquaintance; ends immediately if you or your companions do anything harmful to it. No usage limit",
+    engine: 'contest+charm' },
+  { key: 'elegant_maneuver', name: 'Elegant Maneuver', category: 'general', ...XGE_ADAPTATION_RULESET, sourcePdf: "Homebrew adaptation of Xanathar's Guide to Everything (Swashbuckler)",
+    effect: 'As a bonus action, gain advantage on the next Dexterity (Acrobatics) or Strength (Athletics) check you make this turn',
+    engine: 'feat_use' },
+];
+
+export function listAddedFeats() {
+  return ADDED_FEATS.map(f => ({ ...f, source: 'homebrew' }));
+}
+
+export const ADDED_FEAT_KEYS = ADDED_FEATS.map(f => f.key);
+
+/** Does an ability-score set meet a feat's structured prerequisite?
+ *  A feat without one (or a free-text-only one) passes — only the
+ *  structured `prerequisite { ability, min }` is enforced. */
+export function featPrerequisiteMet(entry, abilityScores) {
+  const p = entry?.prerequisite;
+  if (!p || !p.ability || !Number.isFinite(Number(p.min))) return true;
+  const scores = abilityScores || {};
+  const v = Number(scores[p.ability] ?? scores[{ str: 'strength', dex: 'dexterity', con: 'constitution', int: 'intelligence', wis: 'wisdom', cha: 'charisma' }[p.ability]] ?? 0);
+  return v >= Number(p.min);
+}
+
 export function listFightingStyleFeats() {
   return FIGHTING_STYLE_FEATS.map(f => ({ ...f, source: 'core' }));
 }
@@ -154,6 +242,13 @@ for (const rulesetId of listHomebrewRulesets()) {
     const norm = normalizeFeatName(f.name);
     if (!lookup.has(norm)) lookup.set(norm, f);
   }
+}
+// feat-addition-14: the fourteen added feats (homebrew, tagged per
+// ruleset). No name collides with a JSON homebrew, core feat or fighting
+// style (verified 2026-11-24), so insertion order changes no resolution.
+for (const f of ADDED_FEATS) {
+  const norm = normalizeFeatName(f.name);
+  if (!lookup.has(norm)) lookup.set(norm, { ...f, source: 'homebrew' });
 }
 for (const f of [...CORE_FEATS, ...FIGHTING_STYLE_FEATS]) {
   const norm = normalizeFeatName(f.name);

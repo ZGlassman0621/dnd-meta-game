@@ -126,6 +126,15 @@ export const RESISTANCE_TABLE = [
 // Feature keys wired in the table above (for coverage accounting).
 export const RESISTANCE_FEATURE_KEYS = RESISTANCE_TABLE.map((r) => r.featureKey);
 
+// HOMEBREW feat-addition-14 — feat-granted resistances, kept apart from
+// the subclass table above. Energy Affinity (origin feat): the ONE chosen
+// affinity's type only (Mind psychic / Soul radiant / Death necrotic).
+// The descriptor carries the choice as featChoices.energy_affinity and
+// the pseudo-feature { key: 'energy_affinity' } (loadActorDescriptor).
+export const FEAT_RESISTANCE_TABLE = [
+  { featureKey: 'energy_affinity', name: 'Energy Affinity', kind: 'resistance', types: 'choice', condition: { type: 'choice', choiceKey: 'energy_affinity', map: { mind: 'psychic', soul: 'radiant', death: 'necrotic' } } },
+];
+
 /**
  * Features with a resistance/immunity/vulnerability limb that this family
  * does NOT wire, with the reason. Nothing mechanical is silently left
@@ -206,7 +215,7 @@ function timedEffectIsActive(actor, effectKey) {
 }
 
 function choiceValue(actor, choiceKey) {
-  const choices = actor?.subclassChoices || {};
+  const choices = { ...(actor?.featChoices || {}), ...(actor?.subclassChoices || {}) };
   const raw = choices[choiceKey];
   if (raw == null) return null;
   return String(Array.isArray(raw) ? raw[0] : raw).trim();
@@ -274,9 +283,9 @@ function featureKeysOf(features) {
 export function resistanceEntriesForFeatures(features, damageType, actor, context = {}) {
   const type = normalizeDamageType(damageType);
   if (!type) return [];
-  const held = featureKeysOf(features);
+  const held = featureKeysOf([...(Array.isArray(features) ? features : []), ...(actor?.featFeatures || [])]);
   const out = [];
-  for (const row of RESISTANCE_TABLE) {
+  for (const row of [...RESISTANCE_TABLE, ...FEAT_RESISTANCE_TABLE]) {
     if (!held.has(row.featureKey.toLowerCase())) continue;
     if (!conditionHolds(row, actor, context)) continue;
     const types = rowTypesFor(row, actor);
@@ -429,6 +438,17 @@ export async function loadActorDescriptor(kind, id, opts = {}) {
   } catch { return null; }
   if (!row) return null;
   const desc = actorDescriptorFromRow(row, kind);
+  // HOMEBREW feat-addition-14: the player's Energy Affinity choice.
+  if (kind === 'player') {
+    try {
+      const { energyAffinityFor } = await import('./featMechanicsService.js');
+      const ea = await energyAffinityFor(id);
+      if (ea) {
+        desc.featChoices = { ...(desc.featChoices || {}), energy_affinity: ea.affinity };
+        desc.featFeatures = [...(desc.featFeatures || []), { key: 'energy_affinity' }];
+      }
+    } catch { /* fail closed: no feat row */ }
+  }
   if (opts.sessionId && opts.encounterSeq && opts.ledgerKey) {
     desc.hasTakenTurn = await hasActorTakenTurn(opts.sessionId, opts.encounterSeq, opts.ledgerKey);
   }

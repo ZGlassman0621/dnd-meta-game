@@ -1774,8 +1774,42 @@ export async function playerDamageDiceFor(sessionId, characterId, pending, criti
       if (st && st.round === 1) extraFlat += Number(pending.surprisingStrikes.bonus) || 0;
     }
   } catch { /* flags are best-effort: the weapon dice always stand */ }
+  // HOMEBREW feat-addition-14 (Sling Expert): +1d4 within the sling's
+  // first range increment, +1d4 more against a target one size larger.
+  let slingNotes = [];
+  if (!pending.spellAttack && /^sling\b/i.test(String(pending.weapon || '').trim())) {
+    try {
+      const pc = await dbGet('SELECT feats, race, subrace, size FROM characters WHERE id = ?', [characterId]);
+      const fm = await import('./featMechanicsService.js');
+      if (pc && fm.hasFeatIn(pc.feats, 'sling_expert')) {
+        const { distanceBetween, keyForEnemyName, weaponRange } = await import('./movementService.js');
+        let distanceFt = null;
+        try {
+          const enemyKey = await keyForEnemyName(sessionId, pending.encounterSeq, pending.target);
+          const d = enemyKey ? await distanceBetween(sessionId, pending.encounterSeq, await ledgerKeyForPlayer(characterId), enemyKey) : null;
+          distanceFt = d && d.feet != null ? d.feet : null;
+        } catch { distanceFt = null; }
+        const enemy = await dbGet('SELECT stats_json FROM combat_enemies WHERE id = ?', [pending.targetEnemyId]).catch(() => null);
+        const snap = safeParse(enemy?.stats_json, null);
+        let attackerSize = pc.size || null;
+        if (!attackerSize) {
+          try {
+            // A species with one size fixes it; a choose-your-size species
+            // with no stored pick stays unknown (never guessed).
+            const { allowedSizesFor } = await import('./speciesService.js');
+            const sizes = allowedSizesFor(pc.race, pc.subrace);
+            attackerSize = Array.isArray(sizes) && sizes.length === 1 ? sizes[0] : null;
+          } catch { attackerSize = null; }
+        }
+        const normal = weaponRange('Sling')?.short ?? 30;
+        const se = fm.slingExpertDice({ isSling: true, distanceFt, normalRange: normal, attackerSize, targetSize: snap?.size || null });
+        parts.push(...se.dice);
+        slingNotes = se.notes;
+      }
+    } catch { /* the weapon dice always stand */ }
+  }
   const base = parts.filter(Boolean).join('+');
-  return { text: critical ? doubleDice(base) : base.split('+').join(' + '), includesSneak, includesSmite, extraFlat };
+  return { text: critical ? doubleDice(base) : base.split('+').join(' + '), includesSneak, includesSmite, extraFlat, ...(slingNotes.length ? { notes: slingNotes } : {}) };
 }
 
 async function awaitPlayerDamage(sessionId, characterId, pending, judged, targetAc, reportedDice, takenDie) {
@@ -1791,7 +1825,7 @@ async function awaitPlayerDamage(sessionId, characterId, pending, judged, target
     hit: true, critical: judged.critical, mode: pending.mode, modeReasons: pending.modeReasons,
     damageType: pending.damageType, source: 'reported',
     awaitingDamage: true, damageDiceText: dice.text, damageBonus: flat,
-    featureNotes: pending.featureNotes || [],
+    featureNotes: [...(pending.featureNotes || []), ...(dice.notes || [])],
   };
   await stashOutcome(sessionId, outcome);
   return outcome;

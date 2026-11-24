@@ -10,7 +10,7 @@ import Stage5GearStory from './Stage5GearStory.jsx'
 import Stage6ReviewCommit from './Stage6ReviewCommit.jsx'
 import { validateStage1 } from './stage1Validation.js'
 import { isMagicInitiateOriginFeat, mergeRehydratedPatch, rehydrateFromServerCharacter, saveStage1Progress, saveStage1LocalDraft, loadStage1LocalDraft, buildStage1ProgressBody, resolveOpeningDraft } from './stage1Persistence.js'
-import { fetchMixedAncestryTables, versatileThemeConflict } from './mixedAncestry.js'
+import { fetchMixedAncestryTables, versatileThemeConflict, energyAffinityCantrip } from './mixedAncestry.js'
 import { isStaleThemePathChoice } from './themeLocation.js'
 
 /**
@@ -314,6 +314,10 @@ export default function CreatorNextShell({ onExit, resumeCharacterId = null, onC
         ? state.versatileFeatChoices.cantrips.filter(c => typeof c === 'string' && c.trim())
         : [])
       : []),
+    // HOMEBREW feat-addition-14: Energy Affinity's granted cantrip (the
+    // server grants it from the same choice — see validateCreatorNextStage6 cantrips).
+    ...(state.versatileFeat === 'energy_affinity' && energyAffinityCantrip(state.versatileFeatChoices)
+      ? [energyAffinityCantrip(state.versatileFeatChoices)] : []),
   ]
 
   // Scroll to top on every stage move (Continue, Back, Stepper jumps,

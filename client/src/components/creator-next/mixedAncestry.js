@@ -38,8 +38,17 @@ export const ORIGIN_FEATS = [
   { key: 'savage_attacker', name: 'Savage Attacker', effect: 'Once per turn, when you hit a target with a weapon, roll the weapon\'s damage dice twice and use either roll against the target' },
   { key: 'skilled', name: 'Skilled', effect: 'Proficiency in any combination of three skills or tools of your choice; repeatable' },
   { key: 'tavern_brawler', name: 'Tavern Brawler', effect: 'When you hit with an Unarmed Strike and deal damage, deal 1d4 + Strength bludgeoning instead of the normal damage; reroll any 1 on an Unarmed Strike damage die (must use the new roll); proficiency with improvised weapons; once per turn, when you hit a creature with an Unarmed Strike as part of the Attack action, push it 5 ft away in addition to dealing damage' },
-  { key: 'tough', name: 'Tough', effect: 'Your Hit Point maximum increases by twice your character level when you gain this feat; thereafter it increases by 2 each time you level up' }
+  { key: 'tough', name: 'Tough', effect: 'Your Hit Point maximum increases by twice your character level when you gain this feat; thereafter it increases by 2 each time you level up' },
+  // HOMEBREW feat-addition-14 (feat PDFs, Zach 2026-11-21): not a 2024
+  // book feat — the registry tags it source 'homebrew'.
+  { key: 'energy_affinity', name: 'Energy Affinity', homebrew: true, effect: 'Homebrew. Choose one: Mind — psychic resistance + the Mind Sliver cantrip; Soul — radiant resistance + the Sacred Flame cantrip; Death — necrotic resistance + the Toll the Dead cantrip. The cantrip is granted, never counted against cantrips known or prepared' }
 ]
+
+/** Energy Affinity's granted cantrip for a choices object, or null. */
+export function energyAffinityCantrip(choices) {
+  const a = String((choices || {}).affinity || '').toLowerCase()
+  return { mind: 'Mind Sliver', soul: 'Sacred Flame', death: 'Toll the Dead' }[a] || null
+}
 
 export const ORIGIN_FEAT_KEYS = ORIGIN_FEATS.map(f => f.key)
 

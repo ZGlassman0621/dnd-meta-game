@@ -540,6 +540,7 @@ group('(e) Mutation checks (exact failing counts)');
   fs.mkdirSync(path.join(mut3Root, 'components'), { recursive: true });
   fs.copyFileSync(path.join(repoRoot, 'client/src/components/LevelUpPage.jsx'), path.join(mut3Root, 'components/LevelUpPage.jsx'));
   fs.copyFileSync(path.join(repoRoot, 'client/src/components/spellbookHelpers.js'), path.join(mut3Root, 'components/spellbookHelpers.js'));
+  fs.copyFileSync(path.join(repoRoot, 'client/src/components/featPickHelpers.js'), path.join(mut3Root, 'components/featPickHelpers.js')); // feat-addition-14: LevelUpPage's new sibling import
   const mut3Raw = readRepo('client/src/data/classes.json').replaceAll('Warrior of Waves', 'Way of Waves');
   assert.strictEqual((readRepo('client/src/data/classes.json').match(/Warrior of Waves/g) || []).length, 2,
     'M3 precondition: the real file names Warrior of Waves exactly twice');

@@ -12,6 +12,7 @@ import { formatFactionStandingFragment } from './factionService.js';
 import { safeParse } from '../utils/safeParse.js';
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { renderFeatEffectsForPrompt } from '../data/featRegistry.js';
+import { formatFeatStateLines, hasFeatIn } from './featMechanicsService.js'; // feat-addition-14
 import { buildSubclassPromptSection } from './subclassService.js';
 import { buildAgendaPromptBlock } from './npcComplexityService.js';
 import { buildProfessionPromptLine } from './npcProfessionService.js';
@@ -121,6 +122,24 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     const rendered = renderFeatEffectsForPrompt(feats);
     if (rendered) {
       featsSection += `\n  ${rendered}`;
+    }
+    // HOMEBREW feat-addition-14: live feat state + how each added feat is
+    // used, taught only to a DM whose player holds the feat.
+    const stateLines = formatFeatStateLines(character, []);
+    const has = (k) => hasFeatIn(featsRaw, k);
+    const how = [];
+    if (has('elegant_maneuver')) how.push('Elegant Maneuver: when the player uses it (bonus action), write [FEAT_USE: Feat="Elegant Maneuver"] BEFORE the Acrobatics/Athletics [ROLL_REQUEST] — the engine gives that check advantage, this turn only.');
+    if (has('seismic_touch')) how.push('Seismic Touch: when the player touches the ground for it (their action), write [FEAT_USE: Feat="Seismic Touch"] — tremorsense 60 ft until the start of their next turn; you tell them what they feel.');
+    if (has('sage_advice')) how.push('Sage Advice: after 10 minutes of advice, write [FEAT_USE: Feat="Sage Advice" Skill="<a skill the player is proficient in>" Allies="<up to 6 names>"] — the engine adds the bonus to those allies\' next check with that skill.');
+    if (has('silver_tongue')) how.push('Silver Tongue (Winning Words): when the player tries to win someone over with words (their action), write [WINNING_WORDS: Target="<name>"] instead of any Influence check — the engine runs Persuasion vs Insight and applies the charm. Never on a hostile creature. If the party harms a charmed creature, write [WINNING_WORDS: Target="<name>" End="true"].');
+    const riders = [];
+    if (has('hound')) riders.push('"Hound smell" (a Perception check to notice something by smell)', '"Hound track" (following a creature\'s scent trail — Survival or Perception, +5)');
+    if (has('trapper')) riders.push('"Trapper track" (Survival to track/hunt beasts or Int 8 or lower)', '"Trapper harvest" (skinning, extracting, preserving)');
+    if (has('mountaineer')) riders.push('"Mountaineer climb" (Athletics to climb)');
+    if (has('elusive')) riders.push('"Elusive" (on a CREATURE\'s Perception/Survival check to track the player — Actor="<that creature>")');
+    if (riders.length) how.push(`Feat situations — add Feat= to the [ROLL_REQUEST] when one applies and the engine applies the feat: ${riders.join(', ')}.`);
+    if (stateLines.length || how.length) {
+      featsSection += `\n  FEAT STATE AND USE (engine-enforced):\n  ${[...stateLines, ...how].join('\n  ')}`;
     }
   }
 

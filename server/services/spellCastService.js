@@ -1201,8 +1201,21 @@ export async function castSpell(characterId, spellName, level, opts = {}) {
   const usedSlots = safeParse(char.spell_slots_used, {});
   const max = maxSlots[String(lvl)] || maxSlots[lvl] || 0;
   const used = usedSlots[String(lvl)] || usedSlots[lvl] || 0;
-  // A readied release (skipSlotSpend) already paid at ready time.
+  // HOMEBREW feat-addition-14 (Trapper): Hunter's Mark from the feat's
+  // two free casts per long rest — asked for with Free="true", or used
+  // automatically when no 1st-level slot is left. A free cast spends no
+  // slot; beyond the two, slots pay as usual.
+  let freeCast = null;
   if (!opts.skipSlotSpend) {
+    try {
+      const { trapperFreeCast } = await import('./featMechanicsService.js');
+      const fc = await trapperFreeCast(characterId, spellName, lvl, { free: !!opts.free, slotsLeft: max - used });
+      if (fc?.refused) return { type: 'spell_cast', spell: spellName, level: lvl, slotConsumed: false, success: false, reason: fc.reason };
+      if (fc?.free) freeCast = { source: 'Trapper', left: fc.left, max: fc.max };
+    } catch { /* the slot path below stands */ }
+  }
+  // A readied release (skipSlotSpend) already paid at ready time.
+  if (!opts.skipSlotSpend && !freeCast) {
     if (used >= max) {
       return { type: 'spell_cast', spell: spellName, level: lvl, slotConsumed: false, success: false, reason: 'no_slots_available', slotsMax: max, slotsUsed: used };
     }
@@ -1264,11 +1277,12 @@ export async function castSpell(characterId, spellName, level, opts = {}) {
     type: 'spell_cast',
     spell: spellName,
     level: lvl,
-    slotConsumed: true,
+    slotConsumed: !freeCast,
     success: true,
     slotsMax: max,
-    slotsUsed: used + 1,
-    slotsRemaining: max - (used + 1),
+    slotsUsed: freeCast ? used : used + 1,
+    slotsRemaining: freeCast ? max - used : max - (used + 1),
+    ...(freeCast ? { freeCast } : {}),
     concentration: concentrationStarted,
     castTime: spellInfo?.castTime || 'action',
     components: spellInfo?.components || [],
@@ -1550,6 +1564,7 @@ async function castPartySpell(context, parsed, spell, level) {
     caster: casterRaw, target: parsed?.Target || null,
     targets: deduped.length ? deduped : null,
     choice: parsed?.Choice || null, sessionId: sessionId || null,
+    free: parsed?.Free === true || /^(true|yes|1)$/i.test(String(parsed?.Free || '')),
   });
   if (res && res.success) {
     await tls.spendSpellEconomy(sessionId, encounterSeq, casterKey, { castTime, level, spellName: spell });

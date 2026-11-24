@@ -386,11 +386,26 @@ export async function provokedByMove(sessionId, encounterSeq, moverKey, moverSid
     const resolved = await resolveKey(sessionId, encounterSeq, entry.key);
     const reach = resolved ? await reachFor(sessionId, resolved.kind, resolved.id) : 5;
     const oppZone = positionOf(data, entry.key);
+    // HOMEBREW feat-addition-14 (Quick Draw): a player holding a ranged or
+    // thrown weapon is also provoked by a creature moving to within 5 ft.
+    let quickDraw = false;
+    if (resolved?.kind === 'player') {
+      try {
+        const pc = await dbGet('SELECT * FROM characters WHERE id = ?', [resolved.id]);
+        const fm = await import('./featMechanicsService.js');
+        quickDraw = !!pc && fm.hasFeatIn(pc.feats, 'quick_draw') && await fm.wieldsRangedOrThrown(pc);
+      } catch { quickDraw = false; }
+    }
     for (let i = 0; i + 1 < pathZones.length; i++) {
       const before = distanceBetweenZones(data, oppZone, pathZones[i]);
       const after = distanceBetweenZones(data, oppZone, pathZones[i + 1]);
       if (before.feet !== null && after.feet !== null && before.feet <= reach && after.feet > reach) {
         provoked.push({ key: entry.key, name: entry.name || entry.key });
+        seen.add(entry.key);
+        break;
+      }
+      if (quickDraw && before.feet !== null && after.feet !== null && before.feet > 5 && after.feet <= 5) {
+        provoked.push({ key: entry.key, name: entry.name || entry.key, quickDraw: true });
         seen.add(entry.key);
         break;
       }

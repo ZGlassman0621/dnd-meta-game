@@ -161,11 +161,22 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
     // never rolls for the player. The player's d20 is asked for after
     // this marker; combatLoopService.resolvePlayerInitiative adds the Dex
     // modifier and slots the player into the order. Until then nobody acts.
+    // feat-addition-14: Alert adds +PB (the 2024 book feat — the engine
+    // added Dex only before), Tactician asks for a d4 the player rolls,
+    // and either feat lets the player swap with a willing ally.
+    let initFeats = { flat: 0, flatReasons: [], extraDie: null, canSwap: false, swapSources: [] };
+    try {
+      const { initiativeFeatsFor } = await import('./featMechanicsService.js');
+      initFeats = await initiativeFeatsFor(character.id);
+    } catch { /* feats are best-effort; Dex always stands */ }
     const pendingPlayer = {
       name: character.nickname || character.name || 'Player',
       type: 'player',
       key: playerKey,
-      modifier: playerDexMod,
+      modifier: playerDexMod + initFeats.flat,
+      dexModifier: playerDexMod,
+      featBonus: initFeats.flat, featReasons: initFeats.flatReasons,
+      extraDie: initFeats.extraDie, canSwap: initFeats.canSwap, swapSources: initFeats.swapSources,
     };
 
     // Companion initiatives. Schema notes preserved from the legacy
@@ -314,7 +325,7 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
     const digestText = enemyDigests.length
       ? `\nEnemy intel (system facts from the bestiary — narrate these traits, actions and spells faithfully; do not invent others):\n${enemyDigests.map(d => `- ${d}`).join('\n')}`
       : '';
-    const systemNote = `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Initiative rolled for the NPCs: ${orderStr}. The engine is now asking ${pendingPlayer.name} to roll a d20 for initiative (it adds ${pendingPlayer.modifier >= 0 ? '+' : ''}${pendingPlayer.modifier} after); nobody acts until that number is in. From then on the ENGINE runs every turn: on each NPC's turn it asks you what that NPC does. Never emit [TURN_ADVANCE].${digestText}`;
+    const systemNote = `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Initiative rolled for the NPCs: ${orderStr}. The engine is now asking ${pendingPlayer.name} to roll a d20${pendingPlayer.extraDie ? ` and a ${pendingPlayer.extraDie} (Tactician)` : ''} for initiative (it adds ${pendingPlayer.modifier >= 0 ? '+' : ''}${pendingPlayer.modifier} after)${pendingPlayer.canSwap ? `; ${pendingPlayer.swapSources.join('/')} lets them swap initiative with a willing ally once` : ''}; nobody acts until that number is in. From then on the ENGINE runs every turn: on each NPC's turn it asks you what that NPC does. Never emit [TURN_ADVANCE].${digestText}`;
 
     // Combat Pipeline #2: Store turn order server-side
     if (context?.sessionId) {

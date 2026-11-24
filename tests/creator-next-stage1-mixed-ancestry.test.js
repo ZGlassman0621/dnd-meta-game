@@ -134,7 +134,8 @@ group('(b) pure helpers');
   check(b11.used === 11 && b11.cap === 11 && b11.over === false, 'forgo trade raises cap 7 -> 11');
   const bOver = maClient.mixedBudget([{ cost: 5 }, { cost: 3 }], false);
   check(bOver.over === true && bOver.remaining === -1, '8/7 is over budget');
-  check(maClient.ORIGIN_FEAT_KEYS.length === 10, 'exactly 10 origin feats');
+  // 11 since feat-addition-14 (2026-11-24): the homebrew Energy Affinity joins the 10 book origin feats.
+  check(maClient.ORIGIN_FEAT_KEYS.length === 11 && maClient.ORIGIN_FEATS.filter((f) => !f.homebrew).length === 10, 'exactly 10 book origin feats + Energy Affinity (homebrew)');
   check(maClient.ORIGIN_FEAT_KEYS.includes('lucky') && maClient.ORIGIN_FEAT_KEYS.includes('magic_initiate'), 'origin list includes lucky + magic_initiate');
   check(maClient.isOriginFeatKey('Lucky') === true, 'origin-feat check is case-insensitive');
   check(maClient.isOriginFeatKey('fireball') === false, 'fireball is not an origin feat');

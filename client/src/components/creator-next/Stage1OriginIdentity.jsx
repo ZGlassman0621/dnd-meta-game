@@ -823,6 +823,25 @@ export default function Stage1OriginIdentity({ state, set, mode, payload, specie
               </>
             )}
 
+            {versatileFeatKey === 'energy_affinity' && (
+              <div style={{ marginTop: 6 }}>
+                <label style={{ display: 'block', fontFamily: 'var(--serif)', fontSize: 15, margin: '14px 0 6px' }}>
+                  Affinity (choose 1)
+                  <Tip text="Homebrew origin feat. Mind: psychic resistance and the Mind Sliver cantrip. Soul: radiant resistance and the Sacred Flame cantrip. Death: necrotic resistance and the Toll the Dead cantrip. Only the chosen affinity applies. The cantrip is granted, never counted against your cantrips known or prepared." />
+                </label>
+                <select
+                  className="select"
+                  value={versatileChoices.affinity || ''}
+                  onChange={e => setVersatileChoice('affinity', e.target.value)}
+                >
+                  <option value="">Choose an affinity…</option>
+                  <option value="mind">Mind — psychic resistance + Mind Sliver</option>
+                  <option value="soul">Soul — radiant resistance + Sacred Flame</option>
+                  <option value="death">Death — necrotic resistance + Toll the Dead</option>
+                </select>
+              </div>
+            )}
+
             {versatileFeatKey === 'musician' && (
               <div style={{ marginTop: 6 }}>
                 <span style={{ display: 'block', fontFamily: 'var(--serif)', fontSize: 15, margin: '14px 0 6px' }}>Instruments (choose 3)

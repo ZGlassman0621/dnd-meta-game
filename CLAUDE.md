@@ -163,6 +163,15 @@ A message that is only numbers settles the first waiting ask, but only when no i
 
 **The Perception bank** (`perceptionPreRollService.js`) takes 3 player numbers at a dungeon door: the banked number plus 2 spares. A used number is replaced by the next spare; once they are gone, passive Perception judges, and the same dungeon never asks again. An open Perception ROLL_REQUEST for the player is refused unless the player declared a search or it is hearing-tagged. With a bank active, the DM is told to read it with `PERCEPTION_USE`. With no bank anywhere, the engine opens one for the current location instead.
 
+### Feats — `server/data/featRegistry.js`, `server/services/featMechanicsService.js`
+
+Two catalogs, kept in step by hand: `featRegistry.js` (what the DM prompt says a feat does, plus the server's origin-feat check, `category: 'origin'`) and `client/src/data/feats.json` (the level-up picker). Origin feats come from the theme (fixed) or the Human Versatile pick (`ORIGIN_FEATS` in `creator-next/mixedAncestry.js`); general feats are taken only at level-up. The fourteen homebrew feats from feat-addition-14 sit in the registry's own `ADDED_FEATS` list (`source: 'homebrew'`, a ruleset id), and their engine side is one marked module, `featMechanicsService.js`:
+- **Feat uses** live on the feat's own entry in `characters.feats` (`uses.used`) and refill on a long rest.
+- **Initiative** adds Alert's +PB and asks for Tactician's d4, both through `pendingInitiative`.
+- **Markers**: `[FEAT_USE]` covers Elegant Maneuver, Seismic Touch and Sage Advice. `[WINNING_WORDS]` is Silver Tongue's contest. `Feat=` on `ROLL_REQUEST` applies a situational rider, and `Free=` on `SPELL_CAST` spends a Trapper free cast.
+
+Structured prerequisites and the +1 of a half-feat are checked at level-up for registry feats that carry them.
+
 `parsePlayerDiceInput` + `formatPlayerDiceDirective` in `dmPromptBuilder.js` are a pair — validator and the prompt text it guards — and are kept adjacent so the bounds and the wording cannot drift apart. Three rules worth knowing:
 
 - **Absent ≠ zero ≠ malformed.** `null`/`undefined`/`''` mean "no roll" and are the common case. Damage `0` is legitimate; guard with `Number.isInteger`, never truthiness.
