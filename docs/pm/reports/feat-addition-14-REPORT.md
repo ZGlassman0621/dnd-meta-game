@@ -325,3 +325,4 @@ The client build is green.
 | `client/src/components/creator-next/Stage1OriginIdentity.jsx` | edited | 73272 | `f1e2f1dc3ad7d73a76e3ec53d58e7ae213f96c282e898ba0a3b74654ce116b01` |
 | `client/src/components/creator-next/mixedAncestry.js` | edited | 23092 | `b27550583673aa7a465db2c4d9a3d6a839019e4a2df0522d37e250c141394d42` |
 | `tests/feat-addition-14.test.js` | edited | 47066 | `4d6c5fa2b7d16cbfe7035aa10856635e06f0897fc69286f0492a77797d0a8db1` |
+- Provenance-fence commit: `88ee28b`, branch `phase-4-hybrid-combat`, pushed.
