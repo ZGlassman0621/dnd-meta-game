@@ -213,6 +213,8 @@ I can't measure this session's cost or the remaining usage against the $30/month
 ---
 
 ## Addendum — Muse's decision on the bank trigger (2026-11-23), v1.0.208
+Commit `6412b66` on `phase-4-hybrid-combat`.
+
 **Muse's decision:** "when the DM asks the first open Perception roll in a place with no bank, the engine refuses it and asks the player for the 3 numbers instead. The DM is told to read the bank."
 
 **Built** (`rollRequestService.js`, ROLL_REQUEST handler):

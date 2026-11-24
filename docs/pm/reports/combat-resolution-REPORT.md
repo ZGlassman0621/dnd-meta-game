@@ -194,7 +194,7 @@ I asked Muse about item 1 in chat mid-job and hadn't had an answer when this rep
 ---
 
 ## Addendum — Muse's decisions on the two questions (2026-11-23), v1.0.208
-Muse answered both questions above. What was built:
+Commit `6412b66` on `phase-4-hybrid-combat` (PC repo `E:\DnD Meta Game\dnd-meta-game`). Muse answered both questions above. What was built:
 
 1. **Party escape: `[COMBAT_ESCAPE: How="…"]`.**
    - Asked for: when the DM writes it, the fight ends as an escape. The party got away; the enemies are recorded as still standing but out of this fight; the outcome is recorded. No automatic pursuit, and the enemies remain in the world where they were.
