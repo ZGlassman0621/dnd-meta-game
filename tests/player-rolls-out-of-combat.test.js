@@ -194,6 +194,19 @@ try {
   assert(!(await cfgOf(sid)).pendingRoll, 'the reported 12 settles the check')
 
   // -------------------------------------------------------------------------
+  console.log('\n=== PM decision: the first open Perception ask with no bank opens the bank ===\n')
+  llm.reply('Something glints in the snow ahead. [ROLL_REQUEST: Skill="Perception" DC=13 Looks="a half-buried glint"]')
+  res = await post({ action: 'I trudge on through the drifts.' })
+  cfg = await cfgOf(sid)
+  assert(cfg.pendingRoll?.bank === 'perception' && cfg.pendingRoll.trigger === 'first_ask' && cfg.pendingRoll.count === 3, 'the open ask is refused and the player is asked for their 3 numbers instead')
+  assert((res.body.rollPrompts || []).some((p) => /🎲 Perception for the open tundra north of the pass: roll 3 d20s/.test(p)), 'the player sees the bank ask for this place (not a check)')
+  const firstNotes = safeParse((await dbGet('SELECT messages FROM dm_sessions WHERE id = ?', [sid])).messages, [])
+  assert(firstNotes.some((m) => m.role === 'user' && /no banked Perception, so the engine is asking/.test(m.content) && /PERCEPTION_USE/.test(m.content)), 'the DM is told to read the bank once the numbers are in')
+  llm.reply('You shade your eyes against the glare.')
+  await post({ action: '13 6 18' })
+  assert((await dbGet("SELECT banked_die FROM perception_pre_rolls WHERE session_id = ? AND actor_type = 'pc' AND dungeon_key = 'the open tundra north of the pass'", [sid]))?.banked_die === 13, 'the player\'s 13 is banked for this place')
+
+  // -------------------------------------------------------------------------
   console.log('\n=== Item 4: the Perception bank — 3 numbers at the door, secret reads ===\n')
   rng.clearRollLog()
   llm.reply('The mine mouth gapes before you, black and cold. [PERCEPTION_PREROLL: Dungeon="Old Mine"]')

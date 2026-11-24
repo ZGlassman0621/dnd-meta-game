@@ -50,6 +50,89 @@ const rollD20 = () => rngRollD20('initiative');
  * — the route extracts `combatStart` for the response payload and
  * pushes `systemNote` to result.messages.
  */
+/**
+ * Enemies joining a fight already running (PM decision, Muse 2026-11-23).
+ * Names are numbered on from the ones already in the fight ("Thug 3"
+ * after Thug 1 and Thug 2; a lone unnumbered "Goblin" counts as 1), so
+ * every marker can still tell them apart. Each joiner's initiative is the
+ * engine's d20 (an enemy's roll) and it is slotted in by initiative
+ * (after existing ties). An entry slotted before the current turn moves
+ * the current-turn pointer with it, so whoever is acting stays acting.
+ * Known edge: turn hooks keyed on the turn index (Slow expiry) set
+ * before a join can be off by the inserted count.
+ */
+async function joinRunningFight(sessionId, encounterSeq, state, parsedStats, enemyStats, enemyDigests) {
+  const existing = await dbAll('SELECT name FROM combat_enemies WHERE session_id = ? AND encounter_seq = ?', [sessionId, encounterSeq]);
+  const baseOf = (n) => String(n).replace(/\s+\d+$/, '').toLowerCase();
+  const taken = new Set(existing.map((e) => String(e.name).toLowerCase()));
+  const highest = {};
+  for (const e of existing) {
+    const m = String(e.name).match(/\s+(\d+)$/);
+    const k = baseOf(e.name);
+    highest[k] = Math.max(highest[k] || 0, m ? Number(m[1]) : 1);
+  }
+  // A listed name that IS an enemy already in this fight is that enemy,
+  // not a newcomer: the live DM re-listed the whole fight ("Thug 2, Thug
+  // 1, Thug 3, Thug 4") when two joined, and the first two were cloned.
+  const keep = [];
+  for (let i = 0; i < enemyStats.length; i++) {
+    const listed = String(parsedStats[i]?.name ?? enemyStats[i].name);
+    if (!taken.has(listed.toLowerCase())) keep.push(i);
+  }
+  const already = enemyStats.length - keep.length;
+  if (keep.length === 0) {
+    return { type: 'combat_start', joined: [], encounterSeq, combatStart: null,
+      systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Everyone you listed is already in the fight — no one joined. The fight goes on; never emit [TURN_ADVANCE].` };
+  }
+  const newCount = {};
+  for (const i of keep) newCount[baseOf(parsedStats[i].name)] = (newCount[baseOf(parsedStats[i].name)] || 0) + 1;
+  const named = keep.map((i) => {
+    const s = enemyStats[i];
+    const listed = String(parsedStats[i]?.name ?? s.name);
+    // The DM's own numbered name ("Thug 3") stands when nothing holds it.
+    if (/\s+\d+$/.test(listed) && !taken.has(listed.toLowerCase())) {
+      taken.add(listed.toLowerCase());
+      const k = baseOf(listed);
+      highest[k] = Math.max(highest[k] || 0, Number(listed.match(/(\d+)$/)[1]));
+      return { ...s, name: listed };
+    }
+    const base = listed.replace(/\s+\d+$/, '');
+    const k = base.toLowerCase();
+    if (!highest[k] && newCount[k] === 1) { highest[k] = 1; taken.add(k); return { ...s, name: base }; }
+    let next = (highest[k] || 0) + 1;
+    while (taken.has(`${k} ${next}`)) next++;
+    highest[k] = next;
+    taken.add(`${k} ${next}`);
+    return { ...s, name: `${base} ${next}` };
+  });
+  const created = await createEncounterEnemies(sessionId, encounterSeq, named);
+  const order = [...state.turnOrder];
+  let current = state.currentIndex;
+  const joined = [];
+  for (let i = 0; i < named.length; i++) {
+    const e = named[i];
+    const dexMod = e.dexMod || estimateEnemyDexMod(e.name);
+    const roll = rngRollD20(`initiative (joining): ${e.name}`);
+    const entry = {
+      name: e.name, type: 'enemy',
+      key: created[i] ? combatFallbackId(sessionId, encounterSeq, created[i].id) : `enemy:${String(e.name).toLowerCase()}`,
+      roll, modifier: dexMod, initiative: roll + dexMod,
+    };
+    let pos = order.findIndex((c) => (c.initiative ?? 0) < entry.initiative);
+    if (pos < 0) pos = order.length;
+    order.splice(pos, 0, entry);
+    if (pos <= current) current += 1;
+    joined.push(entry);
+  }
+  await dbRun('UPDATE combat_turn_state SET turn_order_json = ?, current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ? AND encounter_seq = ?',
+    [JSON.stringify(order), current, sessionId, encounterSeq]);
+  const digestText = enemyDigests.length
+    ? `\nEnemy intel (system facts from the bestiary — narrate these traits, actions and spells faithfully; do not invent others):\n${enemyDigests.map(d => `- ${d}`).join('\n')}`
+    : '';
+  const systemNote = `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${joined.map((j) => `${j.name} (initiative ${j.initiative})`).join(', ')} JOINED the fight already running — no new fight started${already ? ` (${already} of those you listed ${already === 1 ? 'was' : 'were'} already in it)` : ''}. Use ${joined.length === 1 ? 'that name' : 'those names'} in every marker. Turn order now: ${order.map((c) => `${c.name} ${c.initiative ?? '-'}`).join(', ')}. The round goes on; never emit [TURN_ADVANCE].${digestText}`;
+  return { type: 'combat_start', joined: joined.map((j) => j.name), encounterSeq, systemNote, combatStart: null };
+}
+
 registerMarkerHandler('COMBAT_START', async (parsed, context) => {
   if (!context?.characterId) return null;
   try {
@@ -183,6 +266,18 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
         if (line) enemyDigests.push(line);
       }
       enemyStats.push({ ...spec, name: uniqueNames[parsedIdx] });
+    }
+
+    // A fight already running (it has a turn state): the listed enemies
+    // JOIN it (PM decision, Muse 2026-11-23) — same encounter, initiative
+    // rolled for them, slotted into the current order, every existing
+    // state kept. Only with no fight running does a fresh fight start.
+    if (context?.sessionId && enemyStats.length > 0) {
+      const runningSeq = await getCurrentEncounterSeq(context.sessionId);
+      const running = runningSeq ? await getTurnState(context.sessionId, runningSeq).catch(() => null) : null;
+      if (running?.turnOrder?.length) {
+        return await joinRunningFight(context.sessionId, runningSeq, running, parsedStats, enemyStats, enemyDigests);
+      }
     }
     const encounterSeq = context?.sessionId ? await getNextEncounterSeq(context.sessionId) : 1;
     // Created rows come back in insertion order, matching enemyStats

@@ -101,17 +101,34 @@ export async function settleFight(sessionId, terms = null) {
   return { success: true, settled: standing.map((e) => e.name), terms: terms || null, encounterSeq };
 }
 
-/** The refusal text for a [COMBAT_END] while enemies stand. */
-export function combatEndRefusalNote(standingNames) {
-  return `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: [COMBAT_END] was REFUSED — the fight is not over: ${standingNames.join(', ')} ${standingNames.length === 1 ? 'is' : 'are'} still standing. A fight ends only when every enemy is dead or resolved. If the fiction has ended the fight, say how: an enemy that runs off → [ENEMY_FLEE: Enemy="Name"]; one that yields → [ENEMY_SURRENDER: Enemy="Name"]; talked down, a deal or a standoff → [COMBAT_SETTLE: Terms="what was agreed"] (every enemy still standing stands down). The engine ends the fight itself once no enemy is left. Otherwise the fight goes on.`;
+/**
+ * The party gets away (PM decision, Muse 2026-11-23): the fight ends as
+ * an escape. The standing enemies keep status 'active' — still standing,
+ * in the world where they were — but this fight is over for them; there
+ * is no automatic pursuit. Needs a running fight with someone standing.
+ */
+export async function escapeFight(sessionId, how = null) {
+  const encounterSeq = await getCurrentEncounterSeq(sessionId);
+  const running = encounterSeq ? await dbGet('SELECT 1 FROM combat_turn_state WHERE session_id = ? AND encounter_seq = ?', [sessionId, encounterSeq]).catch(() => null) : null;
+  if (!running) return { success: false, reason: 'no fight is running' };
+  const standing = (await encounterEnemies(sessionId, encounterSeq)).filter(isStanding).map((e) => e.name);
+  if (!standing.length) return { success: false, reason: 'no enemy is left standing to escape from' };
+  return { success: true, escaped: true, leftStanding: standing, how: how || null, encounterSeq };
 }
 
-/** "Thug 1 surrendered; Thug 2 is dead." — the recorded outcome. */
-export async function fightOutcome(sessionId, encounterSeq) {
+/** The refusal text for a [COMBAT_END] while enemies stand. */
+export function combatEndRefusalNote(standingNames) {
+  return `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: [COMBAT_END] was REFUSED — the fight is not over: ${standingNames.join(', ')} ${standingNames.length === 1 ? 'is' : 'are'} still standing. A fight ends only when every enemy is dead or resolved. If the fiction has ended the fight, say how: an enemy that runs off → [ENEMY_FLEE: Enemy="Name"]; one that yields → [ENEMY_SURRENDER: Enemy="Name"]; talked down, a deal or a standoff → [COMBAT_SETTLE: Terms="what was agreed"] (every enemy still standing stands down); the party gets away → [COMBAT_ESCAPE: How="how they got away"]. The engine ends the fight itself once no enemy is left. Otherwise the fight goes on.`;
+}
+
+/** "Thug 1 surrendered; Thug 2 is dead." — the recorded outcome. After an
+ *  escape, the enemies left standing read "still standing (the party got away)". */
+export async function fightOutcome(sessionId, encounterSeq, { escaped = false } = {}) {
   const rows = await encounterEnemies(sessionId, encounterSeq);
   if (!rows.length) return null;
-  const parts = rows.map((e) => `${e.name} ${STATUS_WORD[e.status] || (isStanding(e) ? 'still standing' : e.status)}`);
-  return { enemies: rows.map((e) => ({ name: e.name, status: e.status })), text: parts.join('; ') };
+  const standingWord = escaped ? 'still standing (the party got away)' : 'still standing';
+  const parts = rows.map((e) => `${e.name} ${STATUS_WORD[e.status] || (isStanding(e) ? standingWord : e.status)}`);
+  return { enemies: rows.map((e) => ({ name: e.name, status: e.status })), text: (escaped ? 'the party escaped — ' : '') + parts.join('; '), escaped };
 }
 
 // ---------------------------------------------------------------------------
@@ -127,6 +144,12 @@ registerMarkerHandler('ENEMY_SURRENDER', async (parsed, context) => {
   if (!context?.sessionId) return null;
   const r = await resolveEnemy(context.sessionId, parsed?.Enemy, 'surrendered');
   return { type: 'enemy_surrender', ...r };
+});
+
+registerMarkerHandler('COMBAT_ESCAPE', async (parsed, context) => {
+  if (!context?.sessionId) return null;
+  const r = await escapeFight(context.sessionId, parsed?.How || null);
+  return { type: 'combat_escape', ...r };
 });
 
 registerMarkerHandler('COMBAT_SETTLE', async (parsed, context) => {

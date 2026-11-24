@@ -2207,6 +2207,8 @@ Combat starts: [COMBAT_START: Enemies="Goblin (HP 7, AC 15, ATK +4, DMG 1d6+2), 
 Combat ends only when it is RESOLVED — every enemy dead, fled, surrendered, or talked down. Say how with a marker; the engine records it and ends the fight itself once no enemy is left:
 • An enemy runs off → [ENEMY_FLEE: Enemy="Thug 1"]. An enemy gives up → [ENEMY_SURRENDER: Enemy="Thug 1"] (it stays, out of the fight, at the party's mercy). Write these on that enemy's turn, or whenever the fiction makes it happen.
 • The fight is talked down — a deal, a parley, a standoff both sides walk away from → [COMBAT_SETTLE: Terms="they let us pass for 10 gold"] (every enemy still standing stands down).
+• The party gets away — outruns, slips off, escapes → [COMBAT_ESCAPE: How="ducked into the crowd"]. The fight ends; the enemies stay standing where they were and do not pursue on their own.
+• Enemies arriving while a fight is on → [COMBAT_START: Enemies="..."] again: they JOIN the running fight (the engine rolls their initiative and slots them in); it does not start a new one.
 • [COMBAT_END] — LAST sentence — only when no enemy is left standing; with an enemy still standing it is REFUSED and the fight goes on.
 
 Per-turn flow — the ENGINE runs the turns (never emit [TURN_ADVANCE]). The engine also asks the player for every roll and adds every modifier after the roll: never tell the player what dice to roll or which modifiers ("proficiency", "Strength") to add — the engine's own line does that.

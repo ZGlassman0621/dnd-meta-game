@@ -37,8 +37,8 @@ const hasMarker = (text) => KEYS.some((k) => new RegExp(`\\[${k}(\\s*:|\\])`, 'i
 // ===========================================================================
 group('(a) the strip is generated from MARKER_SCHEMAS');
 {
-  // 129 since combat resolution (2026-11-23): ENEMY_FLEE, ENEMY_SURRENDER, COMBAT_SETTLE.
-  check(KEYS.length === 129, `MARKER_SCHEMAS has 129 schemas (got ${KEYS.length})`);
+  // 130 since combat resolution (2026-11-23): ENEMY_FLEE, ENEMY_SURRENDER, COMBAT_SETTLE, COMBAT_ESCAPE.
+  check(KEYS.length === 130, `MARKER_SCHEMAS has 130 schemas (got ${KEYS.length})`);
   check(JSON.stringify(STRIPPED_MARKER_NAMES) === JSON.stringify(KEYS), 'the stripped names ARE the schema keys, in order, nothing added or missing');
   const src = fs.readFileSync(new URL('../server/services/markerStrip.js', import.meta.url), 'utf8');
   check(src.includes('Object.keys(MARKER_SCHEMAS)'), 'markerStrip derives its names from MARKER_SCHEMAS');

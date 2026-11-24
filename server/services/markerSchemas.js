@@ -153,6 +153,15 @@ export const MARKER_SCHEMAS = {
     }
   },
 
+  // The party gets away (PM decision, Muse 2026-11-23): the fight ends as
+  // an escape; the enemies stay standing where they were, no pursuit.
+  COMBAT_ESCAPE: {
+    position: 'inline',
+    fields: {
+      How: { type: 'string', required: false }
+    }
+  },
+
   COMBAT_END: {
     position: 'last',
     fields: {}

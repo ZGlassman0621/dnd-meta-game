@@ -414,6 +414,11 @@ export async function useBankedPerception({ sessionId, characterId, target, trig
     return { success: true, ...pObj };
   }
   if (!row) {
+    // The player's numbers are asked for but not in yet: wait, never ask.
+    const waiting = actorType === 'pc' ? await getPendingRoll(sessionId) : null;
+    if (waiting?.bank === 'perception') {
+      return { success: false, reason: `${party.name} is still rolling their banked Perception numbers — read the bank once they are in; do not ask for a roll` };
+    }
     return {
       success: false,
       reason: `no banked Perception for ${party.name} in ${dungeon} — use a normal ROLL_REQUEST`

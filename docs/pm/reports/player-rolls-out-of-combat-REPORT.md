@@ -209,3 +209,32 @@ I can't measure this session's cost or the remaining usage against the $30/month
 6. Type "We reach the gate of [a named dungeon], an ancient ruined dungeon. We go inside."
    - **Look for:** "🎲 At the door of …: roll 3 d20s for Perception and send all 3 numbers in one message". Send three numbers.
    - Walk on. The DM never asks you for a Perception roll unless you say you're searching, and never says when it reads your number.
+
+---
+
+## Addendum — Muse's decision on the bank trigger (2026-11-23), v1.0.208
+**Muse's decision:** "when the DM asks the first open Perception roll in a place with no bank, the engine refuses it and asks the player for the 3 numbers instead. The DM is told to read the bank."
+
+**Built** (`rollRequestService.js`, ROLL_REQUEST handler):
+- **When it applies:** an open Perception request for the player while no bank is active anywhere in the session, unless the player declared a search or the request is hearing-tagged.
+- **What happens:** it is refused, and the engine opens a bank keyed by the character's current location ("this place" if none is set).
+- **The player sees:** "🎲 Perception for the hills above Luskan: roll 3 d20s for Perception and send all 3 numbers in one message … the engine adds +1 after."
+- **The DM is told:** "Your Perception ROLL_REQUEST was NOT sent. The party had no banked Perception, so the engine is asking … for their three Perception numbers for … instead. Once they are in, read the bank in secret for what you meant to check: [PERCEPTION_USE …]."
+- **If the DM reads the bank before the numbers are in,** it is now told to wait ("still rolling their banked Perception numbers … do not ask for a roll"). Before, the reason pointed it back to an open roll.
+
+**Checks a companion is helping with are exempt too.** A pending `HELP_CHECK` for Perception means a companion is actively helping the player look, which counts as a declared search. The full suite showed this: `item-3d-action-markers` drives Lyra helping the player's Perception check, and it stays green unchanged.
+
+**Hearing-tagged requests are exempt.** A deafened player's listening check must still auto-fail (`item-8-conditions`). That test's non-hearing example switched from a Perception check to a Survival check ("looking for tracks"), because a first open Perception ask now opens the bank.
+
+**Tests:**
+- `tests/player-rolls-out-of-combat.test.js` (now 65): the first open ask on the tundra is refused and opens the bank (count 3, `first_ask`), with the "Perception for …" prompt and the DM's note, and "13 6 18" banks 13.
+- `perception-pre-roll` (88) and `item-8-conditions` (60) are green.
+
+**Live** (`ooc-probe5.out`, `ooc-probe5b.out`):
+- **At the Old Mine, run 5.** The DM's first message was an open `[ROLL_REQUEST: Skill="Perception" DC=15 …]`. It was refused, and the player was asked for their 3 numbers. (The probe script didn't answer that prompt, so the bank stayed waiting.)
+- **Run 5b.** The DM wrote `[PERCEPTION_PREROLL: Dungeon="Old Mine"]` itself at the mine mouth (under the widened instruction). The player's "14 8 17" was banked, and the DM's next turn read it in secret: 14, success. The spare 8 moved up, and a later open Perception ask during the bank was refused.
+- This answers this report's earlier question for Zach: the engine now opens the bank when the DM doesn't.
+
+**Known edge:** the bank stays active until a new dungeon door or first ask elsewhere. Walking back to town doesn't close it, so a town Perception ask is read from the dungeon's bank. That was already the system's behaviour.
+
+**Files and the full `npm test`:** see the addendum in `docs/pm/reports/combat-resolution-REPORT.md` (one commit covers all three decisions).

@@ -179,6 +179,9 @@ try {
   }
   assert(m?.triggered === true, 'morale triggers at 50% casualties, as before')
   // Deterministic flight: pin the engine's d20 to a natural 1 for one check.
+  // (End the fight above first — a COMBAT_START during a running fight
+  // would make its enemies JOIN it.)
+  await dbRun('DELETE FROM combat_turn_state WHERE session_id = ?', [sid])
   res = await startFight()
   const fseq = (await dbGet('SELECT MAX(encounter_seq) AS m FROM combat_enemies WHERE session_id = ?', [sid])).m
   await dbRun("UPDATE combat_enemies SET status = 'dead', current_hp = 0 WHERE session_id = ? AND encounter_seq = ? AND name = 'Thug 1'", [sid, fseq])
@@ -189,6 +192,43 @@ try {
   const ft2 = (safeParse((await turnRow(sid))?.turn_order_json, [])).find((c) => c.name === 'Thug 2')
   assert(fm?.breakChecks?.[0]?.outcome === 'fled' && await statusOf(sid, 'Thug 2') === 'fled' && ft2?.out === 'fled',
     'a broken morale save (natural 1): Thug 2 fled — the same status and turn-order mark as ENEMY_FLEE')
+  // -------------------------------------------------------------------------
+  console.log('\n=== PM decision: enemies arriving mid-fight JOIN it; the party escapes ===\n')
+  await dbRun('DELETE FROM combat_turn_state WHERE session_id = ?', [sid])
+  res = await startFight()
+  const jseq = (await dbGet('SELECT MAX(encounter_seq) AS m FROM combat_enemies WHERE session_id = ?', [sid])).m
+  const generic = npc({ 'Thug 1': 'Thug 1 circles.', 'Thug 2': 'Thug 2 circles.', 'Thug 3': 'Thug 3 circles.', 'Thug 4': 'Thug 4 circles.', 'Thug 5': 'Thug 5 circles.' })
+  // The live DM re-listed the whole fight when two joined: Thug 1 and 2 are
+  // the ones already fighting, Thug 3 and 4 are new.
+  llm.reply('The door bangs open — two more thugs push in. [COMBAT_START: Enemies="Thug 2 (HP 11, AC 12, ATK +4, DMG 1d6+2), Thug 1 (HP 11, AC 12, ATK +4, DMG 1d6+2), Thug 3 (HP 11, AC 12, ATK +4, DMG 1d6+2), Thug 4 (HP 11, AC 12, ATK +4, DMG 1d6+2)"]')
+  for (let i = 0; i < 4; i++) llm.reply(generic)
+  res = await post({ action: 'I back toward the bar.' })
+  const joinedRows = await enemiesOf(sid)
+  assert((await dbGet('SELECT MAX(encounter_seq) AS m FROM combat_enemies WHERE session_id = ?', [sid])).m === jseq, 'no new fight: the encounter is the same')
+  assert(joinedRows.map((e) => e.name).join(',') === 'Thug 1,Thug 2,Thug 3,Thug 4', `the joiners are numbered on: Thug 3, Thug 4 (got ${joinedRows.map((e) => e.name).join(',')})`)
+  const jorder = safeParse((await turnRow(sid))?.turn_order_json, [])
+  assert(jorder.length === 5 && jorder.some((c) => c.name === 'Thug 3' && Number.isInteger(c.initiative)) && jorder.some((c) => c.type === 'player'), 'the joiners have initiative and sit in the running order with the player and the first two')
+  assert(!(await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sid])).session_config.includes('pendingInitiative'), 'the player is not asked for initiative again')
+  notes = await storedNotes(sid)
+  assert(notes.some((n) => /Thug 3 \(initiative -?\d+\), Thug 4 \(initiative -?\d+\) JOINED the fight already running — no new fight started \(2 of those you listed were already in it\)/.test(n)), 'the DM is told they joined the active fight (and that two it listed were already in it)')
+  assert(res.body.turnState?.turnOrder?.[res.body.turnState.currentTurn]?.type === 'player', 'after the NPC turns it is the player\'s turn again')
+  // An unnumbered newcomer is numbered on from the fight: Thug 5.
+  llm.reply('A fifth thug drops from the balcony. [COMBAT_START: Enemies="Thug (HP 11, AC 12, ATK +4, DMG 1d6+2)"]')
+  for (let i = 0; i < 5; i++) llm.reply(generic)
+  res = await post({ action: 'I keep my back to the wall.' })
+  assert((await enemiesOf(sid)).map((e) => e.name).join(',') === 'Thug 1,Thug 2,Thug 3,Thug 4,Thug 5', 'a lone unnumbered "Thug" joins as Thug 5')
+  llm.reply('You vault the bar, crash through the kitchen and out into the night. [COMBAT_ESCAPE: How="out through the kitchen"]')
+  res = await post({ action: 'I vault the bar and run for the kitchen door.' })
+  assert(res.body.combatEnd === true && !(await turnRow(sid)), 'the escape ends the fight; the tracker clears')
+  assert((await enemiesOf(sid)).every((e) => e.status === 'active'), 'all five thugs stay standing where they were (status active), no pursuit')
+  assert(/⚙ You get away — Thug 1 and Thug 2 and Thug 3 and Thug 4 and Thug 5 are left behind, still standing\./.test(res.body.narrative), 'the player sees the escape')
+  assert(/⚙ The fight is over: the party escaped — Thug 1 still standing \(the party got away\)/.test(res.body.narrative), 'the outcome records the escape')
+  notes = await storedNotes(sid)
+  assert(notes.some((n) => /The party ESCAPED \(out through the kitchen\)/.test(n)) && notes.some((n) => /COMBAT OVER — system fact: the party escaped/.test(n)), 'the DM and the stored history get the escape')
+  llm.reply('Three more thugs appear in the street. [COMBAT_START: Enemies="Thug (HP 11, AC 12, ATK +4, DMG 1d6+2)"]')
+  res = await post({ action: 'I keep running.' })
+  assert((await dbGet('SELECT MAX(encounter_seq) AS m FROM combat_enemies WHERE session_id = ?', [sid])).m === jseq + 1, 'with no fight running, COMBAT_START starts a fresh fight')
+
   // Unit: setEnemyStatus refuses a status that is not a live resolution.
   let threw = false
   try { await resolution.setEnemyStatus(sid, mseq, 1, 'dead') } catch { threw = true }

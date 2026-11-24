@@ -190,3 +190,57 @@ I asked Muse about item 1 in chat mid-job and hadn't had an answer when this rep
    - Make the last one yield or run. **Look for:** "⚙ The fight is over: Thug 1 surrendered; Thug 2 …", and the tracker clears.
 5. In a third fight, offer them gold to walk away.
    - **Look for:** "⚙ The fight is settled — Thug 1 and Thug 2 stand down.", then the fight is over, and the tracker clears.
+
+---
+
+## Addendum — Muse's decisions on the two questions (2026-11-23), v1.0.208
+Muse answered both questions above. What was built:
+
+1. **Party escape: `[COMBAT_ESCAPE: How="…"]`.**
+   - Asked for: when the DM writes it, the fight ends as an escape. The party got away; the enemies are recorded as still standing but out of this fight; the outcome is recorded. No automatic pursuit, and the enemies remain in the world where they were.
+   - Built: a new schema, declared before `COMBAT_END`. It needs a running fight with someone standing. The enemies keep status `active` ("still standing, where they were"), and nothing pursues.
+   - The player sees "⚙ You get away — Thug 1 and Thug 2 … are left behind, still standing." and "⚙ The fight is over: the party escaped — Thug 1 still standing (the party got away); …".
+   - The DM gets "The party ESCAPED (how) … they do not pursue unless you start a new fight later", and the `COMBAT OVER` fact records the escape in the stored history.
+   - The combat rules teach it, and the `COMBAT_END` refusal note now lists it among the options.
+2. **Mid-fight `COMBAT_START` joins the running fight.**
+   - Asked for: while a fight is active, the listed enemies join it. Their initiative is rolled, they're slotted into the current order, and the existing state is kept. The engine tells the DM they joined. With no fight active, it's a normal fresh fight.
+   - Built: a fight is "active" when it has a turn state. Joiners go into the same encounter and roll the engine's d20 for initiative (an enemy's roll). Each is slotted in by initiative, after existing ties, and the current-turn pointer moves when an entry lands before it. HP, conditions, the round and the player's place are all unchanged.
+   - Joiners are numbered on from the fight ("Thug 3" after Thug 1 and 2; a lone "Thug" becomes "Thug 5").
+   - The DM's note reads "Thug 3 (initiative 14), Thug 4 (initiative 9) JOINED the fight already running — no new fight started … Turn order now: …".
+   - **Fixed live:** gemma4:12b re-listed the whole fight when two thugs joined (`Enemies="Thug 2, Thug 1, Thug 3, Thug 4"`), and the first build cloned Thug 1 and 2 as Thug 5 and 6. A listed name that is already in the fight is now skipped, and the note says how many were already there. A numbered name the DM gives a newcomer (e.g. "Thug 3") is kept.
+   - **Known edge:** a re-listing with unnumbered names ("Orc, Orc" while Orc 1–3 fight) can't be told apart from newcomers, so they join as new orcs. Live Perception run 5b showed it once, while a fight was still waiting on initiative.
+   - **Known edge:** turn hooks keyed on the turn index (Slow expiry) and set before a join can be off by the number inserted ahead of them.
+
+**Tests** (`tests/combat-resolution.test.js`, now 49 assertions):
+- A join with the live re-listing gives four distinct thugs, all in the same encounter, with initiative, and no new player initiative ask. The DM note says two were already there, and the turn returns to the player.
+- A lone "Thug" joins as Thug 5.
+- The escape ends the fight and clears the tracker. All five thugs stay `active`, and the ⚙ lines and outcome say they were left standing. The DM note and the history fact record it.
+- With no fight running, a `COMBAT_START` starts a fresh encounter.
+- `tests/marker-strip.test.js` pins 130 schemas.
+
+**Live** (`cres-probe4.out`):
+- **Fight A.** "I flip a table into their path and sprint out the back door into the dark alleys" → `[DODGE…] [COMBAT_ESCAPE: How="ducked into the crowd"]`. All four thugs were left standing, the fight was over, and the tracker cleared.
+- **Fight B.** "the thugs shout for their friends to come help" → a mid-fight `COMBAT_START`. The newcomers took turns in the same fight; before the fix, the clones above also appeared. After the fix, the test pins the re-listing case.
+
+**Files changed for both decisions** (and for the Perception decision in the other report):
+| File | New / edited | SHA-256 | Bytes |
+|---|---|---|---|
+| `CLAUDE.md` | edited | `b3f6ad3af2136c2cb5f8e9bfe2396e2804597d3d2ef6cb220feca89bc373be60` | 28789 |
+| `client/package.json` | edited | `07dd4f622a87e7bbb33331232f8f5cb97c898243aab42ec83a5134709da694ae` | 427 |
+| `docs/pm/reports/player-rolls-out-of-combat-REPORT.md` | edited | `9cb5b1e63bd565933ce11dec777e23aba417518d40795a35f1f81def18dde2c8` | 30188 |
+| `package.json` | edited | `52d90b1e8e4d22088227da94de819a89142feb701de31045cc874266f910dbc3` | 1398 |
+| `server/routes/dmSession.js` | edited | `5d7bbd4b72947301cee3686fea688b03c9cb0aef1f1e41c08dcbb5395b8d3e9f` | 225013 |
+| `server/services/combatLoopService.js` | edited | `706bfd9a9fb51f65464385682cead2f0699481d07d63009dc09d95dd209a9107` | 23031 |
+| `server/services/combatMarkerService.js` | edited | `0e201e1ef85eb6306d0222efd4154ee9412ea770351197c50bee200b04608251` | 94427 |
+| `server/services/combatResolutionService.js` | edited | `fe9f76e89996c93f6cd16ea7e32e2a622242df20d3f510e97710c970f569a06f` | 9611 |
+| `server/services/dmPromptBuilder.js` | edited | `84ef1cb750907b6b538e6a3bfe0d7ae2ed371c3df67cbb483c3df01b7aead8d0` | 196928 |
+| `server/services/markerSchemas.js` | edited | `07626edf1a4f05c26cb3d9afc7eafcebfa9acde2e8af40ced5376d1261f22dff` | 65414 |
+| `server/services/perceptionPreRollService.js` | edited | `8ea94456b0ce32ad1c24c1271ab1ef018f7ce7974d844cab1efaf78baaf6d067` | 29980 |
+| `server/services/rollRequestService.js` | edited | `34e7d529c33350fe17cf610bba3e46a1b4431d217a1db36877b14ca3c5953331` | 56908 |
+| `tests/combat-resolution.test.js` | edited | `e0c0064b9c016b2ea9f39b23d0e31c127e7ec0934b857620f0fb019922d4a9a0` | 19580 |
+| `tests/item-8-conditions.test.js` | edited | `5bc102ae876326f86f8a5363dd9f9c3d1e985eebfc1ce29a03f9030780e6ca0d` | 22551 |
+| `tests/marker-strip.test.js` | edited | `fcd88ff7d424411a1608d2059e38d28c8413ef5a342d8864795b68d04650f8a2` | 10792 |
+| `tests/player-rolls-out-of-combat.test.js` | edited | `8ec99d41735ec8d770ca9bb083e557602e1981165c7384bb0a98122b6e478ea0` | 18771 |
+| `docs/pm/reports/combat-resolution-REPORT.md` | edited (this file) | n/a | — |
+
+**Full `npm test`:** Files **253/253 green**, assertions **19,744 passed, 0 failed** (Windows notes: `item-1b-cleave-push-slow`, `item-8-conditions`, `lair-durability`, `pc-conditions` counted `pass*`).

@@ -409,7 +409,7 @@ export async function runNpcTurns({ sessionId, encounterSeq, playerTurnDone, pla
       // An accepted COMBAT_END or a settlement ends the fight; a COMBAT_END
       // refused while enemies stand does not (combat resolution).
       if (handlerResults.some((hr) => (hr?.schemaKey === 'COMBAT_END' && !hr.result?.refused)
-          || (hr?.schemaKey === 'COMBAT_SETTLE' && hr.result?.success === true))) {
+          || ((hr?.schemaKey === 'COMBAT_SETTLE' || hr?.schemaKey === 'COMBAT_ESCAPE') && hr.result?.success === true))) {
         return { turns, advanced, state, ended: true, stoppedOn: 'combat-end' };
       }
     }

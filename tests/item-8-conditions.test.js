@@ -321,7 +321,10 @@ group('8. Deafened: hearing checks auto-fail, everything else rolls');
   ok((await cs.getConditions('enemy', gA.id)).includes('deafened'), 'enemy carries deafened before the hearing roll');
   const hearing = await markerResult('[ROLL_REQUEST: Skill="Perception" DC=15 Looks="listening for the patrol" Hearing="true"]', pc.id, sessionId, 'ROLL_REQUEST');
   ok(hearing && hearing.pending === false && hearing.outcome === 'failure', 'deafened PC hearing check auto-fails, no pending roll');
-  const notHearing = await markerResult('[ROLL_REQUEST: Skill="Perception" DC=15 Looks="looking for tracks"]', pc.id, sessionId, 'ROLL_REQUEST');
+  // Survival, not Perception: since 2026-11-23 (PM decision) the first open
+  // Perception ask with no bank opens the player's Perception bank instead
+  // of a pending roll. Deafness only touches hearing checks either way.
+  const notHearing = await markerResult('[ROLL_REQUEST: Skill="Survival" DC=15 Looks="looking for tracks"]', pc.id, sessionId, 'ROLL_REQUEST');
   ok(notHearing && notHearing.pending === true, 'deafened PC non-hearing check still rolls');
   const compRoll = await rr.rollForNpc({ sessionId, characterId: pc.id, actorName: 'Lyra', kind: 'skill', name: 'Perception', dc: 15, hearing: true });
   ok(compRoll && compRoll.autoFail === true && compRoll.outcome === 'failure', 'deafened companion hearing check auto-fails');

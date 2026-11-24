@@ -773,6 +773,19 @@ export async function resolveCheckParty(context, rawName) {
   return null;
 }
 
+/** Read-only: does the player hold a HELP_CHECK that would apply to this
+ *  check? A companion helping the player look is a declared, active check
+ *  — the Perception-bank guard lets it roll openly. */
+async function pcHasCheckHelp(context, kind, name) {
+  try {
+    const enc = await currentCheckEncounter(context.sessionId);
+    const entry = await getEntry(context.sessionId, enc, await ledgerKeyForPlayer(context.characterId));
+    const stored = entry?.checkHelp;
+    if (!stored) return false;
+    return !stored.scope || (stored.scope.kind === kind && stored.scope.name === String(name).trim().toLowerCase());
+  } catch { return false; }
+}
+
 async function consumeCheckHelp(context, actor, isPc, kind, name) {
   if (kind === 'save') return null;
   try {
@@ -856,9 +869,32 @@ registerMarkerHandler('ROLL_REQUEST', async (parsed, context) => {
       // note telling the DM to read the bank. The player's own declared
       // search still rolls openly (the pre-roll design keeps active
       // searches on ROLL_REQUEST).
-      if (kind === 'skill' && /^perception$/i.test(String(name).trim())
-          && !ACTIVE_SEARCH_RE.test(String(context.playerAction || ''))) {
-        const { pcCoveredByBank } = await import('./perceptionPreRollService.js');
+      // A hearing-tagged request (listening for the patrol) is not the
+      // hidden layer, and a deafened roller auto-fails it below.
+      if (kind === 'skill' && /^perception$/i.test(String(name).trim()) && !parsed?.Hearing
+          && !ACTIVE_SEARCH_RE.test(String(context.playerAction || ''))
+          && !(await pcHasCheckHelp(context, kind, name))) {
+        const { pcCoveredByBank, getActiveDungeon, bankAtDoor } = await import('./perceptionPreRollService.js');
+        // No bank anywhere yet (PM decision, Muse 2026-11-23): the first
+        // open Perception ask opens one — refused, and the player is asked
+        // for their 3 numbers for this place instead; the DM reads the
+        // bank once they are in.
+        if (!(await getActiveDungeon(context.sessionId))) {
+          const here = await dbGet('SELECT current_location FROM characters WHERE id = ?', [context.characterId]).catch(() => null);
+          const place = String(here?.current_location || '').trim() || 'this place';
+          const opened = await bankAtDoor({ sessionId: context.sessionId, characterId: context.characterId, dungeon: place });
+          if (opened?.success) {
+            try {
+              const cfg = await readSessionConfig(context.sessionId);
+              if (cfg.pendingRoll?.bank === 'perception') { cfg.pendingRoll.trigger = 'first_ask'; await writeSessionConfig(context.sessionId, cfg); }
+            } catch { /* the bank ask stands either way */ }
+            return {
+              type: 'roll_request', success: false, refusedBankedPerception: true, openedBank: place,
+              reason: 'no Perception bank yet — the engine asked the player for their banked numbers instead',
+              systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Your Perception ROLL_REQUEST was NOT sent. The party had no banked Perception, so the engine is asking ${character?.name || 'the player'} for their three Perception numbers for ${place} instead. Once they are in, read the bank in secret for what you meant to check: [PERCEPTION_USE: Target="${character?.name || 'Player'}" Trigger="trap|secret_door|stealthed_enemy" DC=${dc}]. Never ask an open Perception roll for something hidden; do not mention any roll or number.`
+            };
+          }
+        }
         if (await pcCoveredByBank(context.sessionId)) {
           return {
             type: 'roll_request', success: false, refusedBankedPerception: true,

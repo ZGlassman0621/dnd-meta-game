@@ -1345,7 +1345,7 @@ async function synthesizePlayerAttack(sessionId, characterId, action) {
 function endsFight(hr) {
   if (!hr?.ok || !hr.result) return false;
   if (hr.schemaKey === 'COMBAT_END') return !hr.result.refused;
-  return hr.schemaKey === 'COMBAT_SETTLE' && hr.result.success === true;
+  return (hr.schemaKey === 'COMBAT_SETTLE' || hr.schemaKey === 'COMBAT_ESCAPE') && hr.result.success === true;
 }
 
 /** Plain-words engine lines, DM notes and math for one reply's results (P2, item 7). */
@@ -1364,10 +1364,13 @@ function combatResultLines(handlerResults, playerName = null) {
       const names = hr.result.standing || [];
       lines.push(`⚙ The fight isn't over — ${names.join(' and ')} ${names.length === 1 ? 'is' : 'are'} still standing.`);
       notes.push(hr.result.systemNote);
-    } else if (['ENEMY_FLEE', 'ENEMY_SURRENDER', 'COMBAT_SETTLE'].includes(hr.schemaKey)) {
+    } else if (['ENEMY_FLEE', 'ENEMY_SURRENDER', 'COMBAT_SETTLE', 'COMBAT_ESCAPE'].includes(hr.schemaKey)) {
       const r = hr.result;
       if (r.success === false) { notes.push(`[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${hr.schemaKey} not applied: ${r.reason}.`); continue; }
-      if (hr.schemaKey === 'ENEMY_FLEE') {
+      if (hr.schemaKey === 'COMBAT_ESCAPE') {
+        lines.push(`⚙ You get away — ${r.leftStanding.join(' and ')} ${r.leftStanding.length === 1 ? 'is' : 'are'} left behind, still standing.`);
+        notes.push(`[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The party ESCAPED${r.how ? ` (${r.how})` : ''}. ${r.leftStanding.join(', ')} remain where they were, still standing; they do not pursue unless you start a new fight later.`);
+      } else if (hr.schemaKey === 'ENEMY_FLEE') {
         lines.push(`⚙ ${r.enemy} flees the fight.`);
         notes.push(`[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${r.enemy} has FLED — out of the fight.${r.standing?.length ? ` Still standing: ${r.standing.join(', ')}.` : ''}`);
       } else if (hr.schemaKey === 'ENEMY_SURRENDER') {
@@ -2563,7 +2566,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
         // Refused while enemies stand (combat resolution); its note and
         // ⚙ line ride combatResultLines below.
         if (!hr.result.refused) combatEnd = true;
-      } else if (hr.schemaKey === 'COMBAT_SETTLE' && hr.result.success) {
+      } else if ((hr.schemaKey === 'COMBAT_SETTLE' || hr.schemaKey === 'COMBAT_ESCAPE') && hr.result.success) {
         combatEnd = true;
       } else if (hr.schemaKey === 'TURN_ADVANCE' && hr.result.systemNote) {
         // Item 3, Tier 1: the advance note was previously dropped here
@@ -2683,7 +2686,8 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     if (combatEnd) {
       try {
         const endSeq = await getCurrentEncounterSeq(sessionId);
-        const outcome = endSeq ? await fightOutcome(sidN, endSeq) : null;
+        const escaped = (pipelineResult.handlerResults || []).some((hr) => hr?.ok && hr.schemaKey === 'COMBAT_ESCAPE' && hr.result?.success === true);
+        const outcome = endSeq ? await fightOutcome(sidN, endSeq, { escaped }) : null;
         if (outcome) {
           cleanNarrative += `\n\n⚙ The fight is over: ${outcome.text}.`;
           result.messages.push({ role: 'user', content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: [COMBAT OVER — system fact: ${outcome.text}. The fight is over; narrate its aftermath from here.]` });
@@ -2723,7 +2727,8 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
         const pr = pcfg.pendingRoll;
         const add = (Number(pr.modifier) || 0) + (Number(pr.penalty) || 0);
         const k = pr.count || 3;
-        rollPrompts.push(`🎲 At the door of ${pr.dungeon}: roll ${k} d20s for Perception and send all ${k} numbers in one message (e.g. "14 8 17"). Your first number is banked now and the others are held in reserve; the engine adds ${signedNum(add)} after.`);
+        const where = pr.trigger === 'first_ask' ? `Perception for ${pr.dungeon}` : `At the door of ${pr.dungeon}`;
+        rollPrompts.push(`🎲 ${where}: roll ${k} d20s for Perception and send all ${k} numbers in one message (e.g. "14 8 17"). Your first number is banked now and the others are held in reserve; the engine adds ${signedNum(add)} after.`);
       } else if (pcfg.pendingRoll) {
         // A check the DM asked for (ROLL_REQUEST, a trap or hazard save):
         // the player is told what to roll and what the engine adds after,
