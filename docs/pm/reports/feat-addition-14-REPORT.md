@@ -253,3 +253,9 @@ At **:5173** (never :3000), after `npm run dev`:
    - "I use Elegant Maneuver and leap the gap": the roll prompt asks for two d20s, with advantage.
    - "I use Winning Words on the innkeeper": a Persuasion roll prompt, then a ⚙ charm line or a no-charm line.
    - "I cast Hunter's Mark with a free Trapper cast": no spell slot is spent.
+
+## Verification evidence
+
+- Commit `15e38a4` "Feat addition: the fourteen approved feats (v1.0.209)", branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`, pushed to `origin`.
+- SHA-256 per file: see the Files changed table. The hashes were taken before the commit, of the bytes that were committed.
+- Tests: the Test results section. Live behaviour: the Live probe section.
