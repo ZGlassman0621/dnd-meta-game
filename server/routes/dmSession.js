@@ -103,11 +103,14 @@ import { getPendingAttack, resolveReportedAttack, formatAttackOutcomeBlock, getP
 import {
   resolvePlayerInitiative, formatInitiativeFact, setPendingDeathSave, takePendingDeathSave,
   reportedD20, reportedTotal, pendingPlayerRolls, combatDispatchText, enemyAttackResultText,
-  partyAttackMath, partyAttackRefusalText, runNpcTurns, isPlayerEntry,
+  partyAttackMath, partyAttackRefusalText, runNpcTurns, isPlayerEntry, activeEnemyCount,
   findPendingConcentration, queueConcentrationSaves, resolvePendingConcentration, resolvePendingHeal,
 } from '../services/combatLoopService.js';
 import { getTurnState } from '../services/combatTurnService.js';
 import { formatTurnAdvanceNote } from '../services/combatMarkerService.js';
+// Combat resolution (2026-11-23): registers ENEMY_FLEE / ENEMY_SURRENDER /
+// COMBAT_SETTLE, and records how a fight ended.
+import { encounterEnemies, fightOutcome } from '../services/combatResolutionService.js';
 // Player-rolls-out-of-combat (2026-11-23): Hit Dice and cold saves.
 import { settleOutOfCombatRoll, outOfCombatRollPrompts, reportedNumberList } from '../services/playerRollService.js';
 import { formatTurnStateBlock } from '../services/turnLedgerService.js';
@@ -1338,6 +1341,13 @@ async function synthesizePlayerAttack(sessionId, characterId, action) {
   return { marker, target: target.name, handlerResults: pr.handlerResults || [] };
 }
 
+/** A handler result that ends the fight: an accepted COMBAT_END or a settlement (combat resolution). */
+function endsFight(hr) {
+  if (!hr?.ok || !hr.result) return false;
+  if (hr.schemaKey === 'COMBAT_END') return !hr.result.refused;
+  return hr.schemaKey === 'COMBAT_SETTLE' && hr.result.success === true;
+}
+
 /** Plain-words engine lines, DM notes and math for one reply's results (P2, item 7). */
 function combatResultLines(handlerResults, playerName = null) {
   const lines = []; const notes = []; const math = [];
@@ -1349,6 +1359,24 @@ function combatResultLines(handlerResults, playerName = null) {
       // A refusal carries no enemy name; the marker's Enemy= names it.
       const t = enemyAttackResultText({ enemyName: hr.parsed?.Enemy, ...hr.result }, playerName);
       if (t) { lines.push(t.line); notes.push(t.note); if (t.math) math.push(t.math); }
+    } else if (hr.schemaKey === 'COMBAT_END' && hr.result.refused) {
+      // Combat resolution: a fight does not end while enemies stand.
+      const names = hr.result.standing || [];
+      lines.push(`⚙ The fight isn't over — ${names.join(' and ')} ${names.length === 1 ? 'is' : 'are'} still standing.`);
+      notes.push(hr.result.systemNote);
+    } else if (['ENEMY_FLEE', 'ENEMY_SURRENDER', 'COMBAT_SETTLE'].includes(hr.schemaKey)) {
+      const r = hr.result;
+      if (r.success === false) { notes.push(`[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${hr.schemaKey} not applied: ${r.reason}.`); continue; }
+      if (hr.schemaKey === 'ENEMY_FLEE') {
+        lines.push(`⚙ ${r.enemy} flees the fight.`);
+        notes.push(`[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${r.enemy} has FLED — out of the fight.${r.standing?.length ? ` Still standing: ${r.standing.join(', ')}.` : ''}`);
+      } else if (hr.schemaKey === 'ENEMY_SURRENDER') {
+        lines.push(`⚙ ${r.enemy} surrenders.`);
+        notes.push(`[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${r.enemy} has SURRENDERED — out of the fight; they no longer act against the party.${r.standing?.length ? ` Still standing: ${r.standing.join(', ')}.` : ''}`);
+      } else {
+        lines.push(`⚙ The fight is settled — ${r.settled.join(' and ')} stand${r.settled.length === 1 ? 's' : ''} down.`);
+        notes.push(`[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The fight is SETTLED by agreement${r.terms ? ` (${r.terms})` : ''}: ${r.settled.join(', ')} stand down.`);
+      }
     } else if (hr.schemaKey === 'ATTACK') {
       const refused = partyAttackRefusalText(hr.result);
       if (refused) { lines.push(refused.line); notes.push(refused.note); continue; }
@@ -2532,6 +2560,10 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
         combatStart = hr.result.combatStart;
         result.messages.push({ role: 'user', content: hr.result.systemNote });
       } else if (hr.schemaKey === 'COMBAT_END') {
+        // Refused while enemies stand (combat resolution); its note and
+        // ⚙ line ride combatResultLines below.
+        if (!hr.result.refused) combatEnd = true;
+      } else if (hr.schemaKey === 'COMBAT_SETTLE' && hr.result.success) {
         combatEnd = true;
       } else if (hr.schemaKey === 'TURN_ADVANCE' && hr.result.systemNote) {
         // Item 3, Tier 1: the advance note was previously dropped here
@@ -2619,7 +2651,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
           if (lastAssistant && t.raw) lastAssistant.content = `${lastAssistant.content || ''}\n\n${t.raw}`;
           for (const n of r.notes) result.messages.push({ role: 'user', content: n });
           pipelineResult.handlerResults.push(...t.handlerResults);
-          if (t.handlerResults.some((hr) => hr?.ok && hr.schemaKey === 'COMBAT_END')) combatEnd = true;
+          if (t.handlerResults.some(endsFight)) combatEnd = true;
         }
         if (loop.turns.length) {
           npcTurnLog = loop.turns.map((t) => ({ combatant: t.combatant.name, type: t.combatant.type }));
@@ -2632,12 +2664,33 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
           if (extra) result.messages.push({ role: 'user', content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${extra}` });
         }
         if (loop.ended) combatEnd = true;
+        // The fight ends on its last resolution (combat resolution item 3):
+        // no enemy left active — dead, fled, surrendered or settled —
+        // whichever turn resolved it.
+        if (!combatEnd && (await encounterEnemies(sidN, loopSeq)).length && await activeEnemyCount(sidN, loopSeq) === 0) combatEnd = true;
         if (combatEnd) {
           await dbRun('DELETE FROM combat_turn_state WHERE session_id = ? AND encounter_seq = ?', [sessionId, loopSeq]).catch(() => {});
         }
       }
     } catch (err) {
       console.error('[combatLoop] NPC turns failed (non-fatal):', err.message);
+    }
+
+    // Combat resolution item 3: a fight that ended records how — each
+    // enemy dead, fled, surrendered or settled — for the player (⚙ line),
+    // the DM and the stored history (the chronicle reads it), alongside
+    // the combat_enemies statuses a later session reads.
+    if (combatEnd) {
+      try {
+        const endSeq = await getCurrentEncounterSeq(sessionId);
+        const outcome = endSeq ? await fightOutcome(sidN, endSeq) : null;
+        if (outcome) {
+          cleanNarrative += `\n\n⚙ The fight is over: ${outcome.text}.`;
+          result.messages.push({ role: 'user', content: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: [COMBAT OVER — system fact: ${outcome.text}. The fight is over; narrate its aftermath from here.]` });
+        }
+      } catch (err) {
+        console.warn('[combatLoop] fight outcome record failed (non-fatal):', err.message);
+      }
     }
 
     // P4 concentration: every damage the concentrating player took this

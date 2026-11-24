@@ -113,6 +113,7 @@ All defaults live in `server/config/featureFlags.js`.
 3. LLM call.
 4. **Marker dispatch — before any persist.** A crash after this loses the turn rather than recording a narrative whose effects never applied.
 5. **The combat loop** (`server/services/combatLoopService.js`), when a fight is running. The ENGINE owns the turn order; the DM's `[TURN_ADVANCE]` is stripped before dispatch. The player's turn ends when nothing waits on their dice (no pending initiative, attack, damage, check or death save). Then the route makes **one DM call per NPC turn**, enemy or companion: the DM chooses the action and writes its marker, the engine resolves it and states the result as a "⚙" line, and the loop stops on the player's turn again. A death save is asked for here when the player is at 0 HP.
+   **A fight ends only when it is resolved** (`server/services/combatResolutionService.js`). Every enemy must be `dead`, `fled`, `surrendered` or `settled` (the `combat_enemies.status` CHECK, migration 115). The DM writes `[ENEMY_FLEE]`, `[ENEMY_SURRENDER]` or `[COMBAT_SETTLE]`; morale flight writes `fled` through the same `setEnemyStatus`. Resolved enemies are marked `out` in the turn order rather than spliced out, because turn hooks key on the index. `[COMBAT_END]` is refused while an enemy still stands, and the refusal note goes to the DM. The engine ends the fight itself when none is left active and records the outcome as a ⚙ line and a `COMBAT OVER` fact.
 6. Handler results folded into `result.messages`.
 7. **Exactly one** `UPDATE dm_sessions SET messages`.
 

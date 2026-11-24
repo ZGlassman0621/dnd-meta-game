@@ -126,10 +126,39 @@ export const MARKER_SCHEMAS = {
     }
   },
 
+  // Combat resolution (2026-11-23): how an enemy leaves a fight alive.
+  // The DM chooses; the engine records it and ends the fight when no
+  // enemy is left active (combatResolutionService). Declared BEFORE
+  // COMBAT_END: markers dispatch in declaration order, so a resolution
+  // and a [COMBAT_END] in the same reply resolve first and the end is
+  // then judged against the resolved fight (live probe, 2026-11-23).
+  ENEMY_FLEE: {
+    position: 'inline',
+    fields: {
+      Enemy: { type: 'string', required: true }
+    }
+  },
+
+  ENEMY_SURRENDER: {
+    position: 'inline',
+    fields: {
+      Enemy: { type: 'string', required: true }
+    }
+  },
+
+  COMBAT_SETTLE: {
+    position: 'inline',
+    fields: {
+      Terms: { type: 'string', required: false }
+    }
+  },
+
   COMBAT_END: {
     position: 'last',
     fields: {}
   },
+
+
 
   ENEMY_DAMAGE: {
     position: 'inline',
@@ -1648,10 +1677,16 @@ export function extractMarkerBodies(text, markerName, { all = false } = {}) {
 function extractField(body, fieldName) {
   // Field names may be CamelCase or snake_case or lowercase — match
   // case-insensitively so schema misalignment from the AI doesn't drop data.
-  const re = new RegExp(`\\b${fieldName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s,\\]]+))`, 'i');
+  // A double-quoted value ends at the quote that is followed by the next
+  // field (Name=) or the end of the body — not at the first inner quote.
+  // The DM writes nested quotes inside a value, e.g. Enemies="Thug 3 (HP
+  // 14, …, Weapon="Club"), Thug 4 (…)"; the old [^"]* cut that at the
+  // inner quote and created one enemy named 'Thug 3 (HP 14, … Weapon='
+  // (combat-resolution live probe, 2026-11-23). A plain value is unchanged.
+  const re = new RegExp(`\\b${fieldName}\\s*=\\s*(?:"(.*?)"(?=\\s*,?\\s*[A-Za-z_]\\w*\\s*=|\\s*$)|"([^"]*)"|'([^']*)'|([^\\s,\\]]+))`, 'i');
   const m = re.exec(body);
   if (!m) return null;
-  return m[1] ?? m[2] ?? m[3] ?? null;
+  return m[1] ?? m[2] ?? m[3] ?? m[4] ?? null;
 }
 
 /**

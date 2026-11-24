@@ -86,8 +86,12 @@ export default function CombatTracker({ combatState, onEndCombat }) {
                   : `1px solid rgba(255, 255, 255, 0.08)`,
                 minWidth: 'fit-content',
                 transition: 'all 0.2s',
-                boxShadow: isActive ? '0 0 8px rgba(251, 191, 36, 0.3)' : 'none'
+                boxShadow: isActive ? '0 0 8px rgba(251, 191, 36, 0.3)' : 'none',
+                // Out of the fight (fled / surrendered / settled): kept in
+                // the order for the record, dimmed and labelled.
+                opacity: combatant.out ? 0.45 : 1
               }}
+              title={combatant.out ? `${combatant.name} — ${combatant.out}` : undefined}
             >
               {/* Active indicator */}
               {isActive && (
@@ -106,7 +110,7 @@ export default function CombatTracker({ combatState, onEndCombat }) {
                 fontSize: '0.7rem',
                 fontWeight: 'normal'
               }}>
-                {combatant.initiative}
+                {combatant.out ? combatant.out : combatant.initiative}
               </span>
             </div>
           );

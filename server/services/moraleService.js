@@ -48,7 +48,10 @@ export async function checkMorale(sessionId, encounterSeq, losingSide = 'enemies
     for (const enemy of aliveEnemies) {
       const saveRoll = rollD20(`morale break save: ${enemy.name}`);
       if (saveRoll < dc) {
-        await dbRun("UPDATE combat_enemies SET status = 'fled' WHERE id = ?", [enemy.id]);
+        // The same write as the DM's [ENEMY_FLEE] (combat-resolution,
+        // 2026-11-23): one 'fled' state, one path, the turn order marked.
+        const { setEnemyStatus } = await import('./combatResolutionService.js');
+        await setEnemyStatus(sessionId, encounterSeq, enemy.id, 'fled');
         results.breakChecks.push({ name: enemy.name, roll: saveRoll, dc, outcome: 'fled' });
       } else {
         results.breakChecks.push({ name: enemy.name, roll: saveRoll, dc, outcome: 'held' });

@@ -2204,7 +2204,10 @@ Deposit 30-50% of total. Lead 3d (fine leather) / 7d (masterwork weapon) / 14d+ 
 
   blocks.push(`──────────── COMBAT ────────────
 Combat starts: [COMBAT_START: Enemies="Goblin (HP 7, AC 15, ATK +4, DMG 1d6+2), Orc (HP 15, AC 13, ATK +5, DMG 1d12+3)"] — LAST sentence. The system rolls the NPCs' initiative, asks the player for their own d20, and tracks enemy HP. Same-name enemies are numbered by the system ("Thug 1", "Thug 2") — use those names in every marker.
-Combat ends: [COMBAT_END] — LAST sentence.
+Combat ends only when it is RESOLVED — every enemy dead, fled, surrendered, or talked down. Say how with a marker; the engine records it and ends the fight itself once no enemy is left:
+• An enemy runs off → [ENEMY_FLEE: Enemy="Thug 1"]. An enemy gives up → [ENEMY_SURRENDER: Enemy="Thug 1"] (it stays, out of the fight, at the party's mercy). Write these on that enemy's turn, or whenever the fiction makes it happen.
+• The fight is talked down — a deal, a parley, a standoff both sides walk away from → [COMBAT_SETTLE: Terms="they let us pass for 10 gold"] (every enemy still standing stands down).
+• [COMBAT_END] — LAST sentence — only when no enemy is left standing; with an enemy still standing it is REFUSED and the fight goes on.
 
 Per-turn flow — the ENGINE runs the turns (never emit [TURN_ADVANCE]). The engine also asks the player for every roll and adds every modifier after the roll: never tell the player what dice to roll or which modifiers ("proficiency", "Strength") to add — the engine's own line does that.
 • Player's turn → respond to the player only, describe the battlefield, ask "What do you do?" → STOP. Do not act for any NPC on the player's turn.

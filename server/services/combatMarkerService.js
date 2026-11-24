@@ -258,12 +258,30 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
 });
 
 /**
- * COMBAT_END handler. Presence-only marker. No DB side effect — the
- * route handler used to set a `combatEnd` boolean for the response
- * payload (consumed by DMSession.jsx:821 to clear combat UI state).
- * Handler just returns the truthy event so the route can extract it.
+ * COMBAT_END handler. Presence-only marker; the route ends the fight on
+ * it (clears the turn state; the client clears the tracker).
+ *
+ * Combat resolution (Zach 2026-11-23: "Fights need some sort of
+ * resolution"): refused while any enemy of the current encounter is
+ * still active — the DM gets a note naming who stands and the
+ * resolutions that exist (ENEMY_FLEE / ENEMY_SURRENDER / COMBAT_SETTLE).
  */
-registerMarkerHandler('COMBAT_END', async () => {
+registerMarkerHandler('COMBAT_END', async (parsed, context) => {
+  try {
+    if (context?.sessionId) {
+      const seq = await getCurrentEncounterSeq(context.sessionId);
+      // Only a fight that is running (it has a turn state): an encounter
+      // ended before this rule existed may still list "active" enemies.
+      const running = seq ? await dbGet('SELECT 1 FROM combat_turn_state WHERE session_id = ? AND encounter_seq = ?', [context.sessionId, seq]).catch(() => null) : null;
+      if (running) {
+        const { encounterEnemies, isStanding, combatEndRefusalNote } = await import('./combatResolutionService.js');
+        const standing = (await encounterEnemies(context.sessionId, seq)).filter(isStanding).map((e) => e.name);
+        if (standing.length) {
+          return { type: 'combat_end', refused: true, standing, systemNote: combatEndRefusalNote(standing) };
+        }
+      }
+    }
+  } catch (e) { console.error('[combatMarkerService] COMBAT_END check failed:', e.message); }
   return { type: 'combat_end' };
 });
 

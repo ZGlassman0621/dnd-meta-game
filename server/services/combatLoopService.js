@@ -267,7 +267,7 @@ export function npcTurnDirective(entry, state, playerName) {
   const player = playerName || 'Player';
   const markerHint = entry.type === 'companion'
     ? `for an attack emit [ATTACK: Attacker="${who}" Target="<enemy name>"] (the engine rolls and resolves a companion's attack at once)`
-    : `for an attack emit [ENEMY_ATTACK: Enemy="${who}" Target="${player}"] (or a companion's name as Target); for a spell, [ENEMY_CAST: …]`;
+    : `for an attack emit [ENEMY_ATTACK: Enemy="${who}" Target="${player}"] (or a companion's name as Target); for a spell, [ENEMY_CAST: …]; if ${who} runs off, [ENEMY_FLEE: Enemy="${who}"]; if ${who} gives up, [ENEMY_SURRENDER: Enemy="${who}"]; if ${who}'s side takes a deal, a bribe or a truce the party offered, [COMBAT_SETTLE: Terms="what was agreed"] (every enemy still standing stands down)`;
   return `[SYSTEM — COMBAT TURN (round ${state.round}): It is ${who}'s turn. You control ${who}: choose what ${who} does now — attack, move, cast, flee, talk, anything that fits the fight. ` +
     `Write one to three sentences describing ${who}'s action and ${markerHint}. ` +
     `Describe the attempt only — do NOT say whether it hits or how much damage it does: the engine resolves it and states the result. ` +
@@ -406,7 +406,12 @@ export async function runNpcTurns({ sessionId, encounterSeq, playerTurnDone, pla
       let handlerResults = [];
       try { handlerResults = (await dispatch(raw))?.handlerResults || []; } catch (e) { console.error('[combatLoop] NPC dispatch failed:', e.message); }
       turns.push({ combatant: entry, raw, handlerResults });
-      if (handlerResults.some((hr) => hr?.schemaKey === 'COMBAT_END')) return { turns, advanced, state, ended: true, stoppedOn: 'combat-end' };
+      // An accepted COMBAT_END or a settlement ends the fight; a COMBAT_END
+      // refused while enemies stand does not (combat resolution).
+      if (handlerResults.some((hr) => (hr?.schemaKey === 'COMBAT_END' && !hr.result?.refused)
+          || (hr?.schemaKey === 'COMBAT_SETTLE' && hr.result?.success === true))) {
+        return { turns, advanced, state, ended: true, stoppedOn: 'combat-end' };
+      }
     }
     state = await advanceTurn(sessionId, encounterSeq);
     if (state) advanced.push(state);
