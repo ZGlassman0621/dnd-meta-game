@@ -253,4 +253,7 @@ At **:5173** (never :3000), after `npm run dev` and a hard refresh (Ctrl+Shift+R
 
 ## Verification evidence
 
-COMMIT_PLACEHOLDER
+- Commit `bb3ccfc`, branch `phase-4-hybrid-combat`, PC repo `E:DnD Meta Gamednd-meta-game`, pushed to `origin`.
+- SHA-256 per file: the Files changed table.
+- Tests: the Test results section.
+- On-screen evidence: the Item 1, 4 and 9 sections (headless Chrome at :5173, fresh profile, measured row geometry and screenshots).
