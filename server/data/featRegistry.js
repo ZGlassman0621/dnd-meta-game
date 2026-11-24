@@ -282,31 +282,20 @@ export function renderFeatEffectsForPrompt(feats) {
   const split = getFeatEffects(feats);
   // Provenance fence (Muse, 2026-11-24): a feat's source tag is internal
   // metadata — it never reaches anything the player sees, DM narration
-  // included. The fourteen added feats override no book rule, so they
-  // render in the plain FEAT EFFECTS list with no ruleset name. (The
-  // Manual of Martial Mastery header below is unchanged.)
+  // included, so no ruleset name is rendered here. Every feat sits under
+  // the one plain FEAT EFFECTS heading. The fourteen added feats override
+  // no book rule and join the plain list; the JSON-ruleset feats (the
+  // Manual of Martial Mastery) DO override book rules, so they keep the
+  // override instruction, in a sub-block that names no source.
   const isAdded = (f) => f.rulesetId === PDF_FEATS_RULESET.rulesetId || f.rulesetId === XGE_ADAPTATION_RULESET.rulesetId;
-  const core = [...split.core, ...split.homebrew.filter(isAdded)];
-  const homebrew = split.homebrew.filter((f) => !isAdded(f));
-  const sections = [];
-  if (core.length > 0) {
-    sections.push(
-      `FEAT EFFECTS (apply these in relevant situations):\n  ${core.map(f => `${f.name}: ${f.effect}`).join('\n  ')}`
-    );
+  const plain = [...split.core, ...split.homebrew.filter(isAdded)];
+  const overriding = split.homebrew.filter((f) => !isAdded(f));
+  if (plain.length === 0 && overriding.length === 0) return '';
+  const lines = ['FEAT EFFECTS (apply these in relevant situations):'];
+  for (const f of plain) lines.push(`  ${f.name}: ${f.effect}`);
+  if (overriding.length > 0) {
+    lines.push('  These feats OVERRIDE standard D&D 5e rules where they conflict. When a feat below says X and your training says Y, X wins:');
+    for (const f of overriding) lines.push(`  ${f.name}: ${f.effect}`);
   }
-  if (homebrew.length > 0) {
-    const byRuleset = new Map();
-    for (const f of homebrew) {
-      if (!byRuleset.has(f.rulesetId)) byRuleset.set(f.rulesetId, { name: f.rulesetName, feats: [] });
-      byRuleset.get(f.rulesetId).feats.push(f);
-    }
-    for (const [, rs] of byRuleset) {
-      sections.push(
-        `HOMEBREW FEAT EFFECTS (${rs.name}) — these OVERRIDE standard D&D 5e rules where they conflict. ` +
-        `When a feat below says X and your training says Y, X wins. Apply these in relevant situations:\n  ` +
-        rs.feats.map(f => `${f.name}: ${f.effect}`).join('\n  ')
-      );
-    }
-  }
-  return sections.join('\n');
+  return lines.join('\n');
 }

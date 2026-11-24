@@ -326,3 +326,37 @@ The client build is green.
 | `client/src/components/creator-next/mixedAncestry.js` | edited | 23092 | `b27550583673aa7a465db2c4d9a3d6a839019e4a2df0522d37e250c141394d42` |
 | `tests/feat-addition-14.test.js` | edited | 47066 | `4d6c5fa2b7d16cbfe7035aa10856635e06f0897fc69286f0492a77797d0a8db1` |
 - Provenance-fence commit: `88ee28b`, branch `phase-4-hybrid-combat`, pushed.
+
+## Addendum — provenance fence extended to the Manual of Martial Mastery (Muse, 2026-11-24)
+
+**Change:** the DM prompt no longer prints "HOMEBREW FEAT EFFECTS (Nardo's Manual of Martial Mastery)".
+- Every feat now renders under the one plain "FEAT EFFECTS (apply these in relevant situations):" heading.
+- The Manual feats keep their override instruction, in a sub-block under that heading: "These feats OVERRIDE standard D&D 5e rules where they conflict. When a feat below says X and your training says Y, X wins:". It names no ruleset.
+- Book feats and the fourteen added feats list first, and carry no override instruction.
+
+**Not changed:**
+- Feat lookup and resolution order. Homebrew still wins a name collision.
+- The `source`, `rulesetId` and `rulesetName` data.
+- `getFeatEffects` grouping.
+- Every other surface.
+
+**Test:** `tests/feat-registry.test.js` test 5 was updated. It no longer expects the "HOMEBREW FEAT EFFECTS" header, and now asserts:
+- the plain heading;
+- no ruleset name ("Manual of Martial Mastery" or "Nardo") in the text;
+- the override instruction placed after the book feat and before the Manual feat;
+- a Manual-only list still carries the instruction;
+- a book-only list carries none;
+- an empty list renders nothing.
+
+`feat-registry` is 22/22 and `feat-addition-14` is 142/142.
+
+**Full `npm test`, builder's run:** 254/254 files green, 19,751 assertions passed, 0 failed.
+- Retried after Windows' native crash, and passed: `blackguard-validator-wiring`, `creator-test-notes-2-server`, `wizard-validator-wiring`.
+- `pass*`: `audit-cross-system`, `companion-sheet`, `spell-damage`, `subclass-scanned4`.
+
+Zach's run is the gate.
+
+| File | New / edited | Bytes | SHA-256 |
+|---|---|---|---|
+| `server/data/featRegistry.js` | edited | 23718 | `58140e6858bb736f2585c6d2f8b0a47ce9621e6dc8b414c0c30af26c9109c794` |
+| `tests/feat-registry.test.js` | edited | 4154 | `5fff69073ef7dd0455f19d79fa256519e61c1f04066405311670f1cb6762e2ea` |

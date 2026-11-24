@@ -50,7 +50,16 @@ console.log('\n=== Test 5: Rendering ===\n');
 {
   const rendered = renderFeatEffectsForPrompt(['Alert', 'Battleaxe Mastery']);
   assert(rendered.includes('OVERRIDE'), 'Override framing present');
-  assert(rendered.includes('HOMEBREW FEAT EFFECTS'), 'Homebrew header present');
+  // Provenance fence (Muse, 2026-11-24): the Manual feats render under the
+  // plain FEAT EFFECTS heading, keeping the override instruction, with no
+  // ruleset name (it was "HOMEBREW FEAT EFFECTS (Nardo's Manual of Martial Mastery)").
+  assert(rendered.startsWith('FEAT EFFECTS') && !rendered.includes('HOMEBREW FEAT EFFECTS'), 'Plain FEAT EFFECTS heading, no homebrew header');
+  assert(!/Manual of Martial Mastery|Nardo/i.test(rendered), 'No ruleset name in the prompt text');
+  assert(rendered.indexOf('Alert:') < rendered.indexOf('OVERRIDE') && rendered.indexOf('OVERRIDE') < rendered.indexOf('Battleaxe Mastery:'), 'The override instruction sits above the overriding feat, after the book feat');
+  const manualOnly = renderFeatEffectsForPrompt(['Battleaxe Mastery']);
+  assert(manualOnly.startsWith('FEAT EFFECTS') && manualOnly.includes('OVERRIDE') && manualOnly.includes('Battleaxe Mastery:'), 'Manual feat alone: plain heading + override instruction');
+  assert(renderFeatEffectsForPrompt(['Alert']).indexOf('OVERRIDE') === -1, 'Book feats alone carry no override instruction');
+  assert(renderFeatEffectsForPrompt([]) === '', 'No feats: nothing rendered');
 }
 
 console.log('\n=== Test 6: Full Manual deploy (53 feats, Q8) ===\n');
