@@ -345,6 +345,10 @@ group('H2 (c) short rest still spends dice to heal (PC and companion)');
   await db.dbRun('UPDATE companions SET companion_current_hp = 6 WHERE id = ?', [compId]);
   const r = await rt.applyRest({ sessionId, characterId: pcId, type: 'short', dice: 2 });
   check(r.success === true, 'party short rest succeeds');
+  // The player rolls their own Hit Dice (player-rolls-out-of-combat,
+  // 2026-11-23): the rest posts the ask, the reported 6 and 5 settle it.
+  const hdAsk = JSON.parse((await db.dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId])).session_config || '{}').pendingHitDice;
+  check(!!hdAsk && (await rt.applyReportedHitDice(pcId, hdAsk, [6, 5])).rolls.length === 2, 'PC: the rest asks for the Hit Dice and settles the reported two');
   const pc = await db.dbGet('SELECT current_hp, hit_dice_used FROM characters WHERE id = ?', [pcId]);
   const comp = await db.dbGet('SELECT companion_current_hp, companion_hit_dice_used FROM companions WHERE id = ?', [compId]);
   check(used(pc, 'hit_dice_used') === 2 && pc.current_hp > 10, `PC: Dice=2 spends 2 and heals (hp ${pc.current_hp}, spent ${used(pc, 'hit_dice_used')})`);

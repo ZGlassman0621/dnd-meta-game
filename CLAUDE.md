@@ -149,7 +149,16 @@ The `HP_CHANGE` prompt instruction lives in `formatPlayerHpRules()`, **outside**
 
 ### Hybrid combat — player-rolled dice
 
-**The engine never rolls for the player** (Zach, 2026-11-23): it says what to roll, the player rolls real dice, and the engine does the math afterwards — initiative, the attack d20 (two on advantage or disadvantage), the damage dice (the player's number is the dice total; the engine adds the flat modifiers) and death saves. Each number arrives as a bare-number action or the `attackRoll` / `damage` / `checkRoll` body fields, and settles a pending entry on `session_config` (`pendingInitiative`, `pendingAttack`, `pendingDamage`, `pendingRoll`, `pendingDeathSave`). The engine judges hits against AC and keeps enemy HP in `combat_enemies`; the DM narrates the judged result. The response carries `rollPrompts` (what to roll next), `rollMath` (the client's roll-math panel) and `turnState` (the tracker).
+**The engine never rolls for the player** (Zach, 2026-11-23): it says what to roll, the player rolls real dice, and the engine does the math afterwards — initiative, the attack d20 (two on advantage or disadvantage), the damage dice (the player's number is the dice total; the engine adds the flat modifiers) and death saves. Each number arrives as a bare-number action or the `attackRoll` / `damage` / `checkRoll` body fields, and settles a pending entry on `session_config` (`pendingInitiative`, `pendingAttack`, `pendingDamage`, `pendingRoll`, `pendingDeathSave`). The engine judges hits against AC and keeps enemy HP in `combat_enemies`; the DM narrates the judged result. The response carries `rollPrompts` (what to roll next), `rollMath` (the client's roll-math panel, combat only) and `turnState` (the tracker). No DC ever reaches the player's text; the DM's prompt carries it.
+
+The same rule holds **out of combat** (`server/services/playerRollService.js`):
+
+- **Short-rest Hit Dice** (`pendingHitDice`): the rest lands at once, the player sends one number per die (or `0`), and `applyReportedHitDice` adds CON to each.
+- **Cold-exposure saves** (`pendingColdSaves`): one batch ask per stretch, one d20 per hour (two with advantage or disadvantage), resolved in order by `applyReportedColdSaves`.
+- **Crafting** (`POST /api/crafting/projects/:id/complete` takes `d20`; without one it returns `needsRoll` and the prompt).
+- **Lair-hazard saves**: these ride `pendingTrapSave` with the hazard's damage.
+
+A message that is only numbers settles the first waiting ask, but only when no in-combat roll or DM-requested check is waiting. Companion and enemy rolls stay engine-side.
 
 `parsePlayerDiceInput` + `formatPlayerDiceDirective` in `dmPromptBuilder.js` are a pair — validator and the prompt text it guards — and are kept adjacent so the bounds and the wording cannot drift apart. Three rules worth knowing:
 

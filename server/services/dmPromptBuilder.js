@@ -2246,7 +2246,7 @@ Outside combat, when an action's outcome is genuinely uncertain AND the stakes m
 
   blocks.push(`──────────── PERCEPTION PRE-ROLL (BANKED) ────────────
 When the party ENTERS a dungeon, bank one Perception roll per character FIRST — before anything hidden happens:
-[PERCEPTION_PREROLL: Dungeon="Sunless Citadel"] — INLINE, then ask the player to roll one d20 and STOP. The system banks the player's number and rolls the companions' numbers itself. Use the dungeon's name as the party knows it; a new dungeon means a fresh bank.
+[PERCEPTION_PREROLL: Dungeon="Sunless Citadel"] — INLINE, then STOP. The engine asks the player for three d20s (their banked number plus two spares) and banks them; it rolls the companions' numbers itself. Write this marker — NOT a ROLL_REQUEST for Perception — when the party steps into a dungeon, cave, mine, crypt, ruin or lair. Use the dungeon's name as the party knows it; a new dungeon means a fresh bank.
 
 While a bank is active, NEVER ask for a Perception roll for something hidden — that question IS the tell. When the party reaches a hidden thing, read the stored number in secret instead:
 [PERCEPTION_USE: Target="Lyra" Trigger="trap" DC=13] — INLINE. The system judges the stored number against the DC and returns the outcome as a system note next turn; narrate ONLY what that note says happened.

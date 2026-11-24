@@ -826,6 +826,9 @@ async function dodgeAdvantage(context, actor, isPc, kind, name) {
   } catch { return null; }
 }
 
+/** The player's own declared search: these still roll Perception openly. */
+const ACTIVE_SEARCH_RE = /\b(search(?:es|ing)?|look(?:s|ing)? (?:for|around|closely)|inspect(?:s|ing)?|examin(?:e|es|ing)|scan(?:s|ning)?|check(?:s|ing)? (?:for|the|around)|listen(?:s|ing)?|peer(?:s|ing)?|keep (?:an|my) eye)\b/i;
+
 registerMarkerHandler('ROLL_REQUEST', async (parsed, context) => {
   if (!context?.sessionId) return null;
   try {
@@ -846,6 +849,24 @@ registerMarkerHandler('ROLL_REQUEST', async (parsed, context) => {
     const isPc = isPlayerRef(actor, character?.name);
 
     if (isPc) {
+      // Perception bank guard (player-rolls-out-of-combat, item 4; live
+      // probe 2026-11-23): while the player holds a banked Perception
+      // number in the active dungeon, an open Perception request for
+      // something hidden IS the tell the bank removes. Refused, with a
+      // note telling the DM to read the bank. The player's own declared
+      // search still rolls openly (the pre-roll design keeps active
+      // searches on ROLL_REQUEST).
+      if (kind === 'skill' && /^perception$/i.test(String(name).trim())
+          && !ACTIVE_SEARCH_RE.test(String(context.playerAction || ''))) {
+        const { pcCoveredByBank } = await import('./perceptionPreRollService.js');
+        if (await pcCoveredByBank(context.sessionId)) {
+          return {
+            type: 'roll_request', success: false, refusedBankedPerception: true,
+            reason: 'the player holds a banked Perception number in this dungeon',
+            systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Your Perception ROLL_REQUEST was NOT sent — ${character?.name || 'the player'} holds a banked Perception number in this dungeon, and asking for a roll tells them something is hidden. Read the bank in secret instead: [PERCEPTION_USE: Target="${character?.name || 'Player'}" Trigger="trap|secret_door|stealthed_enemy" DC=${dc}]. Do not mention any roll or number.`
+          };
+        }
+      }
       // Conditions (v1.0.190): paralyzed / stunned / unconscious /
       // petrified auto-fail STR and DEX saves. No pending roll — there
       // are no dice for the player to report. The outcome is logged and

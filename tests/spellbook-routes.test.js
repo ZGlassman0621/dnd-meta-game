@@ -853,6 +853,8 @@ group('(i) Memorize Spell — bank + DM short rest');
   const prep = await readPrepared(wiz5);
   check(prep.includes('Misty Step') && !prep.includes('Sleep'), 'the prepared list swapped Sleep -> Misty Step');
   check(await readBank(wiz5) === null, 'the bank is cleared after the rest');
+  // The player rolls their own Hit Dice (player-rolls-out-of-combat, 2026-11-23): settle the ask.
+  await (await import(fromRepo('server/services/playerRollService.js'))).settleOutOfCombatRoll(session5, '3 2');
   const wizRow = await readCharacter(wiz5);
   check(wizRow.current_hp > 10 && wizRow.current_hp <= 20, `the short rest healed via hit dice (10 -> ${wizRow.current_hp})`);
   check(Object.values(JSON.parse(wizRow.hit_dice_used || '{}')).reduce((a, b) => a + b, 0) === 2, 'Dice=2 spent exactly 2 hit dice');
@@ -935,6 +937,8 @@ group('(i) Memorize Spell — bank + DM short rest');
   check(staleDetail?.applied === false && String(staleDetail?.reason).includes('not prepared'),
     `a bank whose old spell is no longer prepared refuses at rest time (got ${JSON.stringify(staleDetail)})`);
   check(await readBank(stale) === null, 'a refused-at-rest bank is still cleared');
+  // The player rolls their own Hit Dice (player-rolls-out-of-combat, 2026-11-23): settle the ask.
+  await (await import(fromRepo('server/services/playerRollService.js'))).settleOutOfCombatRoll(sessionStale, '3 2');
   check((await readCharacter(stale)).current_hp > 10, 'the refused swap leaves the rest itself untouched — it still heals');
   check(JSON.stringify(await readPrepared(stale)) === JSON.stringify(['Magic Missile', 'Shield', 'Mage Armor', 'Burning Hands', 'Detect Magic', 'Feather Fall', 'Misty Step', 'Fireball']),
     'the refused swap left the prepared list untouched');
@@ -1714,6 +1718,8 @@ group('(o) Arcane Recovery — bank + DM short rest');
   check(JSON.stringify(await readUsed(wiz5)) === JSON.stringify({ '1': 1 }), 'the used slots dropped from {1: 2, 2: 1} to {1: 1}');
   check(await readArcBank(wiz5) === null, 'the bank is cleared after the rest');
   check(await readArcFlag(wiz5) === true, 'the used-flag is set after the rest');
+  // The player rolls their own Hit Dice (player-rolls-out-of-combat, 2026-11-23): settle the ask.
+  await (await import(fromRepo('server/services/playerRollService.js'))).settleOutOfCombatRoll(session5, '3 2');
   const wizRow = await readCharacter(wiz5);
   check(wizRow.current_hp > 10 && wizRow.current_hp <= 20, `the short rest healed via hit dice (10 -> ${wizRow.current_hp})`);
   check(rt.formatTimeEventBlock(rested.event).includes('Arcane Recovery: restored slots of levels 2, 1'),

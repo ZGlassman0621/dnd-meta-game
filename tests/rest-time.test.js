@@ -37,6 +37,7 @@ await initDatabase();
 const svc = (p) => pathToFileURL(path.join(REPO, p)).href;
 const rt = await import(svc('server/services/restTimeService.js'));
 const sched = await import(svc('server/services/scheduleService.js'));
+const prs = await import(svc('server/services/playerRollService.js'));
 const harptos = await import(svc('server/config/harptos.js'));
 const cond = await import(svc('server/services/conditionService.js'));
 
@@ -214,9 +215,17 @@ group('7. Short rest — dice healing, pact magic, actor scope');
   const before = await sched.getClock(null, { characterId: pcId });
   const r = await rt.applyRest({ sessionId, characterId: pcId, type: 'short', dice: 2 });
   const after = await sched.getClock(null, { characterId: pcId });
+  // Player-rolls-out-of-combat (2026-11-23): the engine never rolls the
+  // player's Hit Dice. The rest lands with none spent and posts the ask;
+  // the player's reported 5 and 4 heal (5 + 3) + (4 + 3) = 15.
+  const asked = await dbGet('SELECT current_hp, hit_dice_used FROM characters WHERE id = ?', [pcId]);
+  assert(rt.totalDice(JSON.parse(asked.hit_dice_used)) === 0 && asked.current_hp === 8, 'the rest spends no Hit Die itself — the player rolls them');
+  const askCfg = JSON.parse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId])).session_config || '{}');
+  assert(askCfg.pendingHitDice?.dice?.length >= 2 && askCfg.pendingHitDice.conMod === 3, 'the Hit Dice ask is posted with the dice and the CON the engine adds');
+  const settled = await rt.applyReportedHitDice(pcId, askCfg.pendingHitDice, [5, 4]);
   const pc = await dbGet('SELECT current_hp, spell_slots_used, hit_dice_used FROM characters WHERE id = ?', [pcId]);
-  assert(rt.totalDice(JSON.parse(pc.hit_dice_used)) === 2, 'Dice=2 → exactly 2 dice spent');
-  assert(pc.current_hp >= 16 && pc.current_hp <= 30, 'healed by the rolled dice + CON');
+  assert(rt.totalDice(JSON.parse(pc.hit_dice_used)) === 2, 'two reported dice → exactly 2 dice spent');
+  assert(pc.current_hp === 23 && settled.healed === 15, 'healed by the reported dice + CON: 8 + (5+3) + (4+3) = 23');
   assert(pc.spell_slots_used !== '{}', 'fighter slots do NOT return on a short rest');
   assert(absHours(after) - absHours(before) === 1, "short rest advanced the character's clock 1 hour (campaign-less: per-character clock, S1)");
 
@@ -347,7 +356,9 @@ group('10. Memorize Swap — banked consume at the service level');
   const wizPrep = JSON.parse(wizAfter.prepared_spells);
   assert(wizPrep.includes('Misty Step') && !wizPrep.includes('Sleep'), 'prepared list swapped Sleep -> Misty Step');
   assert(await bankOf(wizId) === null, 'bank cleared after the applying rest');
-  assert(wizAfter.current_hp > 10, 'the rest still healed via hit dice');
+  assert(wizAfter.current_hp === 10, 'the rest itself spends no Hit Die — the player rolls them');
+  const wizHd = await prs.settleOutOfCombatRoll(wizSessionId, '3 2');
+  assert(wizHd?.kind === 'hit_dice' && (await readWiz(wizId)).current_hp === 19, 'the player\'s reported 3 and 2 heal (3+2) + (2+2) = 9');
   assert(JSON.parse(wizAfter.spellbook_json).status === 'intact', 'consume keeps the book intact');
 
   // Lost book at rest time: refused, bank cleared, rest still heals.
@@ -357,7 +368,8 @@ group('10. Memorize Swap — banked consume at the service level');
   const lostDetail = lostRest.event.results.find((x) => x.kind === 'pc')?.memorizeSwap;
   assert(lostDetail?.applied === false && String(lostDetail?.reason).includes('lost'), 'lost book refuses the banked swap at rest time');
   assert(await bankOf(lostId) === null, 'lost-book refusal still clears the bank');
-  assert((await readWiz(lostId)).current_hp > 10, 'lost-book refusal leaves the rest healing');
+  await prs.settleOutOfCombatRoll(lostSession, '3 2');
+  assert((await readWiz(lostId)).current_hp === 19, 'lost-book refusal leaves the rest healing (the player\'s Hit Dice still apply)');
   assert(JSON.stringify(JSON.parse((await readWiz(lostId)).prepared_spells)) === JSON.stringify(PREP8), 'lost-book refusal leaves the prepared list');
 
   // 0 HP: no benefit at all, and the bank survives (the rest never happened).
@@ -483,7 +495,8 @@ group('13. Arcane Recovery — banked consume at the service level');
     'used slots drop from {1: 2, 2: 1} to {1: 1}');
   assert(await bankOf(wizId) === null, 'bank cleared after the applying rest');
   assert(await flagOf(wizId) === true, 'the used-flag is set after the recovery');
-  assert((await readArc(wizId)).current_hp > 10, 'the rest still healed via hit dice');
+  await prs.settleOutOfCombatRoll(wizSessionId, '3 2');
+  assert((await readArc(wizId)).current_hp === 19, 'the rest still heals via the player\'s reported Hit Dice');
   assert(rt.formatTimeEventBlock(r.event).includes('Arcane Recovery: restored slots of levels 2, 1'),
     'the outcome block narrates the recovery for the DM');
 

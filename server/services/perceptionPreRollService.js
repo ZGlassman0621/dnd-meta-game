@@ -4,7 +4,8 @@
  * Design: perception-pre-roll-design.md (decided with Zach, 2026-11-05).
  * Approved shape: one Perception roll per character at the dungeon door,
  * banked; the DM reads the stored numbers in secret at a trap, a secret
- * door, or a stealthed enemy; a used number is replaced with a fresh roll;
+ * door, or a stealthed enemy; a used number is replaced (the PC's by their
+ * own next door spare, a companion's by a fresh engine roll);
  * higher of the roll or passive Perception counts.
  *
  * How it fits the existing machinery:
@@ -33,9 +34,11 @@
  *     critical_* with source 'banked'.
  *
  * Coordinator decisions (flagged for Zach's veto at the gate):
- *   - Replacements are server-rolled for EVERYONE: a mid-dungeon PC roll
- *     request IS the tell being removed. The player knows only the
- *     initial banked number.
+ *   - The PC's replacements are the player's own spares, rolled at the
+ *     door with the banked number (PERCEPTION_BANK_DICE; Muse,
+ *     2026-11-23) — never server-rolled, never asked mid-dungeon (that
+ *     request IS the tell being removed). Spares gone → passive until the
+ *     next dungeon door. Companion replacements stay server-rolled.
  *   - The banked modifier is the EFFECTIVE modifier at the door (sheet +
  *     exhaustion/condition penalty, mirroring requestPcRoll); a
  *     replacement reuses the stored modifier — the bank is a snapshot.
@@ -57,6 +60,30 @@ export const PERCEPTION_USE_TRIGGERS = ['trap', 'secret_door', 'stealthed_enemy'
 
 /** The DC for a secret door in v1 — hidden exits carry no stored DC. */
 export const SECRET_DOOR_DC = 15;
+
+/**
+ * The player rolls their door numbers up front (player-rolls-out-of-
+ * combat, item 4; PM decision, Muse 2026-11-23): 3 numbers at the door —
+ * the banked number plus 2 spares. A used number is replaced by the next
+ * spare, never by an engine roll and never by a mid-dungeon ask. When the
+ * spares run out, passive Perception judges until the next dungeon door
+ * refills the bank. The spares live on session_config.perceptionSpares
+ * keyed by dungeon: { dice: [...], modifier, exhausted }.
+ */
+export const PERCEPTION_BANK_DICE = 3;
+
+async function getSpares(sessionId, dungeon) {
+  const cfg = await readSessionConfig(sessionId);
+  return cfg.perceptionSpares?.[dungeon] || null;
+}
+
+async function setSpares(sessionId, dungeon, state) {
+  const cfg = await readSessionConfig(sessionId);
+  const all = { ...(cfg.perceptionSpares || {}) };
+  if (state) all[dungeon] = state; else delete all[dungeon];
+  cfg.perceptionSpares = all;
+  await writeSessionConfig(sessionId, cfg);
+}
 
 // ---------------------------------------------------------------------------
 // Session config (active dungeon key) + banked rows
@@ -151,7 +178,7 @@ export async function requestBankRoll({ sessionId, characterId, dungeon }) {
   const bank = await pcBankModifier(characterId);
   if (!bank) return { success: false, reason: 'unknown skill: Perception' };
   const pending = {
-    bank: 'perception', dungeon,
+    bank: 'perception', dungeon, count: PERCEPTION_BANK_DICE,
     kind: 'skill', name: 'Perception',
     modifier: bank.modifier, penalty: bank.penalty,
     requestedAt: new Date().toISOString()
@@ -178,8 +205,12 @@ export async function requestBankRoll({ sessionId, characterId, dungeon }) {
 export async function resolveBankRoll(sessionId, dice) {
   const pending = await getPendingRoll(sessionId);
   if (!pending || pending.bank !== 'perception') return null;
-  const die = Array.isArray(dice) ? dice[0] : dice;
-  if (!Number.isInteger(die) || die < 1 || die > 20) return null;
+  // The door takes all PERCEPTION_BANK_DICE numbers at once: the first is
+  // banked, the rest wait as spares. A short or bad report leaves the
+  // pending in place for a re-report.
+  const list = Array.isArray(dice) ? dice : [dice];
+  if (list.length !== PERCEPTION_BANK_DICE || list.some((d) => !Number.isInteger(d) || d < 1 || d > 20)) return null;
+  const [die, ...spares] = list;
   const session = await dbGet('SELECT character_id FROM dm_sessions WHERE id = ?', [sessionId]);
   const character = session?.character_id
     ? await dbGet('SELECT name, campaign_id FROM characters WHERE id = ?', [session.character_id])
@@ -198,13 +229,25 @@ export async function resolveBankRoll(sessionId, dice) {
     outcome: 'banked', source: 'reported',
     context: `banked at the door of ${dungeon}`
   });
+  for (let i = 0; i < spares.length; i++) {
+    await logRoll({
+      sessionId, campaignId: character?.campaign_id ?? null,
+      characterId: session?.character_id ?? null,
+      actorType: 'pc', actorName,
+      checkKind: 'skill', checkName: 'Perception', dc: null,
+      modifier, dice: [spares[i]], takenDie: spares[i], total: spares[i] + modifier,
+      outcome: 'banked', source: 'reported',
+      context: `spare ${i + 1} of ${spares.length} held at the door of ${dungeon}`
+    });
+  }
   const cfg = await readSessionConfig(sessionId);
   delete cfg.pendingRoll;
+  cfg.perceptionSpares = { ...(cfg.perceptionSpares || {}), [dungeon]: { dice: spares, modifier, exhausted: false } };
   await writeSessionConfig(sessionId, cfg);
   return {
     perceptionBank: true, rollId, actor: actorName, dungeon,
     check: 'Perception', kind: 'skill',
-    die, modifier, total, passive: 10 + modifier
+    die, modifier, total, passive: 10 + modifier, spares: spares.length
   };
 }
 
@@ -257,6 +300,7 @@ export async function bankAtDoor({ sessionId, characterId, dungeon }) {
     return { success: false, reason: 'PERCEPTION_PREROLL needs Dungeon="..."' };
   }
   const key = String(dungeon).trim();
+  const priorActive = await getActiveDungeon(sessionId);
   await setActiveDungeon(sessionId, key);
   const newlyBanked = [];
 
@@ -271,7 +315,14 @@ export async function bankAtDoor({ sessionId, characterId, dungeon }) {
       `SELECT * FROM perception_pre_rolls WHERE session_id = ? AND dungeon_key = ? AND actor_type = 'pc' LIMIT 1`,
       [sessionId, key]
     );
-    if (!existingPc) {
+    // Never ask mid-dungeon (Muse, 2026-11-23): a PC whose numbers ran
+    // out in the dungeon the party is already in stays on passive until
+    // a dungeon door — entering this dungeon afresh from elsewhere, or
+    // another dungeon — refills the bank.
+    const spares = await getSpares(sessionId, key);
+    const stillInside = spares?.exhausted && priorActive === key;
+    if (!existingPc && !stillInside) {
+      if (spares) await setSpares(sessionId, key, null);
       const r = await requestBankRoll({ sessionId, characterId, dungeon: key });
       if (r.success) newlyBanked.push(pcName);
     }
@@ -289,6 +340,20 @@ export async function bankAtDoor({ sessionId, characterId, dungeon }) {
     banked: newlyBanked,
     alreadyBanked: newlyBanked.length === 0
   };
+}
+
+/** Is the player covered by a bank in the active dungeon — a banked
+ *  number, or a spent bank (passive)? Then an open Perception roll for
+ *  something hidden is the tell, and the DM reads the bank instead. */
+export async function pcCoveredByBank(sessionId) {
+  const dungeon = await getActiveDungeon(sessionId);
+  if (!dungeon) return false;
+  const row = await dbGet(
+    `SELECT 1 FROM perception_pre_rolls WHERE session_id = ? AND dungeon_key = ? AND actor_type = 'pc' LIMIT 1`,
+    [sessionId, dungeon]
+  );
+  if (row) return true;
+  return !!(await getSpares(sessionId, dungeon))?.exhausted;
 }
 
 // ---------------------------------------------------------------------------
@@ -320,6 +385,34 @@ export async function useBankedPerception({ sessionId, characterId, target, trig
   }
   const actorType = party.kind === 'player' ? 'pc' : 'companion';
   const row = await getBankedRow(sessionId, dungeon, actorType, party.name);
+  // The PC's numbers ran out in this dungeon: passive Perception judges,
+  // with no die and no ask (Muse, 2026-11-23).
+  const pcSpares = actorType === 'pc' ? await getSpares(sessionId, dungeon) : null;
+  if (!row && pcSpares?.exhausted) {
+    const passiveOnly = 10 + (Number(pcSpares.modifier) || 0);
+    const pOutcome = passiveOnly >= dc ? 'success' : 'failure';
+    const pRow = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [characterId]);
+    const pRollId = await logRoll({
+      sessionId, campaignId: pRow?.campaign_id ?? null, characterId,
+      actorType, actorName: party.name,
+      checkKind: 'skill', checkName: 'Perception', dc,
+      modifier: pcSpares.modifier, dice: [], takenDie: null,
+      total: passiveOnly, outcome: pOutcome, source: 'passive',
+      context: `passive Perception (${trigger}) — no banked number left in ${dungeon}`
+    });
+    const pObj = {
+      perceptionUse: true, passiveOnly: true, rollId: pRollId, actor: party.name, actorType,
+      trigger, dungeon, check: 'Perception', kind: 'skill', dc,
+      modifier: pcSpares.modifier, die: null, bankedTotal: null,
+      passive: passiveOnly, effective: passiveOnly, viaPassive: true, outcome: pOutcome
+    };
+    try {
+      const cfg = await readSessionConfig(sessionId);
+      cfg.recentRolls = [...(Array.isArray(cfg.recentRolls) ? cfg.recentRolls : []), pObj].slice(-5);
+      await writeSessionConfig(sessionId, cfg);
+    } catch { /* best-effort — the use is still in roll_log */ }
+    return { success: true, ...pObj };
+  }
   if (!row) {
     return {
       success: false,
@@ -346,25 +439,38 @@ export async function useBankedPerception({ sessionId, characterId, target, trig
     context: `banked Perception (${trigger}); banked ${res.total} vs passive ${passive}${viaPassive ? ' — passive carried it' : ''}`
   });
 
-  // Consume the used number and bank a silent replacement for the next
-  // hidden thing. Server-rolled for everyone — a mid-dungeon PC roll
-  // request is the tell this system removes. The replacement is logged
-  // (outcome 'banked') but never shown to the DM.
+  // Consume the used number. The PC's replacement is their own next
+  // spare from the door — never an engine roll, never a mid-dungeon ask
+  // (Zach 2026-11-23: the DM never rolls for the player; spares per Muse
+  // 2026-11-23). No spare left → passive from now on in this dungeon.
+  // A companion's replacement stays server-rolled (companion rolls are
+  // the engine's), logged (outcome 'banked') but never shown to the DM.
   await deleteBankRow(sessionId, dungeon, actorType, party.name);
-  const replacementDie = rollD20(`perception-preroll:${party.name}`);
-  await bankRow({
-    sessionId, dungeon, actorType, actorName: party.name,
-    die: replacementDie, modifier: row.modifier
-  });
-  await logRoll({
-    sessionId, campaignId: session?.campaign_id ?? null, characterId,
-    actorType, actorName: party.name,
-    checkKind: 'skill', checkName: 'Perception', dc: null,
-    modifier: row.modifier, dice: [replacementDie], takenDie: replacementDie,
-    total: replacementDie + row.modifier,
-    outcome: 'banked', source: 'server',
-    context: `replacement banked after use (${trigger})`
-  });
+  if (actorType === 'pc') {
+    const spares = pcSpares || { dice: [], modifier: row.modifier, exhausted: false };
+    const next = spares.dice.length ? spares.dice[0] : null;
+    if (next != null) {
+      await bankRow({ sessionId, dungeon, actorType, actorName: party.name, die: next, modifier: row.modifier });
+      await setSpares(sessionId, dungeon, { ...spares, dice: spares.dice.slice(1), exhausted: false });
+    } else {
+      await setSpares(sessionId, dungeon, { dice: [], modifier: row.modifier, exhausted: true });
+    }
+  } else {
+    const replacementDie = rollD20(`perception-preroll:${party.name}`);
+    await bankRow({
+      sessionId, dungeon, actorType, actorName: party.name,
+      die: replacementDie, modifier: row.modifier
+    });
+    await logRoll({
+      sessionId, campaignId: session?.campaign_id ?? null, characterId,
+      actorType, actorName: party.name,
+      checkKind: 'skill', checkName: 'Perception', dc: null,
+      modifier: row.modifier, dice: [replacementDie], takenDie: replacementDie,
+      total: replacementDie + row.modifier,
+      outcome: 'banked', source: 'server',
+      context: `replacement banked after use (${trigger})`
+    });
+  }
 
   const outcomeObj = {
     perceptionUse: true, rollId, actor: party.name, actorType,
@@ -389,9 +495,11 @@ export function formatPerceptionBankBlock(o) {
   if (!o) return '';
   const modStr = o.modifier >= 0 ? `+${o.modifier}` : `${o.modifier}`;
   return `\n\n══════════════ PERCEPTION BANKED (system — this is fact) ══════════════\n` +
-    `${o.actor} banked Perception ${o.total} at the door of ${o.dungeon} (die ${o.die} ${modStr}). ` +
+    `${o.actor} banked Perception ${o.total} at the door of ${o.dungeon} (die ${o.die} ${modStr})` +
+    `${o.spares ? `, with ${o.spares} more of their own numbers held in reserve` : ''}. ` +
     `Tell the player their banked number — they rolled it and they know it. ` +
-    `A fresh number is banked silently each time one is used; never mention when a banked number is read, ` +
+    `When a number is used, the player's next reserve number takes its place in secret; when none are left, passive Perception applies. ` +
+    `NEVER ask the player for a Perception roll inside this dungeon, never mention when a banked number is read, ` +
     `and never state any banked number except the player's own at the door.\n` +
     `═══════════════════════════════════════════════════════════════════════\n`;
 }
@@ -417,9 +525,12 @@ export function formatPerceptionUseBlock(o) {
   }
   const triggerWord = o.trigger === 'trap' ? 'a trap'
     : o.trigger === 'secret_door' ? 'a secret door' : 'a stealthed enemy';
+  const line = o.passiveOnly
+    ? `${o.actor} — passive Perception ${o.passive} vs ${triggerWord}, DC ${o.dc} (no banked number left).`
+    : `${o.actor} — Perception (banked) vs ${triggerWord}: die ${o.die} ${modStr} = ${o.bankedTotal}; passive ${o.passive}; effective ${o.effective} vs DC ${o.dc}.`;
   return `\n\n══════════════ PERCEPTION (BANKED) — system, this outcome is fact ══════════════\n` +
-    `${o.actor} — Perception (banked) vs ${triggerWord}: die ${o.die} ${modStr} = ${o.bankedTotal}; passive ${o.passive}; effective ${o.effective} vs DC ${o.dc}.\n${verdict}\n` +
-    `The used number was replaced with a fresh roll — do NOT mention the new number, and never say a banked number was read. Narrate only what ${o.actor} notices (or misses).\n` +
+    `${line}\n${verdict}\n` +
+    `Do NOT mention any banked number, never say a banked number was read, and never ask for a Perception roll. Narrate only what ${o.actor} notices (or misses).\n` +
     `═══════════════════════════════════════════════════════════════════════\n`;
 }
 
@@ -433,8 +544,14 @@ export async function formatActiveBankBlock(sessionId) {
     const dungeon = await getActiveDungeon(sessionId);
     if (!dungeon) return '';
     const rows = await listBanked(sessionId, dungeon);
-    if (rows.length === 0) return '';
     const pc = rows.filter((r) => r.actor_type === 'pc').map((r) => r.actor_name);
+    // A PC whose numbers ran out is still covered — by passive Perception,
+    // read with the same marker — so the DM never asks them to roll.
+    if (pc.length === 0 && (await getSpares(sessionId, dungeon))?.exhausted) {
+      const s = await dbGet('SELECT c.name FROM dm_sessions d JOIN characters c ON c.id = d.character_id WHERE d.id = ?', [sessionId]);
+      if (s?.name) pc.push(s.name);
+    }
+    if (rows.length === 0 && pc.length === 0) return '';
     const comps = rows.filter((r) => r.actor_type !== 'pc').map((r) => r.actor_name);
     const names = [...pc, ...comps].join(', ');
     return `\n\n══════════════════════════════════════════════════════════════\n` +

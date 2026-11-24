@@ -304,13 +304,31 @@ group('8. TIME_ADVANCE hook + markers + sheltered-rest recovery');
   await cold.setColdScene(sessionId, { baseColdLevel: 2 });
   const evt = await rt.advanceTimeForSession({ sessionId, characterId: pcId, hours: 2 });
   assert(evt.cold && evt.cold.processed, 'TIME_ADVANCE carries a cold result when a scene is set');
-  assert(evt.cold.actors[0].coldLevel === 2 && evt.cold.actors[0].hours.length === 2,
-    'TIME_ADVANCE cold result covers every hour at the scene level');
+  // Player-rolls-out-of-combat (2026-11-23): the PC's hourly saves are
+  // the player's — the engine posts ONE batch ask for the stretch and
+  // resolves it from the reported numbers, in order.
+  assert(evt.cold.actors[0].coldLevel === 2 && evt.cold.actors[0].awaitingPlayerDice === true && !evt.cold.actors[0].hours,
+    'TIME_ADVANCE rolls no cold save for the player — it waits on their dice');
+  const coldCfg = JSON.parse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId])).session_config || '{}');
+  assert(coldCfg.pendingColdSaves?.segments?.length === 1 && coldCfg.pendingColdSaves.segments[0].hours === 2 && cold.coldSaveDiceNeeded(coldCfg.pendingColdSaves) === 2,
+    'one batch ask: 2 hours, 2 numbers');
+  const prompt = cold.formatColdSavePrompt(coldCfg.pendingColdSaves, 0);
+  assert(/2 hours in the cold — roll 2 Constitution saving throws/.test(prompt) && !/\bDC\b/.test(prompt), 'the ask states the span and hides the DC');
+  const frostBefore = Number((await dbGet('SELECT frost_exhaustion FROM characters WHERE id = ?', [pcId])).frost_exhaustion) || 0;
+  const wrong = await cold.applyReportedColdSaves(sessionId, [12]);
+  assert(wrong?.error && /send 2 numbers/.test(wrong.error), 'the wrong count is refused and the ask stays');
+  const settled = await cold.applyReportedColdSaves(sessionId, [20, 1]);
+  assert(settled.hours.length === 2 && settled.hours[0].outcome === 'critical_success' && settled.hours[1].outcome === 'critical_failure',
+    'hour 1 from the player\'s 20 holds, hour 2 from their 1 fails');
   const row = await dbGet('SELECT frost_exhaustion FROM characters WHERE id = ?', [pcId]);
-  assert(Number(row.frost_exhaustion) === evt.cold.actors[0].frostAfter,
-    'TIME_ADVANCE frost in the DB matches the event it reports');
+  assert(Number(row.frost_exhaustion) === frostBefore + 1 && settled.frostAfter === frostBefore + 1,
+    'one failed hour → one frost level, in the DB and the result');
+  const cleared = JSON.parse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId])).session_config || '{}');
+  assert(!cleared.pendingColdSaves, 'the ask clears once settled');
+  assert(!/\bDC\b/.test(cold.formatColdSaveMath(settled)), 'the ⚙ math line shows no DC');
+  await dbRun('UPDATE characters SET frost_exhaustion = 0 WHERE id = ?', [pcId]);
   const block = rt.formatTimeEventBlock(evt);
-  assert(block.includes('COLD EXPOSURE'), 'time event text surfaces cold for the DM next turn');
+  assert(block.includes('COLD EXPOSURE') && block.includes('rolling their own'), 'time event text tells the DM the player is rolling');
   const noSceneSession = await makeSession(pcId);
   const evt2 = await rt.advanceTimeForSession({ sessionId: noSceneSession, characterId: pcId, hours: 1 });
   assert(!evt2.cold, 'TIME_ADVANCE without a scene carries no cold block');

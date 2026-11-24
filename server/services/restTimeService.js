@@ -57,7 +57,7 @@ import {
   applyArcaneRecovery, warlockLevelFromClassLevels, resetPactSlots,
 } from './spellbookService.js'; // Rest consolidation 2026-11-07: banked Memorize Swap consume; Arcane Recovery 2026-11-08: banked slot recovery consume + used-flag reset; spellbook follow-ups 2026-11-08: scoped pact-slot reset (D2)
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
-import { processExposureForSession, processExposure, getColdScene, recoverFrost, formatColdBlock } from './coldExposureService.js';
+import { processExposureForSession, processExposure, getColdScene, recoverFrost, formatColdBlock, queuePlayerColdSaves } from './coldExposureService.js';
 import { hasShelter } from './weatherService.js';
 
 /** Cold hook guard: own switch, checked at call time (never cached). */
@@ -161,6 +161,67 @@ export function spendHitDice({ pool, used, conMod, currentHp, maxHp, diceCount =
     rolls.push({ die, roll: r, healed: applied });
   }
   return { spent, rolls, healed, newHp: hp };
+}
+
+/**
+ * Settle the player's reported Hit Dice (player-rolls-out-of-combat,
+ * item 1). `numbers` are the faces the player rolled, in the order the
+ * ask listed the dice (largest first); a single 0 spends none. The
+ * engine adds the CON modifier after the roll: each die heals
+ * max(0, roll + CON), capped at max HP, and spending stops at full HP
+ * (later dice stay unspent). Reads the live pool, so a die spent
+ * elsewhere since the ask is not spent twice. Returns { error } on a
+ * bad report, leaving the ask in place for a re-report.
+ */
+export async function applyReportedHitDice(characterId, ask, numbers) {
+  const pc = await dbGet('SELECT id, current_hp, max_hp, hit_dice, hit_dice_used FROM characters WHERE id = ?', [characterId]);
+  if (!pc) return { error: 'character not found' };
+  const pool = parseDicePool(pc.hit_dice);
+  const used = parseDicePool(pc.hit_dice_used);
+  const avail = diceList(availableDice(pool, used));
+  const conMod = Number.isFinite(ask?.conMod) ? ask.conMod : 0;
+  const list = Array.isArray(numbers) ? numbers : [];
+  if (list.length === 1 && list[0] === 0) {
+    return { none: true, rolls: [], healed: 0, hpFrom: pc.current_hp, hpTo: pc.current_hp, maxHp: pc.max_hp, remaining: avail.length, conMod };
+  }
+  if (list.length === 0) return { error: 'no Hit Dice numbers reported' };
+  if (list.length > avail.length) {
+    return { error: `you have only ${avail.length} Hit ${avail.length === 1 ? 'Die' : 'Dice'} left (${avail.join(', ') || 'none'})` };
+  }
+  for (let i = 0; i < list.length; i++) {
+    const sides = dieSides(avail[i]);
+    if (!Number.isInteger(list[i]) || list[i] < 1 || list[i] > sides) {
+      return { error: `a ${avail[i]} can't roll ${list[i]} — send numbers from 1 to ${sides}` };
+    }
+  }
+  let hp = pc.current_hp;
+  const spent = {};
+  const rolls = [];
+  let unspent = 0;
+  for (let i = 0; i < list.length; i++) {
+    if (hp >= pc.max_hp) { unspent = list.length - i; break; }
+    const die = avail[i];
+    const applied = Math.min(Math.max(0, list[i] + conMod), pc.max_hp - hp);
+    hp += applied;
+    spent[die] = (spent[die] || 0) + 1;
+    rolls.push({ die, roll: list[i], conMod, healed: applied });
+  }
+  const newUsed = mergeUsed(used, spent);
+  await dbRun('UPDATE characters SET current_hp = ?, hit_dice_used = ? WHERE id = ?', [hp, JSON.stringify(newUsed), pc.id]);
+  return {
+    rolls, healed: hp - pc.current_hp, hpFrom: pc.current_hp, hpTo: hp, maxHp: pc.max_hp,
+    remaining: totalDice(availableDice(pool, newUsed)), unspent, conMod,
+  };
+}
+
+/** The ⚙ line for a settled Hit Dice report. */
+export function formatHitDiceMath(r) {
+  if (!r || r.error) return '';
+  if (r.none) return `Hit Dice: none spent — ${r.hpTo}/${r.maxHp} HP, ${r.remaining} left`;
+  const sign = (n) => `${n >= 0 ? '+' : '−'} ${Math.abs(n)}`;
+  const parts = r.rolls.map((x) => `${x.die} ${x.roll} ${sign(x.conMod)} (CON) = ${x.healed}`);
+  return `Hit Dice: ${parts.join(', ')} → +${r.healed} HP (${r.hpFrom} → ${r.hpTo}/${r.maxHp}); ${r.remaining} left` +
+    (r.unspent ? `; ${r.unspent} not spent (full HP)` : '');
 }
 
 /**
@@ -546,15 +607,24 @@ async function restPc(pc, type, diceCount) {
         arcaneRecoveryDetail = { applied: false, reason: refusal };
       }
     }
-    const spend = spendHitDice({
-      pool, used, conMod: conModOf(pc.ability_scores),
-      currentHp: pc.current_hp, maxHp: pc.max_hp, diceCount
-    });
+    // The engine never rolls the player's Hit Dice (Zach, 2026-11-23:
+    // "ALWAYS — as a rule, the DM never rolls for the player"). The
+    // rest lands now with no dice spent; when there is HP to recover
+    // and a die to spend, the PC's ask is returned as hitDiceAsk and
+    // applyRest posts it as pendingHitDice. The player chooses how many
+    // to spend and reports the numbers; applyReportedHitDice adds CON
+    // after. Dice= on the marker still governs companions only.
+    void diceCount;
+    const spend = { spent: {}, rolls: [], healed: 0, newHp: pc.current_hp };
+    const askDice = diceList(availableDice(pool, used));
+    if (askDice.length > 0 && pc.current_hp < pc.max_hp) {
+      detail.hitDiceAsk = { dice: askDice, conMod: conModOf(pc.ability_scores), hp: pc.current_hp, maxHp: pc.max_hp };
+    }
     detail.hpTo = spend.newHp;
     detail.healed = spend.healed;
-    detail.diceSpent = totalDice(spend.spent);
-    detail.diceRolls = spend.rolls;
-    detail.diceRemaining = totalDice(availableDice(pool, mergeUsed(used, spend.spent)));
+    detail.diceSpent = 0;
+    detail.diceRolls = [];
+    detail.diceRemaining = askDice.length;
     if (memorizeSwapDetail) detail.memorizeSwap = memorizeSwapDetail;
     if (arcaneRecoveryDetail) detail.arcaneRecovery = arcaneRecoveryDetail;
     detail.slotsRestored = hasPact;
@@ -715,6 +785,21 @@ export async function applyRest({ sessionId = null, characterId, type, actor = n
   if (pcTarget) results.push(await restPc(pc, type, dice));
   for (const comp of compTargets) results.push(await restCompanion(comp, type, dice));
 
+  // The player's Hit Dice wait on their own dice (pendingHitDice). A
+  // new short rest replaces an unanswered ask; a long rest clears it.
+  if (sessionId) {
+    try {
+      const cfg = await readSessionConfig(sessionId);
+      const pcDetail = results.find(r => r.kind === 'pc');
+      if (pcDetail?.hitDiceAsk) {
+        cfg.pendingHitDice = { characterId: pc.id, ...pcDetail.hitDiceAsk, postedAt: Date.now() };
+      } else {
+        delete cfg.pendingHitDice;
+      }
+      await writeSessionConfig(sessionId, cfg);
+    } catch (e) { console.error('[restTimeService] posting the hit-dice ask failed:', e.message); }
+  }
+
   const hours = type === 'long' ? LONG_REST_HOURS : SHORT_REST_HOURS;
   const clk = await advanceClockForSession({
     sessionId, characterId, hours, reason: `rest_${type}`
@@ -753,6 +838,7 @@ export async function applyRest({ sessionId = null, characterId, type, actor = n
             characterId, hours, scene, resting: true,
             actorFilter: new Set(restedTargets.map(t => `${t.kind}:${t.id}`))
           });
+          await queuePlayerColdSaves(sessionId, characterId, exposure);
           if (exposure.processed) cold = { exposure, suspended: false };
         }
       }
@@ -916,7 +1002,9 @@ export function formatTimeEventBlock(evt) {
         if (r.conditionsCleared?.length) s += ` Conditions cleared: ${r.conditionsCleared.join(', ')}.`;
         if (r.deathSavesReset) s += ' Death saves reset.';
       } else {
-        if (r.diceSpent > 0) {
+        if (r.hitDiceAsk) {
+          s += ` — the player is rolling their own Hit Dice (${r.hitDiceAsk.dice.length} available); the healing arrives as a system fact once they report. Do not narrate an HP amount.`;
+        } else if (r.diceSpent > 0) {
           const rolls = (r.diceRolls || []).map(x => `${x.die.replace('d', '')}→${x.roll}`).join(', ');
           s += ` — spent ${r.diceSpent} hit dice (${rolls}), healed ${r.healed}. ${r.diceRemaining} dice left.`;
         } else {

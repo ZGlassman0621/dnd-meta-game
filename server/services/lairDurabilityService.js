@@ -32,6 +32,8 @@ import { safeParse } from '../utils/safeParse.js';
 import { roll, rollD20 } from '../utils/rng.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 
+const ABILITY_FULL_NAMES = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' };
+
 export const DEFAULT_MAX_HP = 1000;
 export const DECAY_HP_PER_ROUND = 20;
 export const MECHANICAL_RESTORE_HP = 100;
@@ -403,6 +405,30 @@ export async function strikeHazard(lairKey, hazard, { sessionId = null, encounte
     }
     const mod = c.enemyRow ? await enemySaveMod(c.enemyRow, ability) : abilityModifier(c.scores[ability] ?? c.scores[ability === 'str' ? 'strength' : ability === 'dex' ? 'dexterity' : ability]);
     const forced = saveRolls && Object.prototype.hasOwnProperty.call(saveRolls, c.name) ? Number(saveRolls[c.name]) : null;
+    // The player's own save (player-rolls-out-of-combat, item 5; Zach
+    // 2026-11-23: the DM never rolls for the player). It rides the trap
+    // save's pending slot: the player reports the d20, and the hazard's
+    // already-rolled damage applies on a failure (damageTableService.
+    // applyPendingTrapSave). The engine never rolls it.
+    if (c.type === 'player' && !(forced != null && Number.isFinite(forced))) {
+      let posted = null;
+      if (sessionId) {
+        try {
+          const ess = await import('./enemySpellService.js');
+          const label = `${hazard?.name || hazard?.kind || 'lair'} hazard`;
+          posted = await ess.postPendingSave(sessionId, c.id, ABILITY_FULL_NAMES[ability] || 'Dexterity', dc, 'pendingTrapSave', {
+            kind: 'lair_hazard', trapLabel: label, fixedDamage: damage, damageType: hazard?.type || null,
+            saveDc: dc, saveMode: 'avoid', target: { kind: 'player', id: c.id },
+            encounterSeq, sessionCharacterId: c.id, postedAt: Date.now(),
+          });
+          if (posted) await ess.pushDmNotice(sessionId, `Ask the player for a ${ABILITY_FULL_NAMES[ability] || 'Dexterity'} save vs DC ${dc} for the ${label} — the ${damage} damage applies on a failure.`);
+        } catch { posted = null; }
+      }
+      results.push(posted
+        ? { name: c.name, type: c.type, pending: true, saveAbility: ability, dc, damage, hpBefore: c.hp, hpAfter: c.hp }
+        : { name: c.name, type: c.type, skipped: true, reason: 'the player rolls their own save — no session to ask in', hpBefore: c.hp, hpAfter: c.hp });
+      continue;
+    }
     const saveRoll = forced != null && Number.isFinite(forced) ? forced : rollD20('lair hazard save');
     const saveTotal = saveRoll + mod;
     const avoided = saveTotal >= dc;
@@ -442,7 +468,8 @@ export async function strikeHazard(lairKey, hazard, { sessionId = null, encounte
     hazard: { ...hazard, dc, saveAbility: ability, damage },
     damage,
     results,
-    caught: results.filter((r) => !r.avoided && !r.skipped).length,
+    caught: results.filter((r) => !r.avoided && !r.skipped && !r.pending).length,
+    awaitingPlayerSave: results.some((r) => r.pending),
     avoidedCount: results.filter((r) => r.avoided && !r.skipped).length,
   };
 }

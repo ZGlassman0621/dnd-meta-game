@@ -219,7 +219,9 @@ export async function applyPendingTrapSave(sessionId, effectKey, rollOutcome) {
   const success = (typeof rollOutcome?.total === 'number' && typeof rollOutcome?.dc === 'number')
     ? rollOutcome.total >= rollOutcome.dc
     : rollOutcome?.outcome === 'success';
-  const total = rollDiceString(effect.dice);
+  // A lair hazard rolls its damage once for everyone caught; its PC
+  // save rides this slot carrying that figure (fixedDamage).
+  const total = Number.isFinite(effect.fixedDamage) ? effect.fixedDamage : rollDiceString(effect.dice);
   const damage = trapDamageForSaveMode(total, success, effect.saveMode);
   const ess = await import('./enemySpellService.js');
   const dmg = damage > 0

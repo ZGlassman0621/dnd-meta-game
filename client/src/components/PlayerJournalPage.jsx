@@ -200,18 +200,35 @@ export default function PlayerJournalPage({ character, onBack }) {
     } catch { /* ignore */ }
   };
 
+  // The engine never rolls for the player: the first call returns what
+  // to roll, the player rolls a real d20, and the second call sends it.
   const handleCompleteProject = async (projectId) => {
+    const post = (body) => fetch(`/api/crafting/projects/${projectId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ game_day: character.game_day, ...body })
+    });
     try {
-      const res = await fetch(`/api/crafting/projects/${projectId}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ game_day: character.game_day })
-      });
-      if (res.ok) fetchCrafting();
-      else {
-        const data = await res.json();
-        alert(data.error || 'Failed to complete project');
+      let res = await post({});
+      let data = await res.json();
+      if (res.ok && data.needsRoll) {
+        const answer = window.prompt(`🎲 ${data.prompt}\n\nEnter the number on your d20:`);
+        if (answer === null) return;
+        const d20 = parseInt(String(answer).trim(), 10);
+        if (!Number.isInteger(d20) || d20 < 1 || d20 > 20) { alert('Enter a whole number from 1 to 20.'); return; }
+        res = await post({ d20 });
+        data = await res.json();
       }
+      if (!res.ok) { alert(data.error || 'Failed to complete project'); return; }
+      if (data.roll) {
+        const r = data.roll;
+        const adds = (r.ability_mod || 0) + (r.proficiency_bonus || 0);
+        const math = `d20 ${r.d20} ${adds >= 0 ? '+' : '−'} ${Math.abs(adds)} = ${r.total}`;
+        alert(data.success
+          ? `⚙ ${math} — success: ${data.item?.name || 'item'} (${data.quality}).`
+          : `⚙ ${math} — the craft failed; half the materials come back.`);
+      }
+      fetchCrafting();
     } catch { /* ignore */ }
   };
 

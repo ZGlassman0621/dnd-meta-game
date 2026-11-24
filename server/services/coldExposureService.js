@@ -438,6 +438,20 @@ export async function processExposure({ characterId, hours, scene, resting = fal
       wetStatus: actor.wetStatus,
       coldResistant: hasColdResistance(actor.advantages)
     });
+    // The player's own saves (player-rolls-out-of-combat, item 2;
+    // Zach 2026-11-23: the DM never rolls for the player). Their hours
+    // are not rolled here: the ask comes back as playerAsk, the caller
+    // posts it as pendingColdSaves, and applyReportedColdSaves resolves
+    // them in order from the player's numbers. diceForHour (tests)
+    // still supplies dice directly.
+    if (actor.kind === 'player' && !diceForHour) {
+      results.push({
+        ...base, coldLevel, dc, advantage, awaitingPlayerDice: true,
+        playerAsk: { hours: h, coldLevel, dc, advantage, resting },
+        frostAfter: actor.frost
+      });
+      continue;
+    }
     let frost = actor.frost;
     let died = false;
     const hourResults = [];
@@ -507,7 +521,107 @@ export async function processExposureForSession({ sessionId, characterId, hours,
   if (!sessionId) return { processed: false, reason: 'no session' };
   const scene = await getColdScene(sessionId);
   if (!scene) return { processed: false, reason: 'no cold scene set' };
-  return processExposure({ characterId, hours, scene, resting, diceForHour });
+  const res = await processExposure({ characterId, hours, scene, resting, diceForHour });
+  await queuePlayerColdSaves(sessionId, characterId, res);
+  return res;
+}
+
+// ---------------------------------------------------------------------------
+// The player's cold saves (player-rolls-out-of-combat, item 2): ONE batch
+// prompt per stretch — one CON save per hour (two d20s per hour with
+// advantage or disadvantage), every number in one message. Stretches
+// that pile up before the player answers queue as segments, resolved in
+// order.
+// ---------------------------------------------------------------------------
+
+/** Post an exposure result's player ask (if any) as pendingColdSaves. */
+export async function queuePlayerColdSaves(sessionId, characterId, exposure) {
+  if (!sessionId || !exposure?.processed) return null;
+  const pcRes = (exposure.actors || []).find(a => a.kind === 'player' && a.awaitingPlayerDice);
+  if (!pcRes?.playerAsk?.hours) return null;
+  const cfg = await readSessionConfig(sessionId);
+  const prior = cfg.pendingColdSaves && Array.isArray(cfg.pendingColdSaves.segments) ? cfg.pendingColdSaves.segments : [];
+  cfg.pendingColdSaves = { characterId, segments: [...prior, pcRes.playerAsk], postedAt: Date.now() };
+  await writeSessionConfig(sessionId, cfg);
+  return cfg.pendingColdSaves;
+}
+
+/** How many d20s the pending cold saves need, in total. */
+export function coldSaveDiceNeeded(pending) {
+  return (pending?.segments || []).reduce((n, s) => n + s.hours * (s.advantage ? 2 : 1), 0);
+}
+
+/** The player-facing ask. No DC: the engine hides DCs from the player. */
+export function formatColdSavePrompt(pending, conMod) {
+  const segs = pending?.segments || [];
+  if (!segs.length) return '';
+  const hours = segs.reduce((n, s) => n + s.hours, 0);
+  const dice = coldSaveDiceNeeded(pending);
+  const adv = segs.find(s => s.advantage)?.advantage || null;
+  const sign = conMod >= 0 ? `+${conMod}` : `${conMod}`;
+  const pair = adv
+    ? ` You have ${adv} (${adv === 'advantage' ? 'cold resistance' : 'wet clothes'}): roll two d20s per hour, ${dice} numbers in all, two per hour.`
+    : '';
+  return `🎲 ${hours} hour${hours === 1 ? '' : 's'} in the cold — roll ${hours} Constitution saving throw${hours === 1 ? '' : 's'} (a d20 each, one per hour) and send all ${dice} numbers in one message, in order (e.g. "${Array.from({ length: Math.min(dice, 4) }, (_, i) => [12, 7, 15, 3][i]).join(' ')}").${pair} The engine adds your CON modifier (${sign} now; frost can lower it) after.`;
+}
+
+/**
+ * Resolve the player's reported cold saves, hour by hour, in order. The
+ * CON modifier is re-read each hour from the live frost level, so a
+ * failure lowers the next hour's modifier exactly as the engine-rolled
+ * path did. Stops on frost death. Returns { error } (ask kept) when the
+ * count or a face is wrong.
+ */
+export async function applyReportedColdSaves(sessionId, numbers) {
+  const cfg = await readSessionConfig(sessionId);
+  const pending = cfg.pendingColdSaves;
+  if (!pending?.segments?.length) return null;
+  const need = coldSaveDiceNeeded(pending);
+  const list = Array.isArray(numbers) ? numbers : [];
+  if (list.length !== need) return { error: `send ${need} numbers — one d20 per hour${need !== pending.segments.reduce((n, s) => n + s.hours, 0) ? ' (two per hour with advantage or disadvantage)' : ''}; you sent ${list.length}` };
+  if (list.some(n => !Number.isInteger(n) || n < 1 || n > 20)) return { error: 'each cold save is a d20 — send numbers from 1 to 20' };
+  const party = await loadPartyActors(pending.characterId);
+  if (!party) return { error: 'character not found' };
+  const actor = party.pc;
+  let frost = actor.frost;
+  let died = false;
+  let i = 0;
+  const hourResults = [];
+  let hourNo = 0;
+  for (const seg of pending.segments) {
+    for (let h = 0; h < seg.hours && !died; h++) {
+      const conMod = erodedConModifier(actor.scores, frost);
+      const dice = seg.advantage ? [list[i], list[i + 1]] : [list[i]];
+      i += dice.length;
+      const res = resolveExposureDice({ dice, modifier: conMod, dc: seg.dc, advantage: seg.advantage });
+      let frostAfter = frost;
+      if (res.outcome === 'failure' || res.outcome === 'critical_failure') {
+        const after = await addFrostLevel('player', actor.id, 1, erodeScores(actor.scores, frost + 1));
+        frost = after.level;
+        frostAfter = frost;
+        died = after.died;
+      }
+      hourNo += 1;
+      hourResults.push({ hour: hourNo, dice, conMod, ...res, dc: seg.dc, frostAfter });
+    }
+    if (died) break;
+  }
+  const fresh = await readSessionConfig(sessionId);
+  delete fresh.pendingColdSaves;
+  await writeSessionConfig(sessionId, fresh);
+  return { name: actor.name, frostBefore: actor.frost, frostAfter: frost, died, hours: hourResults };
+}
+
+/** The ⚙ line for settled cold saves — no DC (hidden from the player). */
+export function formatColdSaveMath(r) {
+  if (!r || r.error) return '';
+  const sign = (n) => `${n >= 0 ? '+' : '−'} ${Math.abs(n)}`;
+  const parts = r.hours.map((x) => {
+    const die = x.dice.length > 1 ? `[${x.dice.join(', ')}] → ${x.takenDie}` : `${x.takenDie}`;
+    const ok = x.outcome === 'success' || x.outcome === 'critical_success';
+    return `hour ${x.hour}: d20 ${die} ${sign(x.conMod)} (CON) = ${x.total} — ${ok ? 'held' : 'failed'}`;
+  });
+  return `Cold saves: ${parts.join('; ')}. Frost ${r.frostBefore} → ${r.frostAfter}` + (r.died ? ' — you have died of the cold' : '');
 }
 
 /** One-line-per-actor summary for time/rest events (DM narration fuel). */
@@ -520,6 +634,7 @@ export function formatColdBlock(cold) {
     if (a.skipped === 'not_exposed') { lines.push(`${a.name}: Cold Level ${a.coldLevel} — not exposed.`); continue; }
     if (a.skipped === 'down') { lines.push(`${a.name}: down — no cold exposure.`); continue; }
     if (a.skipped === 'not_resting') { lines.push(`${a.name}: not resting — no cold exposure.`); continue; }
+    if (a.awaitingPlayerDice) { lines.push(`${a.name}: Cold Level ${a.coldLevel}, DC ${a.dc} — the player is rolling their own ${a.playerAsk.hours} hourly save(s); the result arrives as a system fact once they report. Do not narrate frost for them yet.`); continue; }
     const fails = (a.hours || []).filter(x => x.outcome === 'failure' || x.outcome === 'critical_failure').length;
     let s = `${a.name}: Cold Level ${a.coldLevel}, DC ${a.dc} — ${fails} failed hour(s), frost ${a.frostBefore} → ${a.frostAfter}.`;
     if (a.died) s += ' DIED of frost (an ability score reached 0).';

@@ -108,6 +108,8 @@ import {
 } from '../services/combatLoopService.js';
 import { getTurnState } from '../services/combatTurnService.js';
 import { formatTurnAdvanceNote } from '../services/combatMarkerService.js';
+// Player-rolls-out-of-combat (2026-11-23): Hit Dice and cold saves.
+import { settleOutOfCombatRoll, outOfCombatRollPrompts, reportedNumberList } from '../services/playerRollService.js';
 import { formatTurnStateBlock } from '../services/turnLedgerService.js';
 import { getCurrentEncounterSeq } from '../services/enemyCombatService.js';
 // REST / TIME_ADVANCE: rest + clock mechanics. The service registers its
@@ -1414,11 +1416,19 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     // the outcome is injected as a system fact further below. Best-effort:
     // a failure here must never cost the player their turn.
     let rollOutcome = null;
+    let perceptionBankNote = null;
     try {
       const pendingRoll = await getPendingRoll(parseInt(sessionId));
       if (pendingRoll) {
         let reportedDice = null;
-        if (Number.isInteger(checkRoll) && checkRoll >= 1 && checkRoll <= 20) {
+        if (pendingRoll.bank === 'perception') {
+          // The dungeon door takes all of the player's numbers in one
+          // message (the banked number + the spares, Muse 2026-11-23).
+          const need = pendingRoll.count || 3;
+          const nums = reportedNumberList(action);
+          if (nums && nums.length === need && nums.every((n) => n >= 1 && n <= 20)) reportedDice = nums;
+          else if (nums) perceptionBankNote = `⚙ Perception not banked: send ${need} numbers from 1 to 20 in one message (you sent ${nums.length}).`;
+        } else if (Number.isInteger(checkRoll) && checkRoll >= 1 && checkRoll <= 20) {
           reportedDice = [checkRoll];
           if (Number.isInteger(checkRoll2) && checkRoll2 >= 1 && checkRoll2 <= 20) {
             reportedDice.push(checkRoll2);
@@ -1502,10 +1512,34 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     const rollMath = [];
     const engineLines = [];
     const engineFacts = [];
+    if (perceptionBankNote) engineLines.push(perceptionBankNote);
     let initiativeRes = null;
     let deathSaveRes = null;
     let concentrationRes = null;
+    // Out-of-combat player rolls (player-rolls-out-of-combat job): a short
+    // rest's Hit Dice and the cold's hourly saves wait on the player's
+    // numbers. Settled only when no in-combat roll or DM-requested check
+    // is waiting — those settle above and below, and take precedence.
+    let oocRoll = null;
     if (!rollOutcome) {
+      try {
+        if ((await pendingPlayerRolls(sidN)).length === 0) {
+          oocRoll = await settleOutOfCombatRoll(sidN, action);
+          if (oocRoll) {
+            engineLines.push(oocRoll.line);
+            if (oocRoll.fact) {
+              engineFacts.push(oocRoll.fact);
+              actionForLlm = `${action}\n\n${oocRoll.fact}`;
+            }
+            const fresh = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
+            if (fresh) session.session_config = fresh.session_config;
+          }
+        }
+      } catch (err) {
+        console.warn('[rolls] out-of-combat roll settlement failed (non-fatal):', err.message);
+      }
+    }
+    if (!rollOutcome && !oocRoll) {
       try {
         const d = reportedD20(action, Number.isInteger(checkRoll) ? checkRoll : dice.value.attackRoll);
         if (d) {
@@ -1546,7 +1580,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
         console.warn('[combatLoop] initiative/death-save resolution failed (non-fatal):', err.message);
       }
     }
-    const preRollConsumed = !!(rollOutcome || initiativeRes || deathSaveRes || concentrationRes);
+    const preRollConsumed = !!(rollOutcome || initiativeRes || deathSaveRes || concentrationRes || oocRoll);
 
     // ATTACK resolution (combat-real B2): a pending party attack from
     // last turn resolves from the player's reported dice — the
@@ -2076,10 +2110,19 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       // the coupled ADD_ITEM markers (parked from independent dispatch).
       // Combat-loop fix: the engine owns TURN_ADVANCE, and a damaging
       // HP_CHANGE beside an ENEMY_ATTACK would count the blow twice.
-      pipelineResult = await processResponseMarkers(combatDispatchText(result.narrative || '', { combatActive: true }).text, {
+      // Player-rolls-out-of-combat: a message that only reports a rest's
+      // Hit Dice is no in-fiction action, and the rest already moved the
+      // clock — a TIME_ADVANCE or REST the DM writes in reply would count
+      // the rest's hour twice (live probe, 2026-11-23), so neither dispatches.
+      let dispatchText = combatDispatchText(result.narrative || '', { combatActive: true }).text;
+      if (oocRoll?.kind === 'hit_dice') dispatchText = dispatchText.replace(/\[(?:TIME_ADVANCE|REST)\b[^\]]*\]/gi, '');
+      pipelineResult = await processResponseMarkers(dispatchText, {
         characterId: session.character_id,
         sessionId: parseInt(sessionId),
-        narrative: result.narrative || ''
+        narrative: result.narrative || '',
+        // The player's own words this turn: the Perception-bank guard
+        // tells a declared search (rolls openly) from a hidden-layer ask.
+        playerAction: action
       });
     } catch (err) {
       console.error('[markerPipeline] dispatch failed (non-fatal):', err.message);
@@ -2623,6 +2666,22 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     // for the tracker (P5).
     try {
       const pcfg = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {});
+      if (pcfg.pendingRoll?.bank === 'perception') {
+        const pr = pcfg.pendingRoll;
+        const add = (Number(pr.modifier) || 0) + (Number(pr.penalty) || 0);
+        const k = pr.count || 3;
+        rollPrompts.push(`🎲 At the door of ${pr.dungeon}: roll ${k} d20s for Perception and send all ${k} numbers in one message (e.g. "14 8 17"). Your first number is banked now and the others are held in reserve; the engine adds ${signedNum(add)} after.`);
+      } else if (pcfg.pendingRoll) {
+        // A check the DM asked for (ROLL_REQUEST, a trap or hazard save):
+        // the player is told what to roll and what the engine adds after,
+        // never the DC (player-rolls-out-of-combat; live probe found the
+        // ask rested on the DM's narration alone).
+        const pr = pcfg.pendingRoll;
+        const add = (Number(pr.modifier) || 0) + (Number(pr.penalty) || 0) + (Number(pr.subclassBonus) || 0);
+        const two = pr.advantage === 'advantage' || pr.advantage === 'disadvantage';
+        const what = pr.kind === 'save' ? `${pr.name} saving throw` : `${pr.name} check`;
+        rollPrompts.push(`🎲 Roll ${two ? `two d20s (${pr.advantage}${pr.advantageReason ? `: ${pr.advantageReason}` : ''}) and send both` : 'a d20'} for ${/^[aeiou]/i.test(what) ? 'an' : 'a'} ${what} — the engine adds ${signedNum(add)} after.`);
+      }
       if (pcfg.pendingInitiative) {
         rollPrompts.push(`🎲 Roll a d20 for initiative — the engine adds ${signedNum(pcfg.pendingInitiative.modifier)} (Dex) after.`);
       }
@@ -2646,6 +2705,9 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       if (pcfg.pendingDamage) {
         rollPrompts.push(`🎲 Roll ${pcfg.pendingDamage.diceText} for damage — the engine adds ${signedNum(pcfg.pendingDamage.flat)} after.`);
       }
+      // Out-of-combat asks (Hit Dice, cold saves) — only while no
+      // in-combat roll is waiting, so the player has one ask at a time.
+      if (rollPrompts.length === 0) rollPrompts.push(...await outOfCombatRollPrompts(sidN));
       if (rollPrompts.length) cleanNarrative += `\n\n${rollPrompts.join('\n')}`;
       const tsSeq = await getCurrentEncounterSeq(sessionId);
       const ts = tsSeq && !combatEnd ? await getTurnState(sidN, tsSeq).catch(() => null) : null;
@@ -2672,6 +2734,10 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     for (const hr of pipelineResult.handlerResults) {
       if (!hr.ok || !hr.result) continue;
       if (hr.schemaKey === 'SET_COVER' && hr.result.systemNote) {
+        result.messages.push({ role: 'user', content: hr.result.systemNote });
+      }
+      // A Perception ROLL_REQUEST refused because the player holds a bank.
+      if (hr.schemaKey === 'ROLL_REQUEST' && hr.result.refusedBankedPerception && hr.result.systemNote) {
         result.messages.push({ role: 'user', content: hr.result.systemNote });
       }
     }

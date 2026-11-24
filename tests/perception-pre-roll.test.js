@@ -153,28 +153,32 @@ assert(doorLogs.length === 2 && doorLogs.every(x => x.source === 'server'),
 
 // ---------------------------------------------------------------------------
 group('4. PC door resolution — reported die becomes the banked number');
-const banked = await pre.resolveBankRoll(sessionId, [14]);
-assert(banked && banked.total === 18 && banked.passive === 14 && banked.perceptionBank === true,
-  'reported 14 → banked total 18 (14+4), passive 14');
+// Player-rolls-out-of-combat item 4 (Muse 2026-11-23): the door takes 3
+// numbers — the banked number + 2 spares, all the player's.
+assert((await pre.resolveBankRoll(sessionId, [14])) === null && (await rolls.getPendingRoll(sessionId))?.bank === 'perception', 'one number is not enough — the door wants 3; the pending stays');
+const banked = await pre.resolveBankRoll(sessionId, [14, 9, 3]);
+assert(banked && banked.total === 18 && banked.passive === 14 && banked.perceptionBank === true && banked.spares === 2,
+  'reported 14 9 3 → banked total 18 (14+4), passive 14, 2 spares');
+assert(JSON.stringify((await sessionConfig(sessionId)).perceptionSpares?.['Sunless Citadel']) === JSON.stringify({ dice: [9, 3], modifier: 4, exhausted: false }), 'the spares 9 and 3 are held for the dungeon');
 assert((await rolls.getPendingRoll(sessionId)) === null, 'pending cleared after banking');
 const pcRow = (await bankRows(sessionId, 'Sunless Citadel')).find(r => r.actor_type === 'pc');
 assert(pcRow && pcRow.banked_die === 14 && pcRow.modifier === 4 && pcRow.actor_name === 'Roll Tester',
   'PC bank row stored: die 14, modifier +4');
 const pcLog = await db.dbAll("SELECT * FROM roll_log WHERE session_id = ? AND source = 'reported' AND outcome = 'banked'", [sessionId]);
-assert(pcLog.length === 1 && pcLog[0].taken_die === 14 && pcLog[0].total === 18,
-  'PC door roll logged (reported, banked, 14 → 18)');
-assert((await pre.resolveBankRoll(sessionId, [10])) === null, 'resolving with nothing pending → null');
+assert(pcLog.length === 3 && pcLog[0].taken_die === 14 && pcLog[0].total === 18 && pcLog.slice(1).map(x => x.taken_die).join(',') === '9,3',
+  'PC door roll and both spares logged (reported, banked)');
+assert((await pre.resolveBankRoll(sessionId, [10, 10, 10])) === null, 'resolving with nothing pending → null');
 const bankBlock = pre.formatPerceptionBankBlock(banked);
 assert(bankBlock.includes('Roll Tester') && bankBlock.includes('18') &&
   bankBlock.includes('Tell the player their banked number') &&
-  bankBlock.includes('never mention when a banked number is read'),
+  bankBlock.includes('never mention when a banked number is read') && bankBlock.includes('2 more of their own numbers held in reserve') && bankBlock.includes('NEVER ask the player for a Perception roll'),
   'bank fact tells the DM the number and the secrecy rule');
 
 // Out-of-range door die: pending stays so the player can re-report.
 await pre.requestBankRoll({ sessionId, characterId: charId, dungeon: 'Second Vault' });
-assert((await pre.resolveBankRoll(sessionId, [25])) === null, 'door die 25 → null');
+assert((await pre.resolveBankRoll(sessionId, [25, 4, 4])) === null, 'door die 25 → null');
 assert((await rolls.getPendingRoll(sessionId))?.bank === 'perception', 'pending survives a bad die');
-const banked2 = await pre.resolveBankRoll(sessionId, [10]);
+const banked2 = await pre.resolveBankRoll(sessionId, [10, 12, 6]);
 assert(banked2 && banked2.total === 14 && banked2.dungeon === 'Second Vault', 're-reported 10 banks (10+4=14)');
 
 // ---------------------------------------------------------------------------
@@ -231,19 +235,22 @@ u = await useViaMarker('Roll Tester', 'trap', 13);
 assert(u?.success === true && u.outcome === 'critical_failure',
   'stored nat 1 vs DC 13 with passive 14: critical_failure, passive does not save it');
 
-// Replacement: after each use the old number is gone and a fresh one is banked.
+// Replacement (Muse 2026-11-23): the PC's replacement is their own next
+// spare — these seeded rows carry none, so each use leaves the PC on
+// passive, and the engine rolls no replacement die for the PC.
 const afterRows = (await bankRows(sessionId, 'Test Vault')).filter(r => r.actor_type === 'pc');
-assert(afterRows.length === 1, 'one PC row remains for the dungeon after the uses');
-assert(afterRows[0].banked_die >= 1 && afterRows[0].banked_die <= 20 && afterRows[0].modifier === 4,
-  'replacement banked: fresh d20 in range, same modifier +4');
+assert(afterRows.length === 0 && (await sessionConfig(sessionId)).perceptionSpares?.['Test Vault']?.exhausted === true,
+  'no spare left: the PC row is gone and the bank is marked spent (passive from now)');
+const pcServerRolls = await db.dbAll("SELECT * FROM roll_log WHERE session_id = ? AND actor_type = 'pc' AND source = 'server'", [sessionId]);
+assert(pcServerRolls.length === 0, 'the engine rolled no Perception die for the PC');
 const useLogs = await db.dbAll("SELECT * FROM roll_log WHERE session_id = ? AND source = 'banked' AND check_name = 'Perception' AND dc IS NOT NULL ORDER BY id", [sessionId]);
 assert(useLogs.length === 5 && useLogs.map(x => x.outcome).join(',') === 'success,success,failure,critical_success,critical_failure',
   'all five uses logged with the judged outcomes');
 const useFact = ((await sessionConfig(sessionId)).recentRolls || []).filter(r => r.perceptionUse).pop();
 assert(useFact && useFact.outcome === 'critical_failure', 'latest USE stashed on recentRolls for next-turn injection');
 const useBlock = pre.formatPerceptionUseBlock(useFact);
-assert(useBlock.includes('CRITICAL FAILURE') && useBlock.includes('do NOT mention the new number') &&
-  useBlock.includes('never say a banked number was read'),
+assert(useBlock.includes('CRITICAL FAILURE') && useBlock.includes('Do NOT mention any banked number') &&
+  useBlock.includes('never say a banked number was read') && useBlock.includes('never ask for a Perception roll'),
   'use fact demands a consequence and forbids mentioning the replacement');
 
 // Companion use (secret door, banked wins) + replacement keeps the modifier.
@@ -254,6 +261,46 @@ assert(u?.success === true && u.outcome === 'success' && u.bankedTotal === 15 &&
 const lyraAfter = (await bankRows(sessionId, 'Test Vault')).find(r => r.actor_name === 'Lyra');
 assert(lyraAfter && lyraAfter.banked_die >= 1 && lyraAfter.banked_die <= 20 && lyraAfter.modifier === 5,
   'Lyra replacement banked with the same modifier +5');
+
+// ---------------------------------------------------------------------------
+group('5b. The player\'s spares, then passive; no mid-dungeon ask; refill at the next door');
+{
+  // Muse 2026-11-23: 3 numbers at the door (banked + 2 spares); when the
+  // bank runs out, passive Perception; refill at the next dungeon door.
+  const s5 = await insertRow('dm_sessions', { character_id: charId, status: 'active', session_config: '{}' });
+  const useS5 = async (dc) => pre.useBankedPerception({ sessionId: s5, characterId: charId, target: 'Roll Tester', trigger: 'trap', dc });
+  const pcDie = async () => (await bankRows(s5, 'Spare Vault')).find(r => r.actor_type === 'pc')?.banked_die ?? null;
+  await pre.bankAtDoor({ sessionId: s5, characterId: charId, dungeon: 'Spare Vault' });
+  assert((await rolls.getPendingRoll(s5))?.count === 3, 'the door asks the player for 3 numbers');
+  await pre.resolveBankRoll(s5, [15, 9, 3]);
+  assert(await pcDie() === 15, 'the first number (15) is banked');
+  let r5 = await useS5(10);
+  assert(r5.outcome === 'success' && r5.die === 15 && await pcDie() === 9, 'use 1 reads 15; the spare 9 moves up — no roll');
+  r5 = await useS5(10);
+  assert(r5.die === 9 && await pcDie() === 3, 'use 2 reads 9; the spare 3 moves up');
+  r5 = await useS5(10);
+  // 3 + 4 = 7 misses DC 10, but passive 14 meets it.
+  assert(r5.die === 3 && r5.outcome === 'success' && r5.viaPassive === true && await pcDie() === null,
+    'use 3 reads the last spare (3+4=7; passive 14 carries DC 10); the bank is now empty');
+  assert((await sessionConfig(s5)).perceptionSpares?.['Spare Vault']?.exhausted === true, 'the bank is marked spent');
+  const p1 = await useS5(14);
+  assert(p1.success && p1.passiveOnly === true && p1.die === null && p1.outcome === 'success', 'empty bank: passive 14 vs DC 14 succeeds, no die');
+  const p2 = await useS5(15);
+  assert(p2.passiveOnly === true && p2.outcome === 'failure', 'empty bank: passive 14 vs DC 15 fails');
+  assert(pre.formatPerceptionUseBlock(p2).includes('passive Perception 14') && !/die \d/.test(pre.formatPerceptionUseBlock(p2)), 'the DM fact says passive, with no die');
+  assert((await pre.formatActiveBankBlock(s5)).includes('Roll Tester'), 'the DM still sees the PC as covered (by passive) — so it never asks for a roll');
+  const pcServer = await db.dbAll("SELECT * FROM roll_log WHERE session_id = ? AND actor_type = 'pc' AND source = 'server'", [s5]);
+  assert(pcServer.length === 0, 'the engine rolled no Perception die for the PC');
+  // Still inside: a repeated door marker for the same dungeon asks nothing.
+  await pre.bankAtDoor({ sessionId: s5, characterId: charId, dungeon: 'Spare Vault' });
+  assert(!(await rolls.getPendingRoll(s5)), 'no mid-dungeon ask: the same dungeon stays on passive');
+  // The next dungeon door refills.
+  await pre.bankAtDoor({ sessionId: s5, characterId: charId, dungeon: 'Next Crypt' });
+  assert((await rolls.getPendingRoll(s5))?.dungeon === 'Next Crypt' && (await rolls.getPendingRoll(s5))?.count === 3, 'the next dungeon door asks for 3 fresh numbers');
+  await pre.resolveBankRoll(s5, [11, 11, 11]);
+  await pre.bankAtDoor({ sessionId: s5, characterId: charId, dungeon: 'Spare Vault' });
+  assert((await rolls.getPendingRoll(s5))?.dungeon === 'Spare Vault', 'coming back through the Spare Vault door refills that bank too');
+}
 
 // ---------------------------------------------------------------------------
 group('6. Use failures — clean, no consumption');

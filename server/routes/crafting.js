@@ -235,11 +235,20 @@ router.post('/projects/:projectId/advance', async (req, res) => {
  */
 router.post('/projects/:projectId/complete', async (req, res) => {
   try {
-    const { game_day } = req.body;
+    const { game_day, d20 } = req.body;
+    // The player's reported d20 (absent = ask for it). Malformed is a 400.
+    let reported = null;
+    if (d20 !== undefined && d20 !== null && d20 !== '') {
+      reported = Number(d20);
+      if (!Number.isInteger(reported) || reported < 1 || reported > 20) {
+        return res.status(400).json({ error: 'd20 must be a whole number from 1 to 20' });
+      }
+    }
 
     const result = await craftingService.completeProject(
       parseInt(req.params.projectId),
-      game_day
+      game_day,
+      reported
     );
 
     if (result.error) {

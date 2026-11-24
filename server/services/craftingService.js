@@ -8,7 +8,6 @@
 
 import { dbAll, dbGet, dbRun } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
-import { rollD20 as rngRollD20 } from '../utils/rng.js';
 import { DEFAULT_RECIPES } from '../data/craftingRecipes.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 
@@ -45,16 +44,6 @@ function getAbilityMod(abilityScores, ability) {
  */
 function getProficiencyBonus(level) {
   return Math.ceil((level || 1) / 4) + 1;
-}
-
-/**
- * Simulate a d20 roll.
- * @returns {number} 1-20
- */
-function rollD20() {
-  // Crafting checks are mechanically meaningful — routed through the central
-  // RNG (Phase 3.3), which also removes a duplicate of this exact function.
-  return rngRollD20('crafting check');
 }
 
 /**
@@ -390,7 +379,7 @@ export async function advanceProject(projectId, hours) {
  * @param {number} gameDay - Current in-game day
  * @returns {Promise<object>} Result with success, item/quality or materials_returned
  */
-export async function completeProject(projectId, gameDay) {
+export async function completeProject(projectId, gameDay, reportedD20 = null) {
   const project = await dbGet('SELECT * FROM crafting_projects WHERE id = ?', [projectId]);
   if (!project) return { error: 'Project not found' };
   if (project.status !== 'in_progress') return { error: `Project is ${project.status}, cannot complete` };
@@ -412,11 +401,27 @@ export async function completeProject(projectId, gameDay) {
   const toolProfs = safeParse(character.tool_proficiencies, []);
   const level = character.level || 1;
 
-  // Calculate the roll
-  const d20 = rollD20();
+  // The player's own d20 (player-rolls-out-of-combat, item 3; Zach
+  // 2026-11-23: the DM never rolls for the player). With no reported
+  // die the project is untouched and the ask comes back: what to roll
+  // and what the engine adds after. No DC in the ask — the engine
+  // hides DCs from the player.
   const abilityMod = getAbilityMod(abilityScores, recipe.ability_check || 'intelligence');
   const isProficient = recipe.required_proficiency && toolProfs.includes(recipe.required_proficiency);
   const profBonus = isProficient ? getProficiencyBonus(level) : 0;
+  const abilityName = String(recipe.ability_check || 'intelligence');
+  if (reportedD20 == null) {
+    const add = abilityMod + profBonus;
+    return {
+      needsRoll: true, project_id: projectId,
+      ability: abilityName, modifier: add,
+      prompt: `Roll a d20 for the ${abilityName.charAt(0).toUpperCase()}${abilityName.slice(1)} check to finish ${recipe.name || 'the project'} — the engine adds ${add >= 0 ? '+' : ''}${add} (${abilityName.slice(0, 3).toUpperCase()}${isProficient ? ' + proficiency' : ''}) after.`
+    };
+  }
+  if (!Number.isInteger(reportedD20) || reportedD20 < 1 || reportedD20 > 20) {
+    return { error: 'd20 must be a whole number from 1 to 20' };
+  }
+  const d20 = reportedD20;
   const totalRoll = d20 + abilityMod + profBonus;
   const dc = recipe.difficulty_dc || 10;
 
