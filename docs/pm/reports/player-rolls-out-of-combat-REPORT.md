@@ -18,6 +18,8 @@ The brief matched the live code, with one difference. The brief says "the player
 ## Verdict
 BUILT + GREEN (builder's run; Zach's run is the gate).
 
+Commit `7ef5d44` on branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`. Version 1.0.206.
+
 ## Per-item verdicts
 | Item | Verdict | In one line |
 |---|---|---|
