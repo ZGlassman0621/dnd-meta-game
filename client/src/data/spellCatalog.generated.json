@@ -128,6 +128,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a strip of white cloth",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": false,
@@ -178,6 +184,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bell and silver wire",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": true,
@@ -223,6 +235,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a morsel of food",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": false,
@@ -248,6 +266,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a morsel of food",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": true,
@@ -292,6 +316,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a drop of blood, a piece of flesh, and a pinch of bone dust",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -382,6 +412,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "iron filings",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -404,6 +440,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a mix of vinegar and honey",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "10 days",
       "concentration": false,
       "ritual": false,
@@ -429,6 +471,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of bat fur",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -474,9 +522,9 @@
         "M"
       ],
       "material": {
-        "text": "gold dust worth 25+ GP",
+        "text": "gold dust worth 25+ GP, which the spell consumes",
         "costGp": 25,
-        "consumed": null,
+        "consumed": true,
         "match": [
           "gold dust"
         ]
@@ -544,6 +592,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a shard of blue glass",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -632,9 +686,9 @@
         "M"
       ],
       "material": {
-        "text": "a jacinthe worth 1,000+ GP",
+        "text": "for each of the spell's targets, one jacinth worth 1,000+ GP and one silver bar worth 100+ GP, all of which the spell consumes",
         "costGp": 1000,
-        "consumed": null,
+        "consumed": true,
         "match": [
           "jacinth"
         ]
@@ -662,6 +716,17 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "specially marked sticks, bones, cards, or other divinatory tokens worth 25+ GP",
+        "costGp": 25,
+        "consumed": false,
+        "match": [
+          "divinatory token",
+          "marked sticks",
+          "marked bones",
+          "cards"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": true,
@@ -746,6 +811,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "an agate worth 1,000+ GP, which the spell consumes",
+        "costGp": 1000,
+        "consumed": true,
+        "match": [
+          "agate"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -791,6 +864,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a drop of blood",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -837,6 +916,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pentacle",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -865,6 +950,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a handful of bark",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -949,6 +1040,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a key ring with no keys",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -998,6 +1095,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "an eggshell and a glove",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -1100,6 +1203,17 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a Holy Symbol worth 5+ GP",
+        "costGp": 5,
+        "consumed": false,
+        "match": [
+          "holy symbol",
+          "amulet",
+          "emblem",
+          "reliquary"
+        ]
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -1156,7 +1270,7 @@
         "Paladin"
       ],
       "source": "PHB 2024",
-      "description": "The next time you hit a creature with a melee weapon attack during the spell, the attack deals an extra 3d8 radiant damage and the target must make a Constitution save or be blinded until the spell ends. Higher slots add 1d8 per slot level above 3rd."
+      "description": "Cast as a bonus action immediately after you hit a creature with a melee weapon or an Unarmed Strike: the target takes an extra 3d8 radiant damage and has the Blinded condition until the spell ends. At the end of each of its turns, the Blinded target makes a Constitution save, ending the spell on itself on a success. Higher slots add 1d8 per slot level above 3rd."
     },
     {
       "key": "blindness/deafness",
@@ -1532,6 +1646,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "three silver pins",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -1651,6 +1771,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a diamond worth 50+ GP",
+        "costGp": 50,
+        "consumed": false,
+        "match": [
+          "diamond"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -1673,6 +1801,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "the powder of a crushed black pearl worth 500+ GP",
+        "costGp": 500,
+        "consumed": false,
+        "match": [
+          "black pearl"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -1719,6 +1855,15 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a focus worth 100+ GP, either a jeweled horn for hearing or a glass eye for seeing",
+        "costGp": 100,
+        "consumed": false,
+        "match": [
+          "jeweled horn",
+          "glass eye"
+        ]
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -1743,6 +1888,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a diamond worth 1,000+ GP, which the spell consumes, and a sealable vessel worth 2,000+ GP that is large enough to hold the creature being cloned",
+        "costGp": 1000,
+        "consumed": true,
+        "match": [
+          "diamond"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -1764,6 +1917,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a sliver of glass",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -1813,6 +1972,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of colorful sand",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -1861,6 +2026,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "incense",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 minute",
       "concentration": false,
       "ritual": true,
@@ -1924,6 +2095,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of soot and salt",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": true,
@@ -1969,6 +2146,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a small crystal or glass cone",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -1994,6 +2177,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "three nut shells",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -2286,6 +2475,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a gem-encrusted statuette of yourself worth 1,500+ GP",
+        "costGp": 1500,
+        "consumed": false,
+        "match": [
+          "statuette"
+        ]
+      },
       "duration": "10 days",
       "concentration": false,
       "ritual": false,
@@ -2307,6 +2504,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "ruby dust worth 50+ GP, which the spell consumes",
+        "costGp": 50,
+        "consumed": true,
+        "match": [
+          "ruby dust"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
@@ -2352,6 +2557,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a mixture of water and dust",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -2382,6 +2593,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "burning incense",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 8 hours",
       "concentration": true,
       "ritual": false,
@@ -2428,6 +2645,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "an ornamental braid",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": false,
@@ -2600,6 +2823,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a mix of water and sand",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -2644,6 +2873,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "one 150+ GP black onyx stone for each corpse",
+        "costGp": 150,
+        "consumed": false,
+        "match": [
+          "black onyx"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -2667,6 +2904,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a paintbrush",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Special",
       "concentration": false,
       "ritual": false,
@@ -2802,6 +3045,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of phosphorus",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -2870,6 +3119,12 @@
         "V",
         "M"
       ],
+      "material": {
+        "text": "bat fur and a piece of coal",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -2894,6 +3149,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a dried carrot",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": false,
@@ -3031,6 +3292,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a ball of bat guano and sulfur",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -3190,6 +3457,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a yew leaf",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": true,
@@ -3215,6 +3488,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "1 Copper Piece",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -3283,6 +3562,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a lodestone and dust",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -3306,6 +3591,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "powdered silver and iron",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -3398,6 +3689,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "incense worth 25+ GP, which the spell consumes",
+        "costGp": 25,
+        "consumed": true,
+        "match": [
+          "incense"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": true,
@@ -3603,6 +3902,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a hot pepper",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -3648,6 +3953,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a sapphire worth 1,000+ GP",
+        "costGp": 1000,
+        "consumed": false,
+        "match": [
+          "sapphire"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": true,
@@ -3669,6 +3982,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a handful of sand",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": false,
@@ -3831,6 +4150,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a fractured rock",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -4037,6 +4362,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "fur or a feather",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -4064,6 +4395,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of powdered iron",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -4204,6 +4541,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a tentacle",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -4319,6 +4662,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a drop of alcohol",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -4385,6 +4734,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a white feather",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -4411,6 +4766,12 @@
         "V",
         "M"
       ],
+      "material": {
+        "text": "a small feather or piece of down",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 minute",
       "concentration": false,
       "ritual": false,
@@ -4435,6 +4796,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of graveyard dirt",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": true,
@@ -4459,6 +4826,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "burning incense worth 10+ GP, which the spell consumes",
+        "costGp": 10,
+        "consumed": true,
+        "match": [
+          "incense"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": true,
@@ -4522,6 +4897,16 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a set of divination tools—such as cards or runes—worth 100+ GP",
+        "costGp": 100,
+        "consumed": false,
+        "match": [
+          "divination tools",
+          "cards",
+          "runes"
+        ]
+      },
       "duration": "Concentration, up to 1 day",
       "concentration": true,
       "ritual": false,
@@ -4632,6 +5017,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of phosphorus or a firefly",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "10 minutes",
       "concentration": false,
       "ritual": false,
@@ -4678,6 +5069,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a ball of bat guano and sulfur",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -4748,6 +5145,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a sumac leaf",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -4770,6 +5173,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of sulfur",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -4792,6 +5201,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a ball of wax",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -4817,6 +5232,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a cockatrice feather",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -4842,6 +5263,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a feather",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -4889,6 +5316,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "ruby dust worth 1,000+ GP",
+        "costGp": 1000,
+        "consumed": false,
+        "match": [
+          "ruby dust"
+        ]
+      },
       "duration": "1 day",
       "concentration": false,
       "ritual": true,
@@ -4910,6 +5345,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "ruby dust worth 1,500+ GP, which the spell consumes",
+        "costGp": 1500,
+        "consumed": true,
+        "match": [
+          "ruby dust"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -4940,6 +5383,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a hummingbird feather",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": false,
@@ -5008,6 +5457,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a leather strap",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -5056,6 +5511,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "some makeup",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -5191,6 +5652,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of gauze",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -5214,6 +5681,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a diamond worth 5,000+ GP",
+        "costGp": 5000,
+        "consumed": false,
+        "match": [
+          "diamond"
+        ]
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -5440,6 +5915,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a glass bead",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -5462,6 +5943,15 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "powdered diamond worth 200+ GP, which the spell consumes",
+        "costGp": 200,
+        "consumed": true,
+        "match": [
+          "powdered diamond",
+          "diamond dust"
+        ]
+      },
       "duration": "Until dispelled or triggered",
       "concentration": false,
       "ritual": false,
@@ -5487,6 +5977,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a sprig of mistletoe",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": false,
@@ -5575,6 +6071,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of pork rind or butter",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 minute",
       "concentration": false,
       "ritual": false,
@@ -5623,6 +6125,15 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "diamond dust worth 100+ GP, which the spell consumes",
+        "costGp": 100,
+        "consumed": true,
+        "match": [
+          "powdered diamond",
+          "diamond dust"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -5712,6 +6223,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a silver rod worth 10+ GP",
+        "costGp": 10,
+        "consumed": false,
+        "match": [
+          "silver rod"
+        ]
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": false,
@@ -5799,6 +6318,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a legume seed",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -5844,6 +6369,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "incense worth 1,000+ GP, which the spell consumes",
+        "costGp": 1000,
+        "consumed": true,
+        "match": [
+          "incense"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
@@ -5866,6 +6399,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a mushroom",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": false,
@@ -5911,6 +6450,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a shaving of licorice root",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -5997,6 +6542,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a piece of iron and a flame",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -6044,7 +6595,7 @@
         "M"
       ],
       "material": {
-        "text": "a gem-encrusted bowl worth 1,000+ GP",
+        "text": "a gem-encrusted bowl worth 1,000+ GP, which the spell consumes",
         "costGp": 1000,
         "consumed": true,
         "match": [
@@ -6095,6 +6646,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "the petrified eye of a newt",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -6117,6 +6674,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a straight piece of iron",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -6143,6 +6706,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a straight piece of iron",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -6171,6 +6740,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a reliquary worth 1,000+ GP",
+        "costGp": 1000,
+        "consumed": false,
+        "match": [
+          "reliquary"
+        ]
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -6238,6 +6815,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pickled tentacle",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -6278,6 +6861,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of confetti",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -6303,6 +6892,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a drop of water or a piece of ice",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -6327,6 +6922,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a mitten",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -6352,6 +6953,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pearl worth 100+ GP",
+        "costGp": 100,
+        "consumed": false,
+        "match": [
+          "pearl"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": true,
@@ -6395,6 +7004,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "ink worth 10+ GP, which the spell consumes",
+        "costGp": 10,
+        "consumed": true,
+        "match": [
+          "ink"
+        ]
+      },
       "duration": "10 days",
       "concentration": false,
       "ritual": true,
@@ -6461,6 +7078,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a statuette of the target worth 5,000+ GP",
+        "costGp": 5000,
+        "consumed": false,
+        "match": [
+          "statuette"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
@@ -6602,6 +7227,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a locust",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -6746,6 +7377,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "an eyelash in gum arabic",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -6795,6 +7432,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of phosphorus",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -6862,6 +7505,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a grasshopper's hind leg",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 minute",
       "concentration": false,
       "ritual": false,
@@ -6981,6 +7630,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "incense worth 250+ GP, which the spell consumes, and four ivory strips worth 50+ GP each",
+        "costGp": 250,
+        "consumed": true,
+        "match": [
+          "incense"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -7004,6 +7661,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a chest, 3 feet by 2 feet by 2 feet, constructed from rare materials worth 5,000+ GP, and a Tiny replica of the chest made from the same materials worth 50+ GP",
+        "costGp": 5000,
+        "consumed": false,
+        "match": [
+          "chest"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
@@ -7026,6 +7691,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a crystal bead",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": true,
@@ -7073,6 +7744,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a metal spring",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -7117,6 +7794,12 @@
         "V",
         "M"
       ],
+      "material": {
+        "text": "a firefly or phosphorescent moss",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -7163,6 +7846,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of fur and a crystal rod",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -7210,6 +7899,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "fur from a bloodhound",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": true,
@@ -7233,6 +7928,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "fur from a bloodhound",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -7260,6 +7961,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a forked twig",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -7287,6 +7994,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of dirt",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -7356,6 +8069,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a piece of cured leather",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": false,
@@ -7402,6 +8121,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "salt and powdered silver worth 100+ GP, which the spell consumes",
+        "costGp": 100,
+        "consumed": true,
+        "match": [
+          "powdered silver"
+        ]
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -7434,6 +8161,16 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a gem, crystal, or reliquary worth 500+ GP",
+        "costGp": 500,
+        "consumed": false,
+        "match": [
+          "gem",
+          "crystal",
+          "reliquary"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
@@ -7478,6 +8215,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "jade dust worth 10+ GP, which the spell consumes",
+        "costGp": 10,
+        "consumed": true,
+        "match": [
+          "jade dust"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": true,
@@ -7569,6 +8314,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of fleece",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -7700,6 +8451,12 @@
         "V",
         "M"
       ],
+      "material": {
+        "text": "a snake's tongue",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": false,
@@ -7777,7 +8534,7 @@
         "Ranger"
       ],
       "source": "PHB 2024",
-      "description": "You step into a stone surface large enough to hold you and merge with it, hidden from every sense while you listen dimly to the world outside. Partly destroying the stone (or reshaping it so you no longer fit) expels you and deals 6d6 force damage to you, and its total destruction deals you even more grievous force damage."
+      "description": "You step into a stone surface large enough to hold you and merge with it, hidden from every sense while you listen dimly to the world outside. Partly destroying the stone (or reshaping it so you no longer fit) expels you and deals 6d6 force damage to you, and its total destruction (or transmutation into another substance) deals you 50 force damage."
     },
     {
       "key": "melf's acid arrow",
@@ -7791,6 +8548,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "powdered rhubarb leaf",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -7836,6 +8599,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "two lodestones",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -7884,6 +8653,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a copper wire",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 round",
       "concentration": false,
       "ritual": false,
@@ -8016,6 +8791,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of fleece",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 minute",
       "concentration": false,
       "ritual": false,
@@ -8193,6 +8974,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a moonseed leaf",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -8215,6 +9002,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a silver whistle",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": false,
@@ -8238,6 +9031,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a miniature door worth 15+ GP",
+        "costGp": 15,
+        "consumed": false,
+        "match": [
+          "miniature door"
+        ]
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": false,
@@ -8260,6 +9061,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a thin sheet of lead",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": false,
@@ -8282,6 +9089,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a miniature sword worth 250+ GP",
+        "costGp": 250,
+        "consumed": false,
+        "match": [
+          "miniature sword"
+        ]
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -8324,6 +9139,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a miniature shovel",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 2 hours",
       "concentration": true,
       "ritual": false,
@@ -8412,6 +9233,15 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of diamond dust worth 25+ GP, which the spell consumes",
+        "costGp": 25,
+        "consumed": true,
+        "match": [
+          "powdered diamond",
+          "diamond dust"
+        ]
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": false,
@@ -8436,6 +9266,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a small square of silk",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": false,
@@ -8479,6 +9315,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a miniature crystal sphere",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -8503,6 +9345,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a glass sphere",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -8548,6 +9396,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "ashes from burned mistletoe",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -8570,6 +9424,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of sesame seeds",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -8591,6 +9451,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of fleece",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -8679,6 +9545,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a jewel worth 1,000+ GP, which the spell consumes",
+        "costGp": 1000,
+        "consumed": true,
+        "match": [
+          "jewel"
+        ]
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": false,
@@ -8705,6 +9579,16 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a forked, metal rod worth 250+ GP and attuned to a plane of existence",
+        "costGp": 250,
+        "consumed": false,
+        "match": [
+          "forked rod",
+          "forked metal rod",
+          "forked, metal rod"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -8785,6 +9669,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a caterpillar cocoon",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -9042,7 +9932,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A shimmering wall of seven colored layers, each a different peril and each banishing certain effects: fire, acid, lightning, poison, petrification, madness, and banishment to other planes. Its glare forces a Constitution save on nearby creatures that can see it — a failure means the Blinded condition. Passing through means weathering every layer, and each layer must be destroyed in order by its opposing magic."
+      "description": "A shimmering, opaque wall of seven colored layers springs up — up to 90 feet long and 30 feet high, or a globe up to 30 feet across. Its glare forces a Constitution save on any other creature that can see it and moves within 20 feet or starts its turn there; a failure means the Blinded condition for 1 minute. A creature passing through braves every layer in turn, each with its own Dexterity save: red fire, orange acid, yellow lightning, green poison and blue cold (12d6 each, half on a success), indigo restraint that can harden into petrification, and violet blindness that can hurl it to another plane. The layers can be destroyed only one at a time, red to violet, each by its own specific means."
     },
     {
       "key": "produce flame",
@@ -9076,6 +9966,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "jade dust worth 25+ GP",
+        "costGp": 25,
+        "consumed": false,
+        "match": [
+          "jade dust"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
@@ -9098,6 +9996,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a statuette of yourself worth 5+ GP",
+        "costGp": 5,
+        "consumed": false,
+        "match": [
+          "statuette"
+        ]
+      },
       "duration": "Concentration, up to 1 day",
       "concentration": true,
       "ritual": false,
@@ -9145,6 +10051,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a flask of Holy Water worth 25+ GP, which the spell consumes",
+        "costGp": 25,
+        "consumed": true,
+        "match": [
+          "holy water"
+        ]
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -9288,6 +10202,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a diamond worth 500+ GP, which the spell consumes",
+        "costGp": 500,
+        "consumed": true,
+        "match": [
+          "diamond"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -9311,6 +10233,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "two eggs",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": true,
@@ -9469,6 +10397,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a prayer wheel",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -9492,6 +10426,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "rare oils worth 1,000+ GP, which the spell consumes",
+        "costGp": 1000,
+        "consumed": true,
+        "match": [
+          "rare oil"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -9559,6 +10501,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a diamond worth 1,000+ GP, which the spell consumes",
+        "costGp": 1000,
+        "consumed": true,
+        "match": [
+          "diamond"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -9581,6 +10531,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a lodestone and iron filings",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -9606,7 +10562,7 @@
         "M"
       ],
       "material": {
-        "text": "diamonds worth 300 GP",
+        "text": "a diamond worth 300+ GP, which the spell consumes",
         "costGp": 300,
         "consumed": true,
         "match": [
@@ -9680,6 +10636,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a segment of rope",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -9723,6 +10685,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a shard of glass from a mirror",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 minute",
       "concentration": false,
       "ritual": false,
@@ -9811,6 +10779,16 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a focus worth 1,000+ GP, such as a crystal ball, mirror, or water-filled font",
+        "costGp": 1000,
+        "consumed": false,
+        "match": [
+          "crystal ball",
+          "mirror",
+          "font"
+        ]
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -9858,6 +10836,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of talc",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -9905,6 +10889,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a copper wire",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -9928,6 +10918,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "gem dust worth 5,000+ GP, which the spell consumes",
+        "costGp": 5000,
+        "consumed": true,
+        "match": [
+          "gem dust"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
@@ -10014,6 +11012,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a jade circlet worth 1,500+ GP",
+        "costGp": 1500,
+        "consumed": false,
+        "match": [
+          "jade circlet"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -10036,6 +11042,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a chip of mica",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -10082,6 +11094,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a prayer scroll",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -10105,6 +11123,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "mistletoe",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 minute",
       "concentration": false,
       "ritual": false,
@@ -10213,6 +11237,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of fleece",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -10257,6 +11287,15 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "powdered ruby worth 1,500+ GP, which the spell consumes",
+        "costGp": 1500,
+        "consumed": true,
+        "match": [
+          "powdered ruby",
+          "ruby dust"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
@@ -10324,6 +11363,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pinch of sand or rose petals",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -10349,6 +11394,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a miniature umbrella",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -10374,6 +11425,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a drop of molasses",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -10534,6 +11591,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "burning incense",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "10 minutes",
       "concentration": false,
       "ritual": false,
@@ -10642,6 +11705,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a drop of bitumen and a spider",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -10666,6 +11735,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "seven thorns",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -10688,6 +11763,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a prayer scroll",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -10885,6 +11966,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a rotten egg",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -10911,6 +11998,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "soft clay",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -10935,6 +12028,15 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "diamond dust worth 100+ GP, which the spell consumes",
+        "costGp": 100,
+        "consumed": true,
+        "match": [
+          "powdered diamond",
+          "diamond dust"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -11025,6 +12127,12 @@
         "V",
         "M"
       ],
+      "material": {
+        "text": "a drop of honey",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 8 hours",
       "concentration": true,
       "ritual": false,
@@ -11052,6 +12160,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pickled tentacle and an eyeball in a platinum-inlaid vial worth 400+ GP",
+        "costGp": 400,
+        "consumed": false,
+        "match": [
+          "platinum-inlaid vial"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -11074,6 +12190,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a feather, tuft of fur, and fish tail inside a gilded acorn worth 200+ GP",
+        "costGp": 200,
+        "consumed": false,
+        "match": [
+          "gilded acorn"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -11096,6 +12220,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a reliquary worth 500+ GP",
+        "costGp": 500,
+        "consumed": false,
+        "match": [
+          "reliquary"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -11118,6 +12250,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a lockbox worth 400+ GP",
+        "costGp": 400,
+        "consumed": false,
+        "match": [
+          "lockbox"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -11163,6 +12303,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "an object with the image of a dragon engraved on it worth 500+ GP",
+        "costGp": 500,
+        "consumed": false,
+        "match": [
+          "dragon"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -11184,6 +12332,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "air, a pebble, ash, and water inside a gold-inlaid vial worth 400+ GP",
+        "costGp": 400,
+        "consumed": false,
+        "match": [
+          "gold-inlaid vial"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -11207,6 +12363,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a gilded flower worth 300+ GP",
+        "costGp": 300,
+        "consumed": false,
+        "match": [
+          "gilded flower"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -11231,6 +12395,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bloody vial worth 600+ GP",
+        "costGp": 600,
+        "consumed": false,
+        "match": [
+          "bloody vial"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -11323,6 +12495,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a gilded skull worth 300+ GP",
+        "costGp": 300,
+        "consumed": false,
+        "match": [
+          "gilded skull"
+        ]
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -11346,6 +12526,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a magnifying glass",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -11372,6 +12558,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a piece of sunstone",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -11473,6 +12665,15 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "powdered diamond worth 1,000+ GP, which the spell consumes",
+        "costGp": 1000,
+        "consumed": true,
+        "match": [
+          "powdered diamond",
+          "diamond dust"
+        ]
+      },
       "duration": "Until dispelled or triggered",
       "concentration": false,
       "ritual": false,
@@ -11536,6 +12737,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a gilded ladle worth 500+ GP",
+        "costGp": 500,
+        "consumed": false,
+        "match": [
+          "gilded ladle"
+        ]
+      },
       "duration": "10 minutes",
       "concentration": false,
       "ritual": false,
@@ -11582,6 +12791,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a tart and a feather",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -11674,6 +12889,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pair of linked silver rings",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": false,
@@ -11715,6 +12936,14 @@
         "V",
         "M"
       ],
+      "material": {
+        "text": "rare inks worth 50+ GP, which the spell consumes",
+        "costGp": 50,
+        "consumed": true,
+        "match": [
+          "rare ink"
+        ]
+      },
       "duration": "1 round",
       "concentration": false,
       "ritual": false,
@@ -11802,6 +13031,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a drop of mercury",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": true,
@@ -11886,6 +13121,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "the stem of a thorny plant",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -12112,6 +13353,12 @@
         "V",
         "M"
       ],
+      "material": {
+        "text": "a miniature ziggurat",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -12203,6 +13450,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a drop of mercury, a dollop of gum arabic, and a wisp of smoke",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -12227,6 +13480,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "diamonds worth 25,000+ GP, which the spell consumes",
+        "costGp": 25000,
+        "consumed": true,
+        "match": [
+          "diamond"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -12249,6 +13510,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "mushroom powder worth 25+ GP, which the spell consumes",
+        "costGp": 25,
+        "consumed": true,
+        "match": [
+          "mushroom powder"
+        ]
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -12379,6 +13648,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of string and of wood",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": true,
@@ -12508,6 +13783,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a drop of bile",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -12576,6 +13857,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a piece of charcoal",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -12601,6 +13888,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a shard of glass",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -12622,6 +13915,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a piece of quartz",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -12717,6 +14016,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a cube of granite",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -12741,6 +14046,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a handful of thorns",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
@@ -12831,6 +14142,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a pair of platinum rings worth 50+ GP each, which you and the target must wear for the duration",
+        "costGp": 50,
+        "consumed": false,
+        "match": [
+          "platinum ring"
+        ]
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
@@ -12876,6 +14195,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a short reed",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "24 hours",
       "concentration": false,
       "ritual": true,
@@ -12901,6 +14226,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a piece of cork",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "1 hour",
       "concentration": false,
       "ritual": true,
@@ -12973,6 +14304,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a bit of spiderweb",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 hour",
       "concentration": true,
       "ritual": false,
@@ -13044,6 +14381,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a candle",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "8 hours",
       "concentration": false,
       "ritual": false,
@@ -13065,6 +14408,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a fan and a feather",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -13108,6 +14457,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a twig struck by lightning",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -13179,6 +14534,12 @@
         "V",
         "M"
       ],
+      "material": {
+        "text": "a sunburst token",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -13250,7 +14611,7 @@
         "Paladin"
       ],
       "source": "PHB 2024",
-      "description": "Cast as you hit, the strike deals an extra 1d6 psychic damage and the target makes a Wisdom save or is frightened of you until it gathers its nerve with a Wisdom check as an action. Each higher slot adds 1d6."
+      "description": "Cast as a bonus action immediately after you hit a creature with a melee weapon or an Unarmed Strike: the target takes an extra 1d6 necrotic damage and must succeed on a Wisdom save or have the Frightened condition until the spell ends. At the end of each of its turns, the Frightened target repeats the save, ending the spell on itself on a success. Each higher slot adds 1d6."
     },
     {
       "key": "wristpocket",
@@ -13283,6 +14644,12 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a miniature tiara",
+        "costGp": null,
+        "consumed": false,
+        "match": []
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,

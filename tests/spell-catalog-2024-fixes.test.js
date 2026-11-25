@@ -187,10 +187,11 @@ check(/12d6/.test(D('prismatic spray')), 'Prismatic Spray description 12d6');
 // ---------------------------------------------------------------- (h)
 group('(h) material specifics');
 const M = (k) => logic.spellMaterial(k);
-check(same(M('revivify'), { text: 'diamonds worth 300 GP', costGp: 300, consumed: true, match: ['diamond'] }), 'Revivify: 300 GP diamonds, consumed');
+// repo-check-fixes-spells-materials: book wording from the PHB transcription.
+check(same(M('revivify'), { text: 'a diamond worth 300+ GP, which the spell consumes', costGp: 300, consumed: true, match: ['diamond'] }), 'Revivify: a 300+ GP diamond, consumed');
 check(M("heroes' feast")?.costGp === 1000 && M("heroes' feast").consumed === true && /gem-encrusted bowl/.test(M("heroes' feast").text), "Heroes' Feast: 1,000+ GP bowl, consumed");
-check(M('astral projection')?.costGp === 1000 && /jacinthe/.test(M('astral projection').text), 'Astral Projection: 1,000+ GP jacinthe');
-check(M('arcane lock')?.costGp === 25 && /gold dust/.test(M('arcane lock').text), 'Arcane Lock: 25+ GP gold dust');
+check(M('astral projection')?.costGp === 1000 && M('astral projection').consumed === true && /jacinth .*silver bar/.test(M('astral projection').text), 'Astral Projection: 1,000+ GP jacinth + silver bar, consumed');
+check(M('arcane lock')?.costGp === 25 && M('arcane lock').consumed === true && /gold dust/.test(M('arcane lock').text), 'Arcane Lock: 25+ GP gold dust, consumed');
 check(M('swift quiver')?.costGp === 1 && M('swift quiver').consumed === false && /quiver/.test(M('swift quiver').text), 'Swift Quiver: a quiver worth 1+ GP');
 for (const k of ['revivify', "heroes' feast", 'astral projection', 'arcane lock', 'swift quiver']) check(logic.materialIsEnforced(M(k)), `${k}: enforced at cast time`);
 check(!logic.materialIsEnforced(null) && !logic.materialIsEnforced({ costGp: 0, consumed: false }), 'a plain component is not enforced');
@@ -263,7 +264,7 @@ try {
   // Revivify without diamonds: refused, no slot spent.
   let id = await caster('Cleric', [{ name: 'Rope', quantity: 1 }]); ids.push(id);
   let r = await castSpell(id, 'Revivify', 3);
-  check(r?.success === false && /diamonds worth 300 GP/.test(r.reason || ''), `Revivify refused without diamonds (${r?.reason})`);
+  check(r?.success === false && /a diamond worth 300\+ GP/.test(r.reason || ''), `Revivify refused without diamonds (${r?.reason})`);
   check(!(await slots(id))['3'], 'no 3rd-level slot spent on the refusal');
   // Not enough value: 200 GP of diamonds.
   id = await caster('Cleric', [{ name: 'Diamond', quantity: 2, price_gp: 100 }]); ids.push(id);
@@ -283,17 +284,18 @@ try {
   id = await caster('Cleric', []); ids.push(id);
   r = await castSpell(id, "Heroes' Feast", 6);
   check(r?.success === false, "Heroes' Feast refused without the bowl");
-  // Astral Projection: refused without; casts with (consumed not stated → kept).
+  // Astral Projection: refused without; casts with, and the jacinth is consumed (PHB transcription).
   id = await caster('Wizard', []); ids.push(id);
   check((await castSpell(id, 'Astral Projection', 9))?.success === false, 'Astral Projection refused without the jacinthe');
   id = await caster('Wizard', [{ name: 'Jacinth (1,000 gp)', quantity: 1 }]); ids.push(id);
   r = await castSpell(id, 'Astral Projection', 9);
-  check(r?.success === true && (await inv(id)).length === 1, 'Astral Projection casts with a 1,000 GP jacinth (value read from its name)');
+  check(r?.success === true && (await inv(id)).length === 0, 'Astral Projection casts with a 1,000 GP jacinth (value read from its name) and consumes it');
   // Arcane Lock.
   id = await caster('Wizard', [{ name: 'Gold dust', quantity: 1, price_gp: 10 }]); ids.push(id);
   check((await castSpell(id, 'Arcane Lock', 2))?.success === false, 'Arcane Lock refused with only 10 GP of gold dust');
   id = await caster('Wizard', [{ name: 'Gold dust', quantity: 1, price_gp: 25 }]); ids.push(id);
-  check((await castSpell(id, 'Arcane Lock', 2))?.success === true, 'Arcane Lock casts with 25 GP of gold dust');
+  r = await castSpell(id, 'Arcane Lock', 2);
+  check(r?.success === true && (await inv(id)).length === 0, 'Arcane Lock casts with 25 GP of gold dust and consumes it');
   // Swift Quiver: a plain quiver (price from the equipment list) satisfies it and is not consumed.
   id = await caster('Ranger', [{ name: 'Quiver', quantity: 1 }]); ids.push(id);
   r = await castSpell(id, 'Swift Quiver', 5);

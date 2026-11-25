@@ -98,7 +98,10 @@ const pcId = await insertRow('characters', {
     mainHand: { name: 'Longsword', damage: '1d8', damageType: 'slashing' },
     armor: { name: 'Chain Mail' }
   }),
-  skills: JSON.stringify([])
+  skills: JSON.stringify([]),
+  // repo-check-fixes-spells-materials: the party pack (Garrick's) carries a
+  // holy symbol, which Wren's Bless needs (a Holy Symbol worth 5+ GP, PHB 2024).
+  inventory: JSON.stringify([{ name: 'Amulet', quantity: 1 }])
 });
 // Sera: L3 cleric, WIS 16 → spell save DC 13, attack +5.
 const seraId = await insertRow('characters', {

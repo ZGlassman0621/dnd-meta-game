@@ -122,7 +122,8 @@ const pcId = await insertRow('characters', {
   }),
   spell_slots: JSON.stringify({ 1: 2, 2: 1 }),
   spell_slots_used: JSON.stringify({}),
-  inventory: JSON.stringify([]),
+  // repo-check-fixes-spells-materials: Bless needs a Holy Symbol worth 5+ GP (PHB 2024).
+  inventory: JSON.stringify([{ name: 'Amulet', quantity: 1 }]),
 });
 
 // Second character purely for the temp-HP / NULL-temp_hp group.

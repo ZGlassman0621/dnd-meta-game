@@ -33,8 +33,14 @@ async function equipmentPriceFor(name) {
     equipmentPrices = new Map();
     try {
       const mod = await import('../data/equipment2024.js');
+      // Lists sit at the top level (WEAPONS, ADVENTURING_GEAR…) or one
+      // level down (FOCUSES.holy — Amulet/Emblem/Reliquary, 5 GP each).
+      const lists = [];
       for (const v of Object.values(mod)) {
-        if (!Array.isArray(v)) continue;
+        if (Array.isArray(v)) lists.push(v);
+        else if (v && typeof v === 'object') for (const w of Object.values(v)) if (Array.isArray(w)) lists.push(w);
+      }
+      for (const v of lists) {
         for (const it of v) {
           if (it && typeof it.name === 'string' && Number.isFinite(Number(it.costGp))) {
             equipmentPrices.set(it.name.toLowerCase(), Number(it.costGp));
