@@ -54,7 +54,7 @@
  * This module never filters the list — the held check is the separate
  * isHeldOption function the renderer applies per option.
  */
-import { SKILLS, TOOLS } from '../../data/references.js'
+import { SKILLS, toolDescription } from '../../data/references.js'
 import equipmentData from '../../data/equipment.json' with { type: 'json' }
 import { resolveSpeciesGrants } from './speciesAdapter.js'
 
@@ -137,7 +137,8 @@ export function describeSentinel(sentinel) {
 function normalize(list) {
   return (list || []).map(o => {
     const opt = typeof o === 'string' ? { value: o, label: o } : o
-    const description = opt && TOOLS[opt.value]
+    // TOOLS entries are structured since repo-check-fixes-tools.
+    const description = opt && toolDescription(opt.value)
     return description && !opt.description ? { ...opt, description } : opt
   })
 }

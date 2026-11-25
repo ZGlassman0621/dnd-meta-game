@@ -55,7 +55,7 @@ group('Item 3 — artisan-tool descriptions under Clan\'s Craft and Crafter');
   const { resolveChoiceOptions } = await imp('client/src/components/creator-next/choiceOptions.js');
   const { TOOLS } = await imp('client/src/data/references.js');
   const tools = resolveChoiceOptions({ options: 'any_artisan_tool' });
-  ok(tools.length === 17 && tools.every((t) => t.description && t.description === TOOLS[t.value]), 'all 17 artisan tools resolve with their references.js description');
+  ok(tools.length === 17 && tools.every((t) => t.description && t.description === TOOLS[t.value].description), 'all 17 artisan tools resolve with their references.js description');
   ok(tools.every((t) => t.value === t.label), 'value and label are unchanged');
   ok(resolveChoiceOptions({ options: 'any_skill' }).every((o) => !o.description), 'skills (no TOOLS entry) carry no description');
   ok(resolveChoiceOptions({ options: ['Foo', 'Bar'] }).every((o) => !o.description), 'a fixed list with no tool names carries none');

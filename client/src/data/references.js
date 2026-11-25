@@ -89,52 +89,68 @@ export const SKILLS = {
 
 // --- Tools -----------------------------------------------------------------
 
+// repo-check-fixes-tools (2026-11-24): each tool is a structured entry —
+// { description, ability, utilize: [{ action, dc }] } — from the 2024 PHB
+// Tools entries (pp. 220–221, PM transcription of Zach's photos). `ability`
+// is the Utilize action's ability; `utilize` lists every Utilize option with
+// its own DC, in book order (a tool with two options stores both). The 17
+// descriptions the repo check flagged are rewritten from the book's Utilize +
+// Craft lines; the other 20 keep their text byte-for-byte. Gaming sets share
+// the book's one Gaming Set entry; the 10 instruments share its one Musical
+// Instrument entry. Nothing here resolves a check yet — the data is stored
+// for a later job. Read a description with toolDescription(name).
 export const TOOLS = {
   // Artisan's tools
-  "Alchemist's Supplies": 'Brewing potions and identifying alchemical substances — vials, flasks, and reagents for extractions and analysis.',
-  "Brewer's Supplies": 'Brewing ales, beers, and meads. Also useful for identifying beverages or sanitizing water.',
-  "Calligrapher's Supplies": 'Writing elegant hand-lettered documents. Useful for forging signatures or recognizing a scribe\'s hand.',
-  "Carpenter's Tools": 'Shaping wood — building structures, furniture, doors, and traps. Also useful for identifying weak spots in wooden construction.',
-  "Cartographer's Tools": 'Drafting maps, estimating scale from terrain, and navigating by land features.',
-  "Cobbler's Tools": 'Crafting and repairing footwear. Also useful for spotting worn shoe patterns that reveal a wearer\'s habits.',
-  "Cook's Utensils": 'Preparing meals — seasoning, preservation, identifying ingredients, and spotting tainted food.',
-  "Glassblower's Tools": 'Shaping molten glass. Also useful for identifying glass quality, origin, and craftsmanship.',
-  "Jeweler's Tools": 'Appraising gems, cutting stones, setting jewelry. Useful for spotting fakes and valuing treasure.',
-  "Leatherworker's Tools": 'Treating hides, making armor, saddles, belts, and bindings. Useful for identifying leather origin.',
-  "Mason's Tools": 'Working stone — building walls, identifying construction techniques, spotting weak points in stonework.',
-  "Painter's Supplies": 'Creating paintings, identifying an artist\'s hand, and copying visual details. Good for blending in with any art culture.',
-  "Potter's Tools": 'Shaping clay vessels. Useful for identifying pottery origins, periods, and cultural markers.',
-  "Smith's Tools": 'Forging and repairing metal weapons and armor. Useful for identifying metallurgy and armor strength.',
-  "Tinker's Tools": 'Assembling, repairing, and modifying small mechanical devices — locks, clockwork, and constructs.',
-  "Weaver's Tools": 'Producing and mending cloth and tapestries. Useful for identifying fabric origin and quality.',
-  "Woodcarver's Tools": 'Carving wooden objects — arrows, figurines, puzzle boxes. Useful for crafting replacement bow shafts.',
+  "Alchemist's Supplies": { description: 'Identify a substance or start a fire, and craft acid, alchemist\'s fire, a component pouch, oil, paper, or perfume.', ability: 'Intelligence', utilize: [{ action: 'Identify a substance', dc: 15 }, { action: 'Start a fire', dc: 15 }] },
+  "Brewer's Supplies": { description: 'Detect a poisoned drink or identify alcohol, and craft antitoxin.', ability: 'Intelligence', utilize: [{ action: 'Detect poisoned drink', dc: 15 }, { action: 'Identify alcohol', dc: 10 }] },
+  "Calligrapher's Supplies": { description: 'Write text with impressive flourishes that guard against forgery, and craft ink or a spell scroll.', ability: 'Dexterity', utilize: [{ action: 'Write text with impressive flourishes that guard against forgery', dc: 15 }] },
+  "Carpenter's Tools": { description: 'Seal or pry open a door or container, and craft a club, greatclub, quarterstaff, barrel, chest, ladder, pole, portable ram, or torch.', ability: 'Strength', utilize: [{ action: 'Seal or pry open a door or container', dc: 20 }] },
+  "Cartographer's Tools": { description: 'Draft a map of a small area, and craft maps.', ability: 'Wisdom', utilize: [{ action: 'Draft a map of a small area', dc: 15 }] },
+  "Cobbler's Tools": { description: 'Modify footwear to give Advantage on the wearer\'s next Dexterity (Acrobatics) check, and craft a climber\'s kit.', ability: 'Dexterity', utilize: [{ action: 'Modify footwear to give Advantage on the wearer\'s next Dexterity (Acrobatics) check', dc: 10 }] },
+  "Cook's Utensils": { description: 'Preparing meals — seasoning, preservation, identifying ingredients, and spotting tainted food.', ability: 'Wisdom', utilize: [{ action: 'Improve food\'s flavor', dc: 10 }, { action: 'Detect spoiled or poisoned food', dc: 15 }] },
+  "Glassblower's Tools": { description: 'Discern what a glass object held in the past 24 hours, and craft a glass bottle, magnifying glass, spyglass, or vial.', ability: 'Intelligence', utilize: [{ action: 'Discern what a glass object held in the past 24 hours', dc: 15 }] },
+  "Jeweler's Tools": { description: 'Discern a gem\'s value, and craft an arcane focus or a holy symbol.', ability: 'Intelligence', utilize: [{ action: 'Discern a gem\'s value', dc: 15 }] },
+  "Leatherworker's Tools": { description: 'Add a design to a leather item, and craft a sling, whip, hide armor, leather armor, studded leather armor, backpack, crossbow bolt case, map or scroll case, parchment, pouch, quiver, or waterskin.', ability: 'Dexterity', utilize: [{ action: 'Add a design to a leather item', dc: 10 }] },
+  "Mason's Tools": { description: 'Chisel a symbol or hole in stone, and craft a block and tackle.', ability: 'Strength', utilize: [{ action: 'Chisel a symbol or hole in stone', dc: 10 }] },
+  "Painter's Supplies": { description: 'Paint a recognizable image of something you\'ve seen, and craft a druidic focus or a holy symbol.', ability: 'Wisdom', utilize: [{ action: 'Paint a recognizable image of something you\'ve seen', dc: 10 }] },
+  "Potter's Tools": { description: 'Discern what a ceramic object held in the past 24 hours, and craft a jug or a lamp.', ability: 'Intelligence', utilize: [{ action: 'Discern what a ceramic object held in the past 24 hours', dc: 15 }] },
+  "Smith's Tools": { description: 'Pry open a door or container, and craft any melee weapon except a club, greatclub, quarterstaff, or whip, medium armor except hide, heavy armor, ball bearings, a bucket, caltrops, a chain, a crowbar, firearm bullets, a grappling hook, an iron pot, iron spikes, or sling bullets.', ability: 'Strength', utilize: [{ action: 'Pry open a door or container', dc: 20 }] },
+  "Tinker's Tools": { description: 'Assemble a Tiny item composed of scrap, which falls apart in 1 minute, and craft a musket, pistol, bell, bullseye lantern, flask, hooded lantern, hunting trap, lock, manacles, mirror, shovel, signal whistle, or tinderbox.', ability: 'Dexterity', utilize: [{ action: 'Assemble a Tiny item composed of scrap, which falls apart in 1 minute', dc: 20 }] },
+  "Weaver's Tools": { description: 'Mend a tear in clothing or sew a Tiny design, and craft padded armor, a basket, bedroll, blanket, fine clothes, net, robe, rope, sack, string, tent, or traveler\'s clothes.', ability: 'Dexterity', utilize: [{ action: 'Mend a tear in clothing', dc: 10 }, { action: 'Sew a Tiny design', dc: 10 }] },
+  "Woodcarver's Tools": { description: 'Carve a pattern in wood, and craft a club, greatclub, quarterstaff, ranged weapon (except a pistol, musket, or sling), arcane focus, arrows, bolts, druidic focus, ink pen, or needles.', ability: 'Dexterity', utilize: [{ action: 'Carve a pattern in wood', dc: 10 }] },
 
-  // Gaming sets
-  "Dice Set": 'Wagering with dice. Gaming sets grant proficiency on games involving them and let you cheat by hand.',
-  "Dragonchess Set": 'Playing dragonchess — a three-tiered strategy game enjoyed in urbane or scholarly circles.',
-  "Playing Card Set": 'Playing card games of chance and skill. Useful for wagering in taverns or reading a player\'s tell.',
-  "Three-Dragon Ante Set": 'Playing the gambling card game favored across the Realms. A common tavern pastime.',
+  // Gaming sets (one book entry, Gaming Set, covers all four)
+  "Dice Set": { description: 'Discern whether someone is cheating at dice, or win the game.', ability: 'Wisdom', utilize: [{ action: 'Discern whether someone is cheating', dc: 10 }, { action: 'Win the game', dc: 20 }] },
+  "Dragonchess Set": { description: 'Playing dragonchess — a three-tiered strategy game enjoyed in urbane or scholarly circles.', ability: 'Wisdom', utilize: [{ action: 'Discern whether someone is cheating', dc: 10 }, { action: 'Win the game', dc: 20 }] },
+  "Playing Card Set": { description: 'Playing card games of chance and skill. Useful for wagering in taverns or reading a player\'s tell.', ability: 'Wisdom', utilize: [{ action: 'Discern whether someone is cheating', dc: 10 }, { action: 'Win the game', dc: 20 }] },
+  "Three-Dragon Ante Set": { description: 'Playing the gambling card game favored across the Realms. A common tavern pastime.', ability: 'Wisdom', utilize: [{ action: 'Discern whether someone is cheating', dc: 10 }, { action: 'Win the game', dc: 20 }] },
 
   // Kits & specialty
-  "Disguise Kit": 'Changing appearance — cosmetics, hair dye, prosthetics, and costume pieces to impersonate another.',
-  "Forgery Kit": 'Producing false documents — seals, parchment, inks, and scripts to fool an untrained inspector.',
-  "Herbalism Kit": 'Identifying plants, brewing antitoxins, and crafting healing potions from natural ingredients.',
-  "Navigator's Tools": 'Charting courses, reading maps, and fixing position at sea by sextant and stars.',
-  "Poisoner's Kit": 'Crafting poisons, applying them to weapons, and identifying poisons in food or drink.',
-  "Thieves' Tools": 'Picking locks, disabling traps, and performing subtle mechanical tampering. Required proficiency for most locks.',
+  "Disguise Kit": { description: 'Changing appearance — cosmetics, hair dye, prosthetics, and costume pieces to impersonate another.', ability: 'Charisma', utilize: [{ action: 'Apply makeup', dc: 10 }] },
+  "Forgery Kit": { description: 'Producing false documents — seals, parchment, inks, and scripts to fool an untrained inspector.', ability: 'Dexterity', utilize: [{ action: 'Mimic 10 or fewer words of someone else\'s handwriting', dc: 15 }, { action: 'Duplicate a wax seal', dc: 20 }] },
+  "Herbalism Kit": { description: 'Identifying plants, brewing antitoxins, and crafting healing potions from natural ingredients.', ability: 'Intelligence', utilize: [{ action: 'Identify a plant', dc: 10 }] },
+  "Navigator's Tools": { description: 'Charting courses, reading maps, and fixing position at sea by sextant and stars.', ability: 'Wisdom', utilize: [{ action: 'Plot a course', dc: 10 }, { action: 'Determine position by stargazing', dc: 15 }] },
+  "Poisoner's Kit": { description: 'Crafting poisons, applying them to weapons, and identifying poisons in food or drink.', ability: 'Intelligence', utilize: [{ action: 'Detect a poisoned object', dc: 10 }] },
+  "Thieves' Tools": { description: 'Picking locks, disabling traps, and performing subtle mechanical tampering. Required proficiency for most locks.', ability: 'Dexterity', utilize: [{ action: 'Pick a lock', dc: 15 }, { action: 'Disarm a trap', dc: 15 }] },
 
-  // Instruments
-  "Bagpipes": 'A drone-and-chanter instrument associated with highland and military traditions.',
-  "Drum": 'Percussion for tavern songs, martial cadences, and tribal dance.',
-  "Dulcimer": 'A hammered stringed instrument producing shimmering, layered tones.',
-  "Flute": 'A transverse woodwind — bright, airy, good for carrying across crowds.',
-  "Lute": 'The classic bard\'s plucked string instrument. Portable, expressive, and suited to song.',
-  "Lyre": 'An ancient plucked string instrument associated with poetry, scholarship, and classical music.',
-  "Horn": 'Brass signaling instrument — hunt calls, warnings, and ceremonial fanfare.',
-  "Pan Flute": 'A set of pitched pipes played by blowing across them. Pastoral and woodland in character.',
-  "Shawm": 'A piercing double-reed woodwind, ancestor of the oboe. Loud, formal, and festival-appropriate.',
-  "Viol": 'A bowed string instrument with a mellow, melancholy tone.'
+  // Instruments (one book entry, Musical Instrument, covers all ten)
+  "Bagpipes": { description: 'A drone-and-chanter instrument associated with highland and military traditions.', ability: 'Charisma', utilize: [{ action: 'Play a known tune', dc: 10 }, { action: 'Improvise a song', dc: 15 }] },
+  "Drum": { description: 'Percussion for tavern songs, martial cadences, and tribal dance.', ability: 'Charisma', utilize: [{ action: 'Play a known tune', dc: 10 }, { action: 'Improvise a song', dc: 15 }] },
+  "Dulcimer": { description: 'A hammered stringed instrument producing shimmering, layered tones.', ability: 'Charisma', utilize: [{ action: 'Play a known tune', dc: 10 }, { action: 'Improvise a song', dc: 15 }] },
+  "Flute": { description: 'A transverse woodwind — bright, airy, good for carrying across crowds.', ability: 'Charisma', utilize: [{ action: 'Play a known tune', dc: 10 }, { action: 'Improvise a song', dc: 15 }] },
+  "Lute": { description: 'The classic bard\'s plucked string instrument. Portable, expressive, and suited to song.', ability: 'Charisma', utilize: [{ action: 'Play a known tune', dc: 10 }, { action: 'Improvise a song', dc: 15 }] },
+  "Lyre": { description: 'An ancient plucked string instrument associated with poetry, scholarship, and classical music.', ability: 'Charisma', utilize: [{ action: 'Play a known tune', dc: 10 }, { action: 'Improvise a song', dc: 15 }] },
+  "Horn": { description: 'Brass signaling instrument — hunt calls, warnings, and ceremonial fanfare.', ability: 'Charisma', utilize: [{ action: 'Play a known tune', dc: 10 }, { action: 'Improvise a song', dc: 15 }] },
+  "Pan Flute": { description: 'A set of pitched pipes played by blowing across them. Pastoral and woodland in character.', ability: 'Charisma', utilize: [{ action: 'Play a known tune', dc: 10 }, { action: 'Improvise a song', dc: 15 }] },
+  "Shawm": { description: 'A piercing double-reed woodwind, ancestor of the oboe. Loud, formal, and festival-appropriate.', ability: 'Charisma', utilize: [{ action: 'Play a known tune', dc: 10 }, { action: 'Improvise a song', dc: 15 }] },
+  "Viol": { description: 'A bowed string instrument with a mellow, melancholy tone.', ability: 'Charisma', utilize: [{ action: 'Play a known tune', dc: 10 }, { action: 'Improvise a song', dc: 15 }] }
 };
+
+/** A tool's one-sentence description, or null (TOOLS entries are structured). */
+export function toolDescription(name) {
+  const t = TOOLS[name];
+  return t && typeof t === 'object' ? (t.description || null) : (typeof t === 'string' ? t : null);
+}
 
 // --- Languages -------------------------------------------------------------
 
@@ -259,7 +275,7 @@ export function lookupReference(category, key) {
       return entry ? entry.description : null;
     }
     case 'tool':
-      return TOOLS[key] || null;
+      return toolDescription(key);
     case 'language':
       return LANGUAGES[key] || null;
     case 'damage':
