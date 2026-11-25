@@ -191,10 +191,10 @@ ok(ss.songOfDefenseReduction(3) === 15 && ss.songOfDefenseReduction(1) === 5, 'S
 ok(typeof ss.unfetteredMindContacts === 'function' && typeof ss.songOfDefenseReduction === 'function', 'All 12 S5 helpers are named exports');
 ok(ss.default && ss.default.unfetteredMindContacts && ss.default.songOfDefenseReduction, 'S5 helpers are in the default export');
 
-group('6. Spell access vs catalog (no gaps in S5; catalog is 583)');
+group('6. Spell access vs catalog (no gaps in S5; catalog is 584)');
 {
   const inCatalog = (name) => Object.prototype.hasOwnProperty.call(SPELL_DATA_ENTRIES, String(name).toLowerCase());
-  ok(Object.keys(SPELL_DATA_ENTRIES).length === 583, 'Live catalog has 583 entries (544 + 38 overnight-build spells + Summon Dragon, sorcerer reconciliation 2026-11-06)');
+  ok(Object.keys(SPELL_DATA_ENTRIES).length === 584, 'Live catalog has 584 entries (Tsunami added by repo-check-fixes-spells; 544 + 38 overnight-build spells + Summon Dragon, sorcerer reconciliation 2026-11-06)');
   const knowledge = ss.clericDomainSpellsAtLevel('cleric', 'Knowledge Domain', 9);
   ok(knowledge.length === 15 && knowledge.every(inCatalog), 'Knowledge 15/15 domain spells in catalog');
   const knowledgeSpells = ss.getSubclass('cleric', 'Knowledge Domain').features.find((f) => f.key === 'knowledge_domain_spells');

@@ -238,10 +238,10 @@ ok(ss.planarDisplacementTargetCount(4) === 8 && ss.planarDisplacementTargetCount
 ok(typeof ss.mountainDizzyingHeightsDc === 'function' && typeof ss.planarDisplacementTargetCount === 'function', 'All 12 S4 helpers are named exports');
 ok(ss.default && ss.default.mountainDizzyingHeightsDc && ss.default.planarDisplacementTargetCount, 'S4 helpers are in the default export');
 
-group('6. Spell access vs catalog (no gaps in S4; catalog is 583)');
+group('6. Spell access vs catalog (no gaps in S4; catalog is 584)');
 {
   const inCatalog = (name) => Object.prototype.hasOwnProperty.call(SPELL_DATA_ENTRIES, String(name).toLowerCase());
-  ok(Object.keys(SPELL_DATA_ENTRIES).length === 583, 'Live catalog has 583 entries (544 + 38 overnight-build spells + Summon Dragon, sorcerer reconciliation 2026-11-06)');
+  ok(Object.keys(SPELL_DATA_ENTRIES).length === 584, 'Live catalog has 584 entries (Tsunami added by repo-check-fixes-spells; 544 + 38 overnight-build spells + Summon Dragon, sorcerer reconciliation 2026-11-06)');
   const revelry = ss.clericDomainSpellsAtLevel('cleric', 'Revelry Domain', 9);
   ok(revelry.length === 10 && revelry.every(inCatalog), 'Revelry 10/10 domain spells in catalog');
   const resolve = ss.paladinOathSpellsAtLevel('paladin', 'Oath of Resolve', 17);

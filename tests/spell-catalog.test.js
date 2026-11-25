@@ -66,7 +66,9 @@ group('4. every damage/healing effect resolves to a sane spec');
 let fxBad = 0, fxOrphan = 0;
 for (const key of Object.keys(SPELL_EFFECTS)) {
   if (!SPELL_CATALOG[key]) { fxOrphan++; continue; }
-  const spec = spellEffectSpec(key, { slotLevel: SPELL_CATALOG[key].level, casterLevel: 5 });
+  // includeConditional: conditional entries (Power Word Kill, Earthquake,
+  // Wish stress…) never auto-apply on cast but must still resolve.
+  const spec = spellEffectSpec(key, { slotLevel: SPELL_CATALOG[key].level, casterLevel: 5, includeConditional: true });
   if (!spec) { fxBad++; continue; }
   if (spec.flat) {
     if (!(spec.flatAmount === 'full' || (typeof spec.flatAmount === 'number' && spec.flatAmount > 0))) fxBad++;
@@ -78,13 +80,15 @@ assert(fxBad === 0, `every effect produces a sane spec (${fxBad} bad of ${Object
 group('5. spot checks — the famous and the corrected');
 assert(lookupSpell('Wish')?.level === 9 && lookupSpell('Wish').classes.includes('Wizard'), 'Wish exists at 9th level');
 const ms = spellEffectSpec('Meteor Swarm', {});
-assert(ms && ms.count === 40 && ms.sides === 6 && /fire/.test(ms.damageType), 'Meteor Swarm is 40d6 fire/bludgeoning');
+// repo-check-fixes-spells: 20d6 fire + 20d6 bludgeoning, recorded per type.
+assert(ms && ms.spec === '20d6+20d6' && ms.parts?.map(p => p.damageType).join('/') === 'fire/bludgeoning', 'Meteor Swarm is 20d6 fire + 20d6 bludgeoning');
 const fb = spellEffectSpec('Fireball', {});
 assert(fb && fb.count === 8 && fb.sides === 6, 'Fireball is still 8d6');
 const tw = spellEffectSpec('Thunderwave', {});
 assert(tw && tw.count === 2 && tw.sides === 8, 'Thunderwave is 2d8 (assembly-verified against the 2024 PHB)');
 const iw = spellEffectSpec('Inflict Wounds', {});
-assert(iw && iw.count === 3 && iw.sides === 10 && iw.damageOnSave === 'half' && spellSaveAbility('Inflict Wounds') === 'con', 'Inflict Wounds is the 2024 save spell: CON, 3d10, half on success');
+// repo-check-fixes-spells: 2d10 base (PHB 2024); 3d10 is the 2nd-level upcast.
+assert(iw && iw.count === 2 && iw.sides === 10 && iw.damageOnSave === 'half' && spellSaveAbility('Inflict Wounds') === 'con', 'Inflict Wounds is the 2024 save spell: CON, 2d10, half on success');
 const cw2 = spellEffectSpec('Cure Wounds', { slotLevel: 2 });
 assert(cw2 && cw2.spec === '4d8', 'Cure Wounds upcasts +2d8 per slot in 2024');
 const heal = spellEffectSpec('Heal', {});

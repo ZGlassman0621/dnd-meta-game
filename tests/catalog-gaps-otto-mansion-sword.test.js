@@ -78,9 +78,9 @@ check(!('magnificent mansion' in SPELL_DATA_ENTRIES), 'no "magnificent mansion" 
 check(!('arcane sword' in SPELL_DATA_ENTRIES), 'no "arcane sword" key');
 check(!('arcane sword' in SPELL_DATA_EFFECTS), 'no "arcane sword" EFFECTS key');
 
-group('(c) the catalog count stays 583');
-check(Object.keys(SPELL_DATA_ENTRIES).length === 583,
-  `catalog holds 583 entries (got ${Object.keys(SPELL_DATA_ENTRIES).length})`);
+group('(c) the catalog count is 584 (583 + Tsunami, repo-check-fixes-spells)');
+check(Object.keys(SPELL_DATA_ENTRIES).length === 584,
+  `catalog holds 584 entries (got ${Object.keys(SPELL_DATA_ENTRIES).length})`);
 
 group('(d) the Sword holds 2024 values, not 2014');
 check(sword?.range === '90 feet', `sword range is 90 feet (got ${sword?.range})`);
@@ -133,8 +133,8 @@ check(/nine-course banquet/i.test(mansion?.description || ''), 'mansion descript
 
 group('(h) the regenerated dataset agrees with the catalog');
 const generated = JSON.parse(fs.readFileSync(path.join(ROOT, 'client/src/data/spellCatalog.generated.json'), 'utf8'));
-check(generated.spellCount === 583, `generated catalog spellCount is 583 (got ${generated.spellCount})`);
-check((generated.spells || []).length === 583, `generated catalog holds 583 spells (got ${(generated.spells || []).length})`);
+check(generated.spellCount === 584, `generated catalog spellCount is 584 (got ${generated.spellCount})`);
+check((generated.spells || []).length === 584, `generated catalog holds 584 spells (got ${(generated.spells || []).length})`);
 const byKey = Object.fromEntries((generated.spells || []).map((s) => [s.key, s]));
 check(byKey["otto's irresistible dance"]?.level === 6, 'generated catalog has otto\'s irresistible dance at 6th');
 check(byKey["mordenkainen's magnificent mansion"]?.level === 7, "generated catalog has mordenkainen's magnificent mansion at 7th");

@@ -1,7 +1,7 @@
 {
   "generator": "scripts/generate-spell-catalog.js",
   "source": "server/data/spellCatalogData.js + server/config/levelProgression.js (level 1)",
-  "spellCount": 583,
+  "spellCount": 584,
   "spells": [
     {
       "key": "abi-dalzim's horrid wilting",
@@ -209,7 +209,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You reshape your own body while you concentrate: breathe and swim underwater, alter your appearance (though not your size or shape), or grow natural weapons — claws, fangs, horns — that strike as unarmed attacks with a magical edge. You can switch the option as an action."
+      "description": "You reshape your own body while you concentrate: breathe and swim underwater, alter your appearance (though not your size or shape), or grow natural weapons — claws, fangs, horns — that deal 1d6 damage and strike as unarmed attacks with a magical edge. You can switch the option as an action."
     },
     {
       "key": "animal friendship",
@@ -251,6 +251,7 @@
       "duration": "24 hours",
       "concentration": false,
       "ritual": true,
+      "save": "cha",
       "classes": [
         "Bard",
         "Druid",
@@ -270,8 +271,8 @@
         "V",
         "S"
       ],
-      "duration": "Concentration, up to 24 hours",
-      "concentration": true,
+      "duration": "24 hours",
+      "concentration": false,
       "ritual": false,
       "classes": [
         "Druid"
@@ -409,6 +410,7 @@
       "save": "wis",
       "appliesCondition": "frightened",
       "classes": [
+        "Bard",
         "Druid",
         "Wizard"
       ],
@@ -471,6 +473,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "gold dust worth 25+ GP",
+        "costGp": 25,
+        "consumed": null,
+        "match": [
+          "gold dust"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
@@ -615,12 +625,20 @@
       "level": 9,
       "school": "Necromancy",
       "castTime": "1 hour",
-      "range": "Touch",
+      "range": "10 feet",
       "components": [
         "V",
         "S",
         "M"
       ],
+      "material": {
+        "text": "a jacinthe worth 1,000+ GP",
+        "costGp": 1000,
+        "consumed": null,
+        "match": [
+          "jacinth"
+        ]
+      },
       "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
@@ -683,8 +701,7 @@
       "castTime": "1 action",
       "range": "Self",
       "components": [
-        "V",
-        "M"
+        "V"
       ],
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
@@ -791,14 +808,14 @@
       "key": "banishing smite",
       "name": "Banishing Smite",
       "level": 5,
-      "school": "Abjuration",
+      "school": "Conjuration",
       "castTime": "1 bonus action",
       "range": "Self",
       "components": [
         "V"
       ],
-      "duration": "Instantaneous",
-      "concentration": false,
+      "duration": "Concentration, up to 1 minute",
+      "concentration": true,
       "ritual": false,
       "save": "cha",
       "classes": [
@@ -814,7 +831,7 @@
       "level": 4,
       "school": "Abjuration",
       "castTime": "1 action",
-      "range": "60 feet",
+      "range": "30 feet",
       "components": [
         "V",
         "S",
@@ -985,6 +1002,16 @@
       "concentration": true,
       "ritual": false,
       "save": "dex",
+      "saves": [
+        {
+          "ability": "dex",
+          "when": "Grasping Hand"
+        },
+        {
+          "ability": "str",
+          "when": "Forceful Hand"
+        }
+      ],
       "appliesCondition": "grappled",
       "classes": [
         "Artificer",
@@ -1119,15 +1146,16 @@
       "components": [
         "V"
       ],
-      "duration": "Concentration, up to 1 minute",
-      "concentration": true,
+      "duration": "1 minute",
+      "concentration": false,
       "ritual": false,
       "save": "con",
       "appliesCondition": "blinded",
       "classes": [
-        "Blackguard"
+        "Blackguard",
+        "Paladin"
       ],
-      "source": "Libris Mortis",
+      "source": "PHB 2024",
       "description": "The next time you hit a creature with a melee weapon attack during the spell, the attack deals an extra 3d8 radiant damage and the target must make a Constitution save or be blinded until the spell ends. Higher slots add 1d8 per slot level above 3rd."
     },
     {
@@ -1175,7 +1203,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You flicker between planes for a minute: at the end of each of your turns, roll a d20 — on an 11 or higher you vanish to the Ethereal Plane until your next turn, then reappear within 10 feet of where you vanished."
+      "description": "You flicker between planes for a minute: at the end of each of your turns, roll 1d6 — on a 4–6 you vanish to the Ethereal Plane until your next turn, then reappear within 10 feet of where you vanished."
     },
     {
       "key": "bloodletting bite",
@@ -1743,6 +1771,7 @@
         "Bard",
         "Sorcerer",
         "Spellshot",
+        "Warlock",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -1850,8 +1879,7 @@
       "range": "Self",
       "components": [
         "V",
-        "S",
-        "M"
+        "S"
       ],
       "duration": "Instantaneous",
       "concentration": false,
@@ -1946,6 +1974,7 @@
       "ritual": false,
       "save": "con",
       "classes": [
+        "Druid",
         "Sorcerer",
         "Spellshot",
         "Wizard"
@@ -1959,7 +1988,7 @@
       "level": 4,
       "school": "Enchantment",
       "castTime": "1 action",
-      "range": "120 feet",
+      "range": "90 feet",
       "components": [
         "V",
         "S",
@@ -2135,7 +2164,7 @@
       "key": "conjure volley",
       "name": "Conjure Volley",
       "level": 5,
-      "school": "Evocation",
+      "school": "Conjuration",
       "castTime": "1 action",
       "range": "150 feet",
       "components": [
@@ -2163,8 +2192,7 @@
       "range": "Self",
       "components": [
         "V",
-        "S",
-        "M"
+        "S"
       ],
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
@@ -2327,13 +2355,20 @@
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
+      "save": "str",
+      "saves": [
+        {
+          "ability": "str",
+          "when": "Whirlpool: a creature in the vortex; 2d8 bludgeoning damage on a failed save"
+        }
+      ],
       "classes": [
         "Cleric",
         "Druid",
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "All freestanding water in a cube up to 100 feet on a side obeys you: raise a flood or a traveling wave, part it into a trench, redirect its flow uphill, or spin a ship-smashing whirlpool, changing the effect as an action on your turns."
+      "description": "All freestanding water in a cube up to 100 feet on a side obeys you: raise a flood or a traveling wave, part it into a trench, redirect its flow uphill, or spin a ship-smashing whirlpool (a creature caught in the vortex makes a Strength save, taking 2d8 bludgeoning damage on a failure), changing the effect as an action on your turns."
     },
     {
       "key": "control weather",
@@ -2387,7 +2422,7 @@
       "level": 2,
       "school": "Transmutation",
       "castTime": "1 action",
-      "range": "5 feet",
+      "range": "Touch",
       "components": [
         "V",
         "S",
@@ -2401,7 +2436,7 @@
         "Ranger"
       ],
       "source": "PHB 2024",
-      "description": "You plant four pieces of ammunition in the ground around you as a ward for 8 hours. When a creature other than you comes within 30 feet, an arrow flies at it: Dexterity save or 1d6 piercing damage. Each higher slot wards with two more arrows."
+      "description": "You plant four pieces of ammunition in the ground around you as a ward for 8 hours. When a creature other than you comes within 30 feet, an arrow flies at it: Dexterity save or 2d4 piercing damage. Each higher slot wards with two more arrows."
     },
     {
       "key": "corpse mask",
@@ -3042,6 +3077,7 @@
       "concentration": false,
       "ritual": false,
       "classes": [
+        "Sorcerer",
         "Warlock",
         "Wizard"
       ],
@@ -3196,7 +3232,7 @@
       "level": 4,
       "school": "Conjuration",
       "castTime": "1 action",
-      "range": "Self",
+      "range": "500 feet",
       "components": [
         "V"
       ],
@@ -3572,7 +3608,6 @@
       "ritual": false,
       "save": "dex",
       "classes": [
-        "Druid",
         "Sorcerer",
         "Wizard"
       ],
@@ -3606,7 +3641,7 @@
       "name": "Drawmij's Instant Summons",
       "level": 6,
       "school": "Conjuration",
-      "castTime": "1 action",
+      "castTime": "1 minute",
       "range": "Touch",
       "components": [
         "V",
@@ -3640,7 +3675,6 @@
       "save": "wis",
       "classes": [
         "Bard",
-        "Druid",
         "Warlock",
         "Wizard"
       ],
@@ -3789,7 +3823,7 @@
       "key": "earthquake",
       "name": "Earthquake",
       "level": 8,
-      "school": "Evocation",
+      "school": "Transmutation",
       "castTime": "1 action",
       "range": "500 feet",
       "components": [
@@ -3808,7 +3842,7 @@
         "Sorcerer"
       ],
       "source": "PHB 2024",
-      "description": "The earth shakes, rips, and convulses across a 100-foot circle: creatures are knocked prone on a failed Dexterity save, concentration falters, fissures yawn open, and structures crumble under 50 points of bludgeoning damage each round until the ground settles."
+      "description": "The earth shakes, rips, and convulses across a 100-foot circle: creatures are knocked prone on a failed Dexterity save, concentration falters, 1d6 fissures (each 1d10 × 10 feet deep) yawn open, and structures crumble under 50 points of bludgeoning damage each round until the ground settles — a structure that collapses can deal 12d6 bludgeoning damage to creatures near it."
     },
     {
       "key": "eldritch blast",
@@ -3872,6 +3906,7 @@
       "classes": [
         "Artificer",
         "Blackguard",
+        "Druid",
         "Paladin",
         "Ranger"
       ],
@@ -4137,7 +4172,7 @@
       "key": "etherealness",
       "name": "Etherealness",
       "level": 7,
-      "school": "Transmutation",
+      "school": "Conjuration",
       "castTime": "1 action",
       "range": "Self",
       "components": [
@@ -4172,13 +4207,13 @@
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
-      "save": "dex",
+      "save": "str",
       "appliesCondition": "restrained",
       "classes": [
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Squirming black tentacles fill a 20-foot square of difficult terrain. A creature that starts its turn there or enters the area makes a Dexterity save or takes 3d6 bludgeoning damage and is restrained, writhing, until it breaks free with a Strength or Dexterity check."
+      "description": "Squirming black tentacles fill a 20-foot square of difficult terrain. A creature that starts its turn there or enters the area makes a Strength save or takes 3d6 bludgeoning damage and is restrained, writhing, until it breaks free with a Strength or Dexterity check."
     },
     {
       "key": "expeditious retreat",
@@ -4220,6 +4255,7 @@
       "save": "wis",
       "appliesCondition": "unconscious",
       "classes": [
+        "Bard",
         "Sorcerer",
         "Warlock",
         "Wizard"
@@ -4232,7 +4268,7 @@
       "name": "Fabricate",
       "level": 4,
       "school": "Transmutation",
-      "castTime": "1 action",
+      "castTime": "10 minutes",
       "range": "120 feet",
       "components": [
         "V",
@@ -4406,7 +4442,6 @@
         "Bard",
         "Cleric",
         "Druid",
-        "Sorcerer",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -4601,6 +4636,7 @@
       "concentration": false,
       "ritual": false,
       "classes": [
+        "Druid",
         "Sorcerer",
         "Wizard"
       ],
@@ -4716,7 +4752,8 @@
       "concentration": true,
       "ritual": false,
       "classes": [
-        "Druid"
+        "Druid",
+        "Sorcerer"
       ],
       "source": "PHB 2024",
       "description": "A blade of fire, shaped like a scimitar, ignites in your hand. As an action you can strike with it as a melee spell attack for 3d6 fire damage; the damage grows when cast with higher slots."
@@ -4786,6 +4823,8 @@
       "save": "con",
       "appliesCondition": "restrained",
       "classes": [
+        "Druid",
+        "Sorcerer",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -4871,23 +4910,30 @@
         "S",
         "M"
       ],
-      "duration": "1 hour",
-      "concentration": false,
+      "duration": "Concentration, up to 1 hour",
+      "concentration": true,
       "ritual": false,
+      "saves": [
+        {
+          "ability": "cha",
+          "when": "only if a creature inside tries to leave by teleportation or interplanar travel",
+          "conditional": true
+        }
+      ],
       "classes": [
         "Bard",
         "Warlock",
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "An immobile prison of invisible force springs up around your targets — either a barred cage 20 feet across or a solid box 10 feet across. Nothing physical or teleporting easily escapes it, and creatures trapped inside are cut off from the fight entirely."
+      "description": "An immobile prison of invisible force springs up around your targets — either a barred cage 20 feet across or a solid box 10 feet across. Nothing physical or teleporting easily escapes it, and creatures trapped inside are cut off from the fight entirely. A creature inside that tries to leave by teleportation or interplanar travel must first succeed on a Charisma save."
     },
     {
       "key": "foresight",
       "name": "Foresight",
       "level": 9,
       "school": "Divination",
-      "castTime": "1 action",
+      "castTime": "1 minute",
       "range": "Touch",
       "components": [
         "V",
@@ -4970,7 +5016,6 @@
         "Bard",
         "Cleric",
         "Druid",
-        "Paladin",
         "Ranger"
       ],
       "source": "PHB 2024",
@@ -5175,6 +5220,7 @@
       "classes": [
         "Cleric",
         "Sorcerer",
+        "Warlock",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -5366,7 +5412,7 @@
       "key": "glibness",
       "name": "Glibness",
       "level": 8,
-      "school": "Transmutation",
+      "school": "Enchantment",
       "castTime": "1 action",
       "range": "Self",
       "components": [
@@ -5398,9 +5444,7 @@
       "concentration": true,
       "ritual": false,
       "classes": [
-        "Bard",
         "Sorcerer",
-        "Warlock",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -5435,7 +5479,7 @@
       "key": "goodberry",
       "name": "Goodberry",
       "level": 1,
-      "school": "Transmutation",
+      "school": "Conjuration",
       "castTime": "1 action",
       "range": "Self",
       "components": [
@@ -5443,7 +5487,7 @@
         "S",
         "M"
       ],
-      "duration": "Instantaneous",
+      "duration": "24 hours",
       "concentration": false,
       "ritual": false,
       "classes": [
@@ -5538,6 +5582,7 @@
       "appliesCondition": "prone",
       "classes": [
         "Artificer",
+        "Sorcerer",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -5561,7 +5606,6 @@
       "classes": [
         "Bard",
         "Sorcerer",
-        "Warlock",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -5792,7 +5836,7 @@
       "key": "hallow",
       "name": "Hallow",
       "level": 5,
-      "school": "Evocation",
+      "school": "Abjuration",
       "castTime": "24 hours",
       "range": "Touch",
       "components": [
@@ -5800,16 +5844,15 @@
         "S",
         "M"
       ],
-      "duration": "24 hours",
+      "duration": "Until dispelled",
       "concentration": false,
       "ritual": false,
-      "save": "cha",
       "classes": [
         "Blackguard",
         "Cleric"
       ],
       "source": "PHB 2024",
-      "description": "You consecrate ground in a 60-foot-radius sphere. Creature types you choose cannot willingly enter, and those inside are shielded from being Charmed, Frightened, or possessed by them, and corpses in the area cannot become Undead. You also bind one extra effect to the ground — such as silence, darkness, fear, or everlasting rest — resisted by a Charisma save."
+      "description": "You consecrate ground in a 60-foot-radius sphere. Creature types you choose cannot willingly enter, and those inside are shielded from being Charmed, Frightened, or possessed by them, and corpses in the area cannot become Undead. You also bind one extra effect to the ground — such as silence, darkness, fear, or everlasting rest."
     },
     {
       "key": "hallucinatory terrain",
@@ -5883,7 +5926,7 @@
       "key": "heal",
       "name": "Heal",
       "level": 6,
-      "school": "Conjuration",
+      "school": "Abjuration",
       "castTime": "1 action",
       "range": "60 feet",
       "components": [
@@ -6000,6 +6043,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "a gem-encrusted bowl worth 1,000+ GP",
+        "costGp": 1000,
+        "consumed": true,
+        "match": [
+          "bowl"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -6287,7 +6338,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Hailstones pound down in a 20-foot-wide, 40-foot-tall cylinder: each creature in it makes a Dexterity save, taking 2d8 bludgeoning and 4d6 cold damage on a failure or half on a success. The ground is left difficult terrain until the end of your next turn."
+      "description": "Hailstones pound down in a 20-foot-wide, 40-foot-tall cylinder: each creature in it makes a Dexterity save, taking 2d10 bludgeoning and 4d6 cold damage on a failure or half on a success. The ground is left difficult terrain until the end of your next turn."
     },
     {
       "key": "identify",
@@ -6346,7 +6397,7 @@
       ],
       "duration": "10 days",
       "concentration": false,
-      "ritual": false,
+      "ritual": true,
       "classes": [
         "Bard",
         "Warlock",
@@ -6437,6 +6488,7 @@
       "ritual": false,
       "save": "dex",
       "classes": [
+        "Druid",
         "Sorcerer",
         "Wizard"
       ],
@@ -6536,7 +6588,7 @@
         "Cleric"
       ],
       "source": "PHB 2024",
-      "description": "Your touch channels necrotic energy into a creature, which makes a Constitution save, taking 3d10 necrotic damage on a failure or half on a success. Each higher slot adds 1d10."
+      "description": "Your touch channels necrotic energy into a creature, which makes a Constitution save, taking 2d10 necrotic damage on a failure or half on a success. Each higher slot adds 1d10."
     },
     {
       "key": "insect plague",
@@ -7353,6 +7405,13 @@
       "duration": "1 hour",
       "concentration": false,
       "ritual": false,
+      "saves": [
+        {
+          "ability": "cha",
+          "when": "only if a creature of the chosen type tries to cross the circle by teleportation or interplanar travel",
+          "conditional": true
+        }
+      ],
       "classes": [
         "Blackguard",
         "Cleric",
@@ -7361,7 +7420,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Glowing runes circle a 10-foot cylinder, barring celestials, elementals, fey, fiends, or undead (your choice): they cannot willingly enter, attack those inside at disadvantage, and cannot charm or possess them. Reversed, the circle becomes a prison for one such creature."
+      "description": "Glowing runes circle a 10-foot cylinder, barring celestials, elementals, fey, fiends, or undead (your choice): they cannot willingly enter, attack those inside at disadvantage, and cannot charm or possess them; one that tries to cross by teleportation or interplanar travel must first succeed on a Charisma save. Reversed, the circle becomes a prison for one such creature."
     },
     {
       "key": "magic jar",
@@ -7380,8 +7439,6 @@
       "ritual": false,
       "save": "cha",
       "classes": [
-        "Sorcerer",
-        "Warlock",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -7473,6 +7530,7 @@
         "Blackguard",
         "Paladin",
         "Ranger",
+        "Sorcerer",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -7693,12 +7751,11 @@
       "duration": "Concentration, up to 10 minutes",
       "concentration": true,
       "ritual": false,
-      "save": "int",
       "classes": [
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You banish a creature into a labyrinthine demiplane of twisting corridors with no save to resist. Each turn it can spend its action trying to escape with a DC 20 Intelligence check; when the spell ends, the victim pops back to where it vanished."
+      "description": "You banish a creature into a labyrinthine demiplane of twisting corridors with no save to resist. Each turn it can spend its action trying to escape with a DC 20 Intelligence (Investigation) check; when the spell ends, the victim pops back to where it vanished."
     },
     {
       "key": "meld into stone",
@@ -7720,7 +7777,7 @@
         "Ranger"
       ],
       "source": "PHB 2024",
-      "description": "You step into a stone surface large enough to hold you and merge with it, hidden from every sense while you listen dimly to the world outside. Wrecking the stone expels you violently, and its total destruction deals you grievous force damage."
+      "description": "You step into a stone surface large enough to hold you and merge with it, hidden from every sense while you listen dimly to the world outside. Partly destroying the stone (or reshaping it so you no longer fit) expels you and deals 6d6 force damage to you, and its total destruction deals you even more grievous force damage."
     },
     {
       "key": "melf's acid arrow",
@@ -7834,6 +7891,7 @@
         "Artificer",
         "Bard",
         "Druid",
+        "Sorcerer",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -7931,7 +7989,7 @@
       "level": 2,
       "school": "Divination",
       "castTime": "1 action",
-      "range": "60 feet",
+      "range": "120 feet",
       "components": [
         "S"
       ],
@@ -8051,7 +8109,6 @@
       "appliesCondition": "invisible",
       "classes": [
         "Bard",
-        "Sorcerer",
         "Warlock",
         "Wizard"
       ],
@@ -8161,12 +8218,13 @@
       "duration": "8 hours",
       "concentration": false,
       "ritual": false,
+      "save": "dex",
       "classes": [
         "Artificer",
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "An invisible, phantom watchdog takes up guard duty for eight hours, barking loudly at strangers who approach and biting intruders you have not welcomed — a melee spell attack dealing 4d8 piercing damage — though only you can see it."
+      "description": "An invisible, phantom watchdog takes up guard duty for eight hours, barking loudly at strangers who approach and biting intruders you have not welcomed — each must succeed on a Dexterity save or take 4d8 force damage — though only you can see it."
     },
     {
       "key": "mordenkainen's magnificent mansion",
@@ -8437,7 +8495,7 @@
       "key": "otiluke's resilient sphere",
       "name": "Otiluke's Resilient Sphere",
       "level": 4,
-      "school": "Evocation",
+      "school": "Abjuration",
       "castTime": "1 action",
       "range": "30 feet",
       "components": [
@@ -8650,7 +8708,6 @@
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
-      "save": "cha",
       "classes": [
         "Cleric",
         "Druid",
@@ -8659,14 +8716,24 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Holding a forked metal rod attuned to your destination, you and up to eight linked companions vanish to another plane of existence, arriving near the place you named. Used offensively with a melee spell attack, it can banish a single unwilling creature to a plane of your choosing on a failed Charisma save."
+      "description": "Holding a forked metal rod attuned to your destination, you and up to eight willing creatures who link hands with you vanish to another plane of existence, arriving near the place you named."
     },
     {
       "key": "plant growth",
       "name": "Plant Growth",
       "level": 3,
       "school": "Transmutation",
-      "castTime": "1 action",
+      "castTime": "1 action or 8 hours",
+      "castModes": [
+        {
+          "name": "Overgrowth",
+          "castTime": "1 action"
+        },
+        {
+          "name": "Enrichment",
+          "castTime": "8 hours"
+        }
+      ],
       "range": "150 feet",
       "components": [
         "V",
@@ -8755,7 +8822,7 @@
       "key": "power word heal",
       "name": "Power Word Heal",
       "level": 9,
-      "school": "Evocation",
+      "school": "Enchantment",
       "castTime": "1 action",
       "range": "60 feet",
       "components": [
@@ -8791,7 +8858,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You speak the word that ends life. A creature you can see with 100 hit points or fewer dies instantly — no attack roll, no saving throw."
+      "description": "You speak the word that ends life. A creature you can see with 100 hit points or fewer dies instantly; otherwise, it takes 12d12 psychic damage — no attack roll, no saving throw."
     },
     {
       "key": "power word pain",
@@ -8940,11 +9007,10 @@
       "classes": [
         "Bard",
         "Sorcerer",
-        "Warlock",
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Eight dazzling rays of colored light fan from your hand across a 60-foot cone. Each creature rolls to learn its fate: most rays deal 10d6 damage of an element (fire, acid, lightning, poison, or cold) on a failed Dexterity save, while the indigo ray restrains and slowly petrifies, and the violet ray blinds or hurls the victim to another plane."
+      "description": "Eight dazzling rays of colored light fan from your hand across a 60-foot cone. Each creature rolls to learn its fate: most rays deal 12d6 damage of an element (fire, acid, lightning, poison, or cold) on a failed Dexterity save, while the indigo ray restrains and slowly petrifies, and the violet ray blinds or hurls the victim to another plane."
     },
     {
       "key": "prismatic wall",
@@ -8961,11 +9027,22 @@
       "concentration": false,
       "ritual": false,
       "save": "dex",
+      "saves": [
+        {
+          "ability": "dex",
+          "when": "each layer a creature passes through"
+        },
+        {
+          "ability": "con",
+          "when": "proximity: a creature near the wall that can see it; Blinded condition on a failed save"
+        }
+      ],
       "classes": [
+        "Bard",
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A shimmering wall of seven colored layers, each a different peril and each banishing certain effects: fire, acid, lightning, poison, petrification, madness, and banishment to other planes. Passing through means weathering every layer, and each layer must be destroyed in order by its opposing magic."
+      "description": "A shimmering wall of seven colored layers, each a different peril and each banishing certain effects: fire, acid, lightning, poison, petrification, madness, and banishment to other planes. Its glare forces a Constitution save on nearby creatures that can see it — a failure means the Blinded condition. Passing through means weathering every layer, and each layer must be destroyed in order by its opposing magic."
     },
     {
       "key": "produce flame",
@@ -9196,7 +9273,7 @@
         "Sorcerer",
         "Wizard"
       ],
-      "source": "PHB 2024",
+      "source": "Xanathar",
       "description": "You target an open flame and make it burst — either as blinding fireworks (creatures within 10 feet make Constitution saves or are blinded until the end of their next turn) or as a thick smoke cloud that heavily obscures a 20-foot sphere."
     },
     {
@@ -9312,7 +9389,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A black beam forces a Constitution save instead of an attack roll: on a failure the creature is weakened — its Strength-based attack damage is halved and it has disadvantage on Strength checks and saves — repeating the save at the end of each turn."
+      "description": "A black beam forces a Constitution save instead of an attack roll: on a failure the creature subtracts 1d8 from all its damage rolls and has disadvantage on Strength-based D20 Tests, repeating the save at the end of each turn."
     },
     {
       "key": "ray of frost",
@@ -9350,14 +9427,13 @@
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
-      "save": "con",
       "classes": [
         "Blackguard",
         "Sorcerer",
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A ray of sickening greenish energy: ranged spell attack for 2d8 poison damage, and on a hit the target makes a Constitution save or is poisoned until the end of your next turn. Each higher slot adds 1d8."
+      "description": "A ray of sickening greenish energy: ranged spell attack, and on a hit the target takes 2d8 poison damage and has the Poisoned condition until the end of your next turn — no save. Each higher slot adds 1d8."
     },
     {
       "key": "reality break",
@@ -9386,7 +9462,7 @@
       "name": "Regenerate",
       "level": 7,
       "school": "Transmutation",
-      "castTime": "1 action",
+      "castTime": "1 minute",
       "range": "Touch",
       "components": [
         "V",
@@ -9408,7 +9484,7 @@
       "key": "reincarnate",
       "name": "Reincarnate",
       "level": 5,
-      "school": "Transmutation",
+      "school": "Necromancy",
       "castTime": "1 hour",
       "range": "Touch",
       "components": [
@@ -9440,7 +9516,6 @@
       "concentration": false,
       "ritual": false,
       "classes": [
-        "Bard",
         "Blackguard",
         "Cleric",
         "Paladin",
@@ -9459,8 +9534,7 @@
       "range": "Touch",
       "components": [
         "V",
-        "S",
-        "M"
+        "S"
       ],
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
@@ -9531,6 +9605,14 @@
         "S",
         "M"
       ],
+      "material": {
+        "text": "diamonds worth 300 GP",
+        "costGp": 300,
+        "consumed": true,
+        "match": [
+          "diamond"
+        ]
+      },
       "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
@@ -9753,8 +9835,8 @@
       "components": [
         "V"
       ],
-      "duration": "Concentration, up to 1 minute",
-      "concentration": true,
+      "duration": "1 minute",
+      "concentration": false,
       "ritual": false,
       "save": "con",
       "classes": [
@@ -10297,6 +10379,7 @@
       "ritual": false,
       "save": "wis",
       "classes": [
+        "Bard",
         "Sorcerer",
         "Wizard"
       ],
@@ -10731,13 +10814,13 @@
       "key": "staggering smite",
       "name": "Staggering Smite",
       "level": 4,
-      "school": "Evocation",
+      "school": "Enchantment",
       "castTime": "1 bonus action",
       "range": "Self",
       "components": [
         "V"
       ],
-      "duration": "1 minute",
+      "duration": "Instantaneous",
       "concentration": false,
       "ritual": false,
       "save": "wis",
@@ -10787,7 +10870,7 @@
         "Ranger",
         "Wizard"
       ],
-      "source": "Xanathar",
+      "source": "PHB 2024",
       "description": "You flourish a weapon and vanish, flashing between up to five creatures within 30 feet with a melee spell attack against each; a hit deals 6d10 force damage. You then reappear in an unoccupied space next to one of the targets."
     },
     {
@@ -10844,7 +10927,7 @@
       "key": "stoneskin",
       "name": "Stoneskin",
       "level": 4,
-      "school": "Abjuration",
+      "school": "Transmutation",
       "castTime": "1 action",
       "range": "Touch",
       "components": [
@@ -10871,7 +10954,7 @@
       "level": 9,
       "school": "Conjuration",
       "castTime": "1 action",
-      "range": "Sight",
+      "range": "1 mile",
       "components": [
         "V",
         "S"
@@ -10885,7 +10968,7 @@
         "Druid"
       ],
       "source": "PHB 2024",
-      "description": "A monstrous storm cloud gathers overhead and unleashes escalating wrath round by round: deafening thunder, acid rain, arcing lightning, pounding hail, and finally freezing winds that scour everything beneath it. Creatures below make Constitution saves against its first fury or are deafened for minutes."
+      "description": "A monstrous storm cloud gathers overhead and unleashes escalating wrath round by round: deafening thunder (2d6 thunder damage), acid rain (4d6 acid), arcing lightning (10d6 lightning), pounding hail (2d6 bludgeoning), and finally freezing winds (1d6 cold) that scour everything beneath it. Creatures below make Constitution saves against its first fury or are deafened for minutes."
     },
     {
       "key": "storm sphere",
@@ -11020,7 +11103,7 @@
         "Cleric",
         "Paladin"
       ],
-      "source": "Tasha",
+      "source": "PHB 2024",
       "description": "You call forth a Celestial spirit using the Celestial Spirit stat block — a radiant Defender that bolsters allies with temporary hit points, or a bow-wielding Avenger dealing radiant damage. The spirit is friendly, acts after you, and grows stronger with higher-level slots."
     },
     {
@@ -11155,7 +11238,7 @@
         "Warlock",
         "Wizard"
       ],
-      "source": "Tasha",
+      "source": "PHB 2024",
       "description": "You call forth a Fiendish spirit using the Fiendish Spirit stat block — a hulking Demon, a sly Devil, or a treacherous Yugoloth. The spirit is friendly, acts after you, and grows stronger with higher-level slots."
     },
     {
@@ -11225,7 +11308,7 @@
         "Warlock",
         "Wizard"
       ],
-      "source": "PHB 2024",
+      "source": "Tasha",
       "description": "You summon a shadow spirit in the shape of your dread, fury, or fear — a Shadow Spirit that chills the speed of nearby foes and strikes with necrotic claws. It shares your initiative and obeys your commands until slain or dismissed."
     },
     {
@@ -11269,7 +11352,10 @@
       "save": "con",
       "appliesCondition": "blinded",
       "classes": [
-        "Druid"
+        "Cleric",
+        "Druid",
+        "Sorcerer",
+        "Wizard"
       ],
       "source": "PHB 2024",
       "description": "A mote of brilliant sunlight hovers above you as you loose beams of radiance in 5-foot-wide, 60-foot-long lines — one when you cast the spell and more as Magic actions while it lasts. Each creature in a line makes a Constitution save, taking 6d8 radiant damage and the Blinded condition until the start of your next turn on a failure, or half damage on a success."
@@ -11308,8 +11394,18 @@
       "castTime": "1 bonus action",
       "range": "Self",
       "components": [
-        "V"
+        "V",
+        "S",
+        "M"
       ],
+      "material": {
+        "text": "a quiver worth 1+ GP",
+        "costGp": 1,
+        "consumed": false,
+        "match": [
+          "quiver"
+        ]
+      },
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
@@ -11381,13 +11477,28 @@
       "concentration": false,
       "ritual": false,
       "save": "wis",
+      "saves": [
+        {
+          "ability": "wis",
+          "when": "the glyph's other effects (the catalog's existing save)"
+        },
+        {
+          "ability": "con",
+          "when": "Death: 10d10 necrotic damage on a failed save"
+        },
+        {
+          "ability": "con",
+          "when": "Pain"
+        }
+      ],
       "classes": [
         "Bard",
         "Cleric",
+        "Druid",
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "You inscribe a hidden glyph of power on a surface or object, choosing its trigger and one dread effect — death (10d10 necrotic damage on a failed Constitution save), discord, fear, hopelessness, insanity, pain, sleep, or stunning. Creatures within 60 feet when it triggers must save or suffer the chosen doom."
+      "description": "You inscribe a hidden glyph of power on a surface or object, choosing its trigger and one dread effect — death (10d10 necrotic damage on a failed Constitution save), discord, fear, hopelessness, insanity, pain (a Constitution save), sleep, or stunning. Creatures within 60 feet when it triggers must save or suffer the chosen doom."
     },
     {
       "key": "synaptic static",
@@ -11557,7 +11668,7 @@
       "level": 8,
       "school": "Divination",
       "castTime": "1 action",
-      "range": "Self",
+      "range": "Unlimited",
       "components": [
         "V",
         "S",
@@ -11591,7 +11702,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "In a word, you and up to eight willing creatures — or one object — vanish and reappear at a destination you name anywhere on the same plane. How well you know the destination decides the risk: a familiar teleportation circle is certain, while a vague description can scatter you or dump you somewhere dangerously similar."
+      "description": "In a word, you and up to eight willing creatures — or one object — vanish and reappear at a destination you name anywhere on the same plane. How well you know the destination decides the risk: a familiar teleportation circle is certain, while a vague description can scatter you or dump you somewhere dangerously similar. Off target, you land 2d12 miles away in a direction set by a 1d8 roll; a mishap deals 3d10 force damage to each traveler."
     },
     {
       "key": "teleportation circle",
@@ -11604,12 +11715,13 @@
         "V",
         "M"
       ],
-      "duration": "Instantaneous",
+      "duration": "1 round",
       "concentration": false,
       "ritual": false,
       "classes": [
         "Bard",
         "Sorcerer",
+        "Warlock",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -11825,6 +11937,7 @@
         "Bard",
         "Druid",
         "Sorcerer",
+        "Warlock",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -12048,14 +12161,14 @@
         "V",
         "S"
       ],
-      "duration": "1 round",
+      "duration": "1 minute",
       "concentration": false,
       "ritual": false,
       "classes": [
         "Druid"
       ],
       "source": "PHB 2024",
-      "description": "You link a Large or larger plant beside you to another plant you have seen or touched, anywhere on the same plane. For 1 round, any creature can step into the first plant and out of the second by spending 5 feet of movement."
+      "description": "You link a Large or larger plant beside you to another plant you have seen or touched, anywhere on the same plane. For 1 minute, any creature can step into the first plant and out of the second by spending 5 feet of movement."
     },
     {
       "key": "tree stride",
@@ -12142,8 +12255,7 @@
       "classes": [
         "Bard",
         "Cleric",
-        "Druid",
-        "Ranger",
+        "Sorcerer",
         "Warlock",
         "Wizard"
       ],
@@ -12172,6 +12284,27 @@
       ],
       "source": "PHB 2024",
       "description": "As part of casting, you make one attack with a weapon, using your spellcasting ability for the attack and damage rolls. The damage can be radiant instead of the weapon's normal type, and extra radiant damage is added at higher levels, up to +3d6 at 17th."
+    },
+    {
+      "key": "tsunami",
+      "name": "Tsunami",
+      "level": 8,
+      "school": "Conjuration",
+      "castTime": "1 minute",
+      "range": "1 mile",
+      "components": [
+        "V",
+        "S"
+      ],
+      "duration": "Concentration, up to 6 rounds",
+      "concentration": true,
+      "ritual": false,
+      "save": "str",
+      "classes": [
+        "Druid"
+      ],
+      "source": "PHB 2024",
+      "description": "A wall of water up to 300 feet long, 300 feet high, and 50 feet thick surges up at a point you choose within range. Each creature in its area when it appears makes a Strength save, taking 6d10 bludgeoning damage on a failure or half on a success. At the start of each of your turns after that, the wall and everything in it moves 50 feet away from you, and any Huge or smaller creature inside it or in a space it enters must succeed on a Strength save or take 5d10 bludgeoning damage (no more than once per round). At the end of each such turn the wall loses 50 feet of height and its later damage drops by 1d10; at 0 feet the spell ends. A creature caught in the wall can swim, but the wave's force means it must succeed on a Strength (Athletics) check against your spell save DC to move at all, and a creature that leaves the wall falls to the ground."
     },
     {
       "key": "tuturis' venomous sting",
@@ -12314,6 +12447,7 @@
       "ritual": false,
       "classes": [
         "Blackguard",
+        "Sorcerer",
         "Warlock",
         "Wizard"
       ],
@@ -12382,8 +12516,8 @@
         "Sorcerer",
         "Wizard"
       ],
-      "source": "Xanathar",
-      "description": "A glob of caustic acid bursts in a 20-foot sphere: each creature makes a Dexterity save, taking 4d10 acid damage on a failure or half on a success — and those who failed are burned again for 5d4 acid at the end of their next turn as the vitriol keeps eating."
+      "source": "PHB 2024",
+      "description": "A glob of caustic acid bursts in a 20-foot sphere: each creature makes a Dexterity save, taking 10d4 acid damage on a failure or half on a success — and those who failed are burned again for 5d4 acid at the end of their next turn as the vitriol keeps eating."
     },
     {
       "key": "vortex dart",
@@ -12493,7 +12627,6 @@
       "ritual": false,
       "save": "dex",
       "classes": [
-        "Sorcerer",
         "Wizard"
       ],
       "source": "PHB 2024",
@@ -12852,7 +12985,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "Thick, sticky webbing fills a 20-foot cube, lightly obscuring it and making difficult terrain. Creatures starting there or entering make Dexterity saves or are restrained until they break free with a Strength check; the webs are flammable and burn away in moments."
+      "description": "Thick, sticky webbing fills a 20-foot cube, lightly obscuring it and making difficult terrain. Creatures starting there or entering make Dexterity saves or are restrained until they break free with a Strength check; the webs are flammable — burning webbing deals 2d4 fire damage to a creature that starts its turn in the fire."
     },
     {
       "key": "weird",
@@ -12935,12 +13068,13 @@
       "duration": "Concentration, up to 1 minute",
       "concentration": true,
       "ritual": false,
+      "save": "str",
       "classes": [
         "Druid",
         "Ranger"
       ],
       "source": "PHB 2024",
-      "description": "A wall of rushing wind 50 feet long and 15 feet high springs up where you choose. Arrows and small flying creatures cannot pass it, gases and vapors are blown aside, and loose material is hurled about within it."
+      "description": "A wall of rushing wind 50 feet long and 15 feet high springs up where you choose; when it appears, each creature in its area makes a Strength save, taking 4d8 bludgeoning damage on a failure. Arrows and small flying creatures cannot pass it, gases and vapors are blown aside, and loose material is hurled about within it."
     },
     {
       "key": "wish",
@@ -12960,7 +13094,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "The mightiest spell a mortal can cast: simply speaking reshapes reality. Its safest use duplicates any spell of 8th level or lower without components, but it can also heal a whole company, grant resistances, undo a recent moment, or attempt anything at all — at the risk of warping beyond intent and possibly burning the magic out of you forever."
+      "description": "The mightiest spell a mortal can cast: simply speaking reshapes reality. Its safest use duplicates any spell of 8th level or lower without components, but it can also heal a whole company, grant resistances, undo a recent moment, or attempt anything at all — at the risk of warping beyond intent and possibly burning the magic out of you forever. Anything beyond duplicating a spell also stresses you: until you finish a Long Rest, each spell you cast deals you 1d10 necrotic damage per level of that spell, and your Strength score becomes 3 for 2d4 days."
     },
     {
       "key": "witch bolt",
@@ -12968,7 +13102,7 @@
       "level": 1,
       "school": "Evocation",
       "castTime": "1 action",
-      "range": "30 feet",
+      "range": "60 feet",
       "components": [
         "V",
         "S",
@@ -12984,7 +13118,7 @@
         "Wizard"
       ],
       "source": "PHB 2024",
-      "description": "A beam of crackling energy tethers you to a target on a ranged spell attack hit for 1d12 lightning damage, and you can use a bonus action on later turns to deal the damage again automatically. Each higher slot adds 1d12 to the initial damage."
+      "description": "A beam of crackling energy tethers you to a target on a ranged spell attack hit for 2d12 lightning damage, and you can use a bonus action on later turns to deal 1d12 lightning damage automatically. Each higher slot adds 1d12 to the initial damage."
     },
     {
       "key": "wither and bloom",
@@ -13106,7 +13240,7 @@
       "components": [
         "V"
       ],
-      "duration": "Instantaneous",
+      "duration": "1 minute",
       "concentration": false,
       "ritual": false,
       "save": "wis",

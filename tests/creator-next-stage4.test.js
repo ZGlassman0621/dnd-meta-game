@@ -827,7 +827,9 @@ group('(h) GET /api/spells (real HTTP)');
 {
   const counts = [
     ['bard', 28, null, 4], ['cleric', 18, null, 4], ['druid', 22, null, 4],
-    ['sorcerer', 30, null, 2], ['warlock', 16, null, 2], ['wizard', 44, null, 4],
+    // sorcerer 31: repo-check-fixes-spells restored the book's Sorcerer
+    // on Grease (PHB 2024: Sorcerer, Wizard).
+    ['sorcerer', 31, null, 2], ['warlock', 16, null, 2], ['wizard', 44, null, 4],
     ['artificer', 18, null, 3],
     ['paladin', 20, null, 2], ['ranger', 18, null, 2], ['spellshot', 0, 0, null],
     ['magus', 0, 0, null], ['blackguard', 0, null, 0],

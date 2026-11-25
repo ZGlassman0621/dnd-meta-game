@@ -337,7 +337,9 @@ group('R2-11(a) Magic Initiate spell descriptions render');
   const { spellDescriptionFor } = stage3Mod || {};
   // The real lookup over the bundled spells.json (no logic re-implemented).
   ok(spellDescriptionFor('Guidance').includes('roll a d4'), 'bundled spellDescriptionFor: Guidance describes the d4');
-  ok(spellDescriptionFor('Alarm').includes('alarm alerts'), 'bundled spellDescriptionFor: Alarm describes the alarm');
+  // repo-check-fixes-spells: spells.json now carries the live catalog's
+  // fresh-worded Alarm ("the spell alerts you"), not the 2014 text.
+  ok(spellDescriptionFor('Alarm').includes('alerts you'), 'bundled spellDescriptionFor: Alarm describes the alarm');
   ok(spellDescriptionFor('alarm') === spellDescriptionFor('Alarm'), 'bundled spellDescriptionFor matches case-insensitively');
   ok(spellDescriptionFor('No Such Spell') === '', 'bundled spellDescriptionFor returns empty for an unknown name, never invented');
   ok(spellDescriptionFor('') === '', 'bundled spellDescriptionFor returns empty for a blank name');

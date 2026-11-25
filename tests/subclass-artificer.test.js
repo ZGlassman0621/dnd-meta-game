@@ -198,10 +198,10 @@ ok(typeof ss.experimentalElixirCount === 'function' && typeof ss.steelDefenderHp
 ok(ss.default && ss.default.experimentalElixirCount && ss.default.steelDefenderHp && ss.default.arcaneJoltDice &&
   ss.default.atlasMaxHolders && ss.default.cannonDetonateDice, 'Job 1 helpers are in the default export');
 
-group('5. Spell access vs catalog (no gaps; catalog is 583)');
+group('5. Spell access vs catalog (no gaps; catalog is 584)');
 {
   const inCatalog = (name) => Object.prototype.hasOwnProperty.call(SPELL_DATA_ENTRIES, String(name).toLowerCase());
-  ok(Object.keys(SPELL_DATA_ENTRIES).length === 583, 'Live catalog has 583 entries (unchanged by Job 1)');
+  ok(Object.keys(SPELL_DATA_ENTRIES).length === 584, 'Live catalog has 584 entries (583 + Tsunami, repo-check-fixes-spells)');
   for (const name of FIVE) {
     const spells = ss.artificerSubclassSpellsAtLevel('artificer', name, 17);
     ok(spells.length >= 10 && spells.every(inCatalog), `${name} always-prepared list is fully in the catalog (${spells.length} spells)`);

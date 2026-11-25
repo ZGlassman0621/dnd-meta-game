@@ -43,10 +43,13 @@ const OUT_PATH = path.join(ROOT, 'client', 'src', 'data', 'spellCatalog.generate
 const CLASSES_PATH = path.join(ROOT, 'client', 'src', 'data', 'classes.json')
 
 // Field order inside each spell entry — fixed, so regeneration is stable.
+// repo-check-fixes-spells: castModes (Plant Growth's two casting
+// times), material (cost / consumed specifics), and saves (every book
+// save with its trigger) ride along where an entry carries them.
 const FIELD_ORDER = [
-  'level', 'school', 'castTime', 'range', 'components', 'duration',
-  'concentration', 'ritual', 'save', 'appliesCondition', 'classes',
-  'source', 'description'
+  'level', 'school', 'castTime', 'castModes', 'range', 'components',
+  'material', 'duration', 'concentration', 'ritual', 'save', 'saves',
+  'appliesCondition', 'classes', 'source', 'description'
 ]
 
 // Same title-casing as the endpoint (server/routes/spells.js).

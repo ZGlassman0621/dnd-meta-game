@@ -599,7 +599,9 @@ group('(f) subchoice pickers — sentinels resolve, MI options from spells.json'
   const spellsData = JSON.parse(readRepo('client/src/data/spells.json'));
   for (const [list, cantripCount, spellCount, cantripSample, spellSample] of [
     ['cleric', 9, 15, 'Sacred Flame', 'Cure Wounds'],
-    ['druid', 8, 16, 'Druidcraft', 'Cure Wounds'],
+    // 17: repo-check-fixes-spells synced spells.json from the live
+    // catalog, whose Protection from Evil and Good lists Druid (2024).
+    ['druid', 8, 17, 'Druidcraft', 'Cure Wounds'],
     ['wizard', 16, 28, 'Fire Bolt', 'Magic Missile'],
   ]) {
     const cantrips = (spellsData.cantrips?.[list] || []).map((s) => s?.name).filter(Boolean);

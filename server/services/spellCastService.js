@@ -39,6 +39,8 @@ import { spellProfileFor } from './combatStatsService.js';
 import { findCompanionIdByName, conditionRollEffects, hasIncapacitatingCondition, charmerFor } from './conditionService.js';
 import { findActiveEnemy, getCurrentEncounterSeq, applyPartyDamageToEnemy } from './enemyCombatService.js';
 import { lookupBestiary } from './bestiaryService.js';
+import { damageAdjustmentFor } from './bestiaryLookupService.js';
+import { checkSpellMaterial, spendSpellMaterial } from './spellMaterialService.js';
 import { crScaledModifier } from './rollRequestService.js';
 // Family 5: Life pure math + Wild Magic trigger/table live in
 // subclassService / wildMagicService. NOTE (cached-mirror gap): the
@@ -640,6 +642,7 @@ export async function runWildMagicHook({ sessionId, characterId, casterKind, cas
         targets: undefined,
         skipWildMagic: true,
         skipSlotSpend: true,
+        skipMaterials: true,
         concentrationBypass: true,
       };
       try {
@@ -714,7 +717,13 @@ function effectNumbers(spec, casterProfile) {
     return { flat, specStr: flat === 'full' ? 'full' : String(flat) };
   }
   const flat = spec.modifier + (spec.addCastingMod ? (casterProfile?.modifier || 0) : 0);
-  const specStr = `${spec.count}d${spec.sides}${flat > 0 ? `+${flat}` : flat < 0 ? `${flat}` : ''}`;
+  // repo-check-fixes-spells (fix-as-you-find): a multi-term pool (Ice
+  // Storm 2d10+4d6, Meteor Swarm 20d6+20d6) prints every term — it used
+  // to print the first term only, so the player was told to roll 2d10.
+  const dice = Array.isArray(spec.terms) && spec.terms.length
+    ? spec.terms.map(t => `${t.count}d${t.sides}`).join('+')
+    : `${spec.count}d${spec.sides}`;
+  const specStr = `${dice}${flat > 0 ? `+${flat}` : flat < 0 ? `${flat}` : ''}`;
   return { flat, specStr };
 }
 
@@ -822,11 +831,18 @@ async function applyCompanionSpellEffect(sessionId, characterId, compRow, caster
   const profile = spellProfileFor({ ability_scores: compRow.companion_ability_scores, level: compRow.companion_level }, compRow.companion_class, compRow.companion_subclass);
   const { flat, specStr } = effectNumbers(spec, profile);
   let total;
+  let partRolls = null;
   if (spec.flat) {
     total = flat === 'full' ? 99999 : Math.max(0, flat);
   } else if (spec.terms) {
     let sum = 0;
-    for (const t of spec.terms) sum += roll(t.sides, t.count, { reason: `spell effect: ${spellName}` }).total;
+    partRolls = [];
+    for (const t of spec.terms) {
+      const r = roll(t.sides, t.count, { reason: `spell effect: ${spellName}` }).total;
+      partRolls.push({ amount: r, damageType: t.damageType || null });
+      sum += r;
+    }
+    if (partRolls.length) partRolls[0].amount += flat;
     total = Math.max(0, sum + flat);
   } else {
     const r = roll(spec.sides, spec.count, { reason: `spell effect: ${spellName}` });
@@ -863,13 +879,38 @@ async function applyCompanionSpellEffect(sessionId, characterId, compRow, caster
   if (saveSuccess) applied = spec.damageOnSave === 'none' ? 0 : Math.floor(total / 2);
   let killed = false;
   let damageAdjustment = null;
-  if (applied > 0) {
+  let parts = null;
+  if (spec.parts && partRolls && partRolls.every(p => p.damageType)) {
+    // repo-check-fixes-spells: a per-type split (Meteor Swarm, Ice
+    // Storm, Jallarzi's…) — the save halves each part, then each part
+    // meets the target's resistance/immunity/vulnerability on its own
+    // type. The adjusted sum applies as one untyped packet.
+    const snap = safeParse(enemy.stats_json, null);
+    parts = partRolls.map(p => {
+      let amt = Math.max(0, p.amount);
+      if (saveSuccess) amt = spec.damageOnSave === 'none' ? 0 : Math.floor(amt / 2);
+      const adj = snap ? damageAdjustmentFor(snap, p.damageType, { magical: true }) : null;
+      if (adj?.immune) amt = 0;
+      else {
+        if (adj?.resistant) amt = Math.floor(amt / 2);
+        if (adj?.vulnerable) amt *= 2;
+      }
+      return { damageType: p.damageType, rolled: p.amount, applied: amt, adjustment: adj?.label || null };
+    });
+    applied = parts.reduce((s, p) => s + p.applied, 0);
+    const labels = parts.filter(p => p.adjustment).map(p => `${p.damageType} ${p.adjustment}`);
+    if (labels.length) damageAdjustment = labels.join(', ');
+    if (applied > 0) {
+      const res = await applyPartyDamageToEnemy(sessionId, seq, enemy.name, applied, characterId, { magical: true });
+      killed = !!res?.killed;
+    }
+  } else if (applied > 0) {
     const res = await applyPartyDamageToEnemy(sessionId, seq, enemy.name, applied, characterId,
       { damageType: spec.damageType, magical: true });
     killed = !!res?.killed;
     if (res?.damageAdjustment) { damageAdjustment = res.damageAdjustment; applied = res.damageDealt; }
   }
-  const outcome = { spell: spellName, kind: 'damage', caster: casterName, target: enemy.name, total, applied, saveSuccess, killed, damageAdjustment };
+  const outcome = { spell: spellName, kind: 'damage', caster: casterName, target: enemy.name, total, applied, saveSuccess, killed, damageAdjustment, ...(parts ? { parts } : {}) };
   await stashSpellEffectOutcome(sessionId, outcome);
   return outcome;
 }
@@ -1094,6 +1135,16 @@ export async function castCompanionSpell(characterId, casterName, spellName, lvl
   if (await hasIncapacitatingCondition('companion', compId)) {
     return { type: 'spell_cast', success: false, reason: `${casterName} is incapacitated and cannot take actions` };
   }
+  // repo-check-fixes-spells item 9: the party inventory (carried on the
+  // recruiting character since migration 032) must hold a costly or
+  // consumed material; spent after the cast.
+  let materialCheck = null;
+  if (!opts.skipMaterials) {
+    materialCheck = await checkSpellMaterial(characterId, spellName);
+    if (!materialCheck.ok) {
+      return { type: 'spell_cast', caster: casterName, spell: spellName, level: lvl, slotConsumed: false, success: false, reason: materialCheck.reason, remedy: materialCheck.remedy };
+    }
+  }
   let concentrationStarted = false;
   // Family 5: Wild Magic Random Spell casts with no concentration even
   // when the spell normally requires it (opts.concentrationBypass).
@@ -1120,7 +1171,8 @@ export async function castCompanionSpell(characterId, casterName, spellName, lvl
       const cond = await maybeApplyPartyCondition(opts.sessionId || null, characterId, 'companion', casterKey, casterName, spellName, t, sv, opts.choice).catch(() => null);
       if (cond) conditions.push(cond);
     }
-    return { type: 'spell_cast', caster: casterName, spell: spellName, level: 0, slotConsumed: false, success: true, concentration: concentrationStarted, ...(saves.length === 1 && saves[0] ? { spellSave: saves[0] } : {}), ...(saves.length > 1 ? { spellSaves: saves } : {}), ...(effects.length === 1 && effects[0] ? { effect: effects[0] } : {}), ...(effects.length > 1 ? { effects } : {}), ...(conditions.length ? { conditions } : {}) };
+    const materialSpent0 = await spendSpellMaterial(characterId, materialCheck).catch(() => null);
+    return { type: 'spell_cast', caster: casterName, spell: spellName, level: 0, slotConsumed: false, success: true, concentration: concentrationStarted, ...(saves.length === 1 && saves[0] ? { spellSave: saves[0] } : {}), ...(saves.length > 1 ? { spellSaves: saves } : {}), ...(effects.length === 1 && effects[0] ? { effect: effects[0] } : {}), ...(effects.length > 1 ? { effects } : {}), ...(conditions.length ? { conditions } : {}), ...(materialSpent0 ? { materialSpent: materialSpent0 } : {}) };
   }
   const maxSlots = getSpellSlots(row.companion_class, row.companion_level) || {};
   const usedSlots = safeParse(row.companion_spell_slots_used, {});
@@ -1161,8 +1213,10 @@ export async function castCompanionSpell(characterId, casterName, spellName, lvl
   // SPELL EFFECT block (and the route's spellCasts payload). The
   // return object below already carries life / wildMagic verbatim.
   await stashPostCastHookOutcomes(opts.sessionId || null, spellName, casterName, postCast);
+  const materialSpent = await spendSpellMaterial(characterId, materialCheck).catch(() => null);
   return {
     type: 'spell_cast', caster: casterName, spell: spellName, level: lvl,
+    ...(materialSpent ? { materialSpent } : {}),
     slotConsumed: true, success: true, slotsMax: max, slotsUsed: used + 1,
     slotsRemaining: max - (used + 1), concentration: concentrationStarted,
     castTime: spellInfo?.castTime || 'action', components: spellInfo?.components || [],
@@ -1188,6 +1242,11 @@ export async function holdSpellSlot({ characterId, casterName, spellName, level 
   if (!info) return { type: 'spell_hold', success: false, reason: `unknown spell: ${spellName}` };
   const lvl = level != null && Number.isFinite(Number(level)) ? Math.trunc(Number(level)) : (info.level ?? 0);
   const isPc = !casterName || /^(player|pc|character)$/i.test(casterName);
+  // repo-check-fixes-spells item 9: readying casts the spell now, so a
+  // costly/consumed material is checked (and spent) at hold time; the
+  // release then passes skipMaterials.
+  const materialCheck = await checkSpellMaterial(characterId, spellName);
+  if (!materialCheck.ok) return { type: 'spell_hold', success: false, reason: materialCheck.reason, remedy: materialCheck.remedy, spell: spellName, level: lvl };
   if (isPc) {
     let slotConsumed = false;
     if (lvl > 0) {
@@ -1209,7 +1268,8 @@ export async function holdSpellSlot({ characterId, casterName, spellName, level 
       if (current && current.toLowerCase() !== String(spellName).toLowerCase()) replacedConcentration = current;
       await startConcentration(characterId, spellName);
     } catch (e) { console.error('[spellCastService] Hold concentration failed:', e.message); }
-    return { type: 'spell_hold', success: true, spell: spellName, level: lvl, slotConsumed, replacedConcentration };
+    const materialSpent = await spendSpellMaterial(characterId, materialCheck).catch(() => null);
+    return { type: 'spell_hold', success: true, spell: spellName, level: lvl, slotConsumed, replacedConcentration, ...(materialSpent ? { materialSpent } : {}) };
   }
   const compId = await findCompanionIdByName(characterId, casterName);
   if (!compId) return { type: 'spell_hold', success: false, reason: `unknown caster: ${casterName}` };
@@ -1235,7 +1295,8 @@ export async function holdSpellSlot({ characterId, casterName, spellName, level 
     if (current && current.toLowerCase() !== String(spellName).toLowerCase()) replacedConcentration = current;
     await startCompanionConcentration(compId, spellName);
   } catch (e) { console.error('[spellCastService] Hold concentration failed:', e.message); }
-  return { type: 'spell_hold', success: true, spell: spellName, level: lvl, slotConsumed, replacedConcentration };
+  const materialSpent = await spendSpellMaterial(characterId, materialCheck).catch(() => null);
+  return { type: 'spell_hold', success: true, spell: spellName, level: lvl, slotConsumed, replacedConcentration, ...(materialSpent ? { materialSpent } : {}) };
 }
 
 /** Combat item 8: is this spell harmful for charmed-caster gating?
@@ -1247,7 +1308,7 @@ export function spellIsHarmful(spellName) {
   if (!spellName) return null;
   const info = lookupSpell(spellName);
   if (!info) return null;
-  const fx = spellEffectSpec(spellName);
+  const fx = spellEffectSpec(spellName, { includeConditional: true });
   // spellEffectSpec returns kind 'damage' | 'healing' — there is no
   // damage field on the spec, so kind is the damage test.
   if (fx) return fx.kind === 'damage';
@@ -1269,6 +1330,16 @@ export async function castSpell(characterId, spellName, level, opts = {}) {
   }
   if (casterName && !/^(player|pc|character)$/i.test(casterName)) {
     return castCompanionSpell(characterId, casterName, spellName, lvl, { ...opts, sessionId: opts.sessionId || null, target: opts.target || null });
+  }
+  // repo-check-fixes-spells item 9: a costly or consumed material must
+  // be carried — refused before any slot is spent. opts.skipMaterials:
+  // a readied release (paid at ready time) or a Wild Magic random cast.
+  let materialCheck = null;
+  if (!opts.skipMaterials) {
+    materialCheck = await checkSpellMaterial(characterId, spellName);
+    if (!materialCheck.ok) {
+      return { type: 'spell_cast', spell: spellName, level: lvl, slotConsumed: false, success: false, reason: materialCheck.reason, remedy: materialCheck.remedy };
+    }
   }
   if (lvl === 0) {
     const charRow = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
@@ -1292,7 +1363,8 @@ export async function castSpell(characterId, spellName, level, opts = {}) {
       if (cond) conditions.push(cond);
     }
     const pendingEffect = pendings.find(Boolean) || null;
-    return { type: 'spell_cast', spell: spellName, level: 0, slotConsumed: false, success: true, ...(saves.length === 1 && saves[0] ? { spellSave: saves[0] } : {}), ...(saves.length > 1 ? { spellSaves: saves } : {}), ...(pendingEffect ? { pendingEffect } : {}), ...(conditions.length ? { conditions } : {}) };
+    const materialSpent0 = await spendSpellMaterial(characterId, materialCheck).catch(() => null);
+    return { type: 'spell_cast', spell: spellName, level: 0, slotConsumed: false, success: true, ...(saves.length === 1 && saves[0] ? { spellSave: saves[0] } : {}), ...(saves.length > 1 ? { spellSaves: saves } : {}), ...(pendingEffect ? { pendingEffect } : {}), ...(conditions.length ? { conditions } : {}), ...(materialSpent0 ? { materialSpent: materialSpent0 } : {}) };
   }
   const char = await dbGet('SELECT spell_slots, spell_slots_used FROM characters WHERE id = ?', [characterId]);
   if (!char) return null;
@@ -1374,10 +1446,12 @@ export async function castSpell(characterId, spellName, level, opts = {}) {
   }).catch(() => ({ life: null, wildMagic: null }));
   // F5 surfacing: see the companion path above — same channel.
   await stashPostCastHookOutcomes(opts.sessionId || null, spellName, charRowForHook?.name || 'Player', postCast);
+  const materialSpent = await spendSpellMaterial(characterId, materialCheck).catch(() => null);
   return {
     type: 'spell_cast',
     spell: spellName,
     level: lvl,
+    ...(materialSpent ? { materialSpent } : {}),
     slotConsumed: !freeCast,
     success: true,
     slotsMax: max,
@@ -1458,7 +1532,8 @@ async function releaseReadiedSpell(context, parsed, spell, level) {
     caster: parsed?.Caster || null,
     target: parsed?.Target || null,
     sessionId: sessionId || null,
-    skipSlotSpend: true
+    skipSlotSpend: true,
+    skipMaterials: true
   });
   if (!res) return { type: 'spell_cast', success: false, reason: 'spell release failed' };
   if (res.slotsUsed != null) { res.slotsUsed -= 1; res.slotsRemaining += 1; }
@@ -1623,6 +1698,11 @@ async function castPartySpell(context, parsed, spell, level) {
   const castTime = info?.castTime || 'action';
   const econ = await tls.checkSpellEconomy(sessionId, encounterSeq, casterKey, { castTime, level });
   if (!econ.allowed) return { type: 'spell_cast', success: false, reason: econ.reason, remedy: econ.remedy };
+  // (6b) repo-check-fixes-spells item 9: a missing costly/consumed
+  // material refuses here, before a counter or slot is touched. The
+  // cast below (castSpell) re-checks and spends it.
+  const materialGate = await checkSpellMaterial(context.characterId, spell);
+  if (!materialGate.ok) return { type: 'spell_cast', spell, level, slotConsumed: false, success: false, reason: materialGate.reason, remedy: materialGate.remedy };
   // (7) Armed enemy counter — after gating, so a counter never
   // launders an illegal off-turn cast. Slot peek first so a slot
   // refusal never eats an armed counter.

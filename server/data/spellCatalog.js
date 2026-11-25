@@ -120,14 +120,61 @@ function termsSpecString(terms, modifier) {
  * casting-ability modifier is separate (addCastingMod) because only the
  * caller knows the caster.
  */
-export function spellEffectSpec(name, { slotLevel = null, casterLevel = 1 } = {}) {
+export function spellEffectSpec(name, { slotLevel = null, casterLevel = 1, includeConditional = false } = {}) {
   if (!name) return null;
   const key = String(name).toLowerCase().trim();
   const fx = SPELL_EFFECTS[key];
   if (!fx) return null;
+  // repo-check-fixes-spells: an entry with a `condition` (Power Word
+  // Kill above 100 HP, Earthquake's collapse, Wish stress, Meld into
+  // Stone, Alter Self's natural weapons) deals its damage only in that
+  // circumstance — never automatically on cast. Cast paths get null;
+  // callers that only classify (spellIsHarmful) opt in.
+  if (fx.condition && !includeConditional) return null;
   const spell = lookupSpell(name);
   const baseLevel = spell?.level ?? 0;
   const kind = fx.healing ? 'healing' : 'damage';
+  const extras = {
+    ...(fx.followUps ? { followUps: fx.followUps } : {}),
+    ...(fx.condition ? { condition: fx.condition } : {}),
+  };
+  if (Array.isArray(fx.damageParts) && fx.damageParts.length && !fx.flat) {
+    // Per-type split of one simultaneous pool (Meteor Swarm 20d6 fire +
+    // 20d6 bludgeoning): each term carries its own damageType, so a
+    // resistance/immunity can apply per type. An upcast die is shared
+    // evenly across the parts with that die size when it divides
+    // (Jallarzi's +2d10 = +1d10 each, Flame Strike +2d6 = +1d6 each);
+    // otherwise it grows the first matching part (Ice Storm's 2d10).
+    const terms = [];
+    for (const p of fx.damageParts) {
+      const d = parseEffectDice(p.damage);
+      if (!d) return null;
+      terms.push({ count: d.count, sides: d.sides, damageType: p.damageType || null });
+    }
+    let modifier = 0;
+    if (slotLevel != null && slotLevel > baseLevel) {
+      const up = parseEffectDice(fx.upcastDamage);
+      if (up) {
+        const steps = slotLevel - baseLevel;
+        const matching = terms.filter(t => t.sides === up.sides);
+        if (matching.length > 1 && up.count % matching.length === 0) {
+          for (const t of matching) t.count += (up.count / matching.length) * steps;
+        } else if (matching.length) {
+          matching[0].count += up.count * steps;
+        }
+        modifier += up.modifier * steps;
+      }
+    }
+    return {
+      kind: 'damage', count: terms[0].count, sides: terms[0].sides, modifier, terms,
+      parts: terms.map(t => ({ dice: `${t.count}d${t.sides}`, damageType: t.damageType })),
+      addCastingMod: !!fx.addCastingMod,
+      damageType: fx.damageType || null,
+      damageOnSave: fx.damageOnSave || null,
+      spec: termsSpecString(terms, modifier),
+      ...extras
+    };
+  }
   if (fx.flat) {
     // Flat-amount spells (Heal 70, Mass Heal 700, Guardian of Faith 20,
     // Power Word Heal 'full'): nothing to roll — the caller applies the
@@ -144,7 +191,8 @@ export function spellEffectSpec(name, { slotLevel = null, casterLevel = 1 } = {}
       addCastingMod: !!fx.addCastingMod,
       damageType: fx.damageType || null,
       damageOnSave: fx.damageOnSave || null,
-      spec: flatAmount === 'full' ? 'full' : String(flatAmount)
+      spec: flatAmount === 'full' ? 'full' : String(flatAmount),
+      ...extras
     };
   }
   const base = parseEffectDice(fx.healing || fx.damage);
@@ -170,7 +218,8 @@ export function spellEffectSpec(name, { slotLevel = null, casterLevel = 1 } = {}
       addCastingMod: !!fx.addCastingMod,
       damageType: fx.damageType || null,
       damageOnSave: fx.damageOnSave || null,
-      spec: termsSpecString(terms, multi.modifier)
+      spec: termsSpecString(terms, multi.modifier),
+      ...extras
     };
   }
   let { count, sides, modifier } = base;
@@ -190,8 +239,39 @@ export function spellEffectSpec(name, { slotLevel = null, casterLevel = 1 } = {}
     addCastingMod: !!fx.addCastingMod,
     damageType: fx.damageType || null,
     damageOnSave: fx.damageOnSave || null,
-    spec: `${count}d${sides}${modifier > 0 ? `+${modifier}` : modifier < 0 ? `${modifier}` : ''}`
+    spec: `${count}d${sides}${modifier > 0 ? `+${modifier}` : modifier < 0 ? `${modifier}` : ''}`,
+    ...extras
   };
+}
+
+/**
+ * Every saving throw the book imposes for a spell (repo-check-fixes-
+ * spells). `save` on the entry stays the single ability the engine
+ * rolls on cast; `saves` lists all of them with their trigger, and a
+ * `conditional: true` save (Forcecage, Magic Circle) happens only if
+ * the creature acts — never on cast. Falls back to [{ ability: save }].
+ */
+export function spellSaveList(name) {
+  const spell = lookupSpell(name);
+  if (!spell) return [];
+  if (Array.isArray(spell.saves) && spell.saves.length) return spell.saves.map(s => ({ ...s }));
+  return spell.save ? [{ ability: spell.save }] : [];
+}
+
+/**
+ * The material-component specifics for a spell, or null (repo-check-
+ * fixes-spells item 9): { text, costGp, consumed, match }. `consumed:
+ * null` means the source does not yet say. Only these are enforced at
+ * cast time: a component with a cost, or one the spell consumes — a
+ * component pouch or focus stands in for everything else.
+ */
+export function spellMaterial(name) {
+  const spell = lookupSpell(name);
+  return spell?.material ? { ...spell.material } : null;
+}
+
+export function materialIsEnforced(material) {
+  return !!material && ((Number(material.costGp) || 0) > 0 || material.consumed === true);
 }
 
 /**
@@ -218,4 +298,4 @@ export const REPEAT_SAVE_SPELLS = new Set([
  */
 export const COUNTING_SAVE_SPELLS = new Set(['flesh to stone']);
 
-export default { SPELL_CATALOG, lookupSpell, isConcentrationSpell, SPELL_SAVES, spellSaveAbility, SPELL_EFFECTS, spellEffectSpec, REPEAT_SAVE_SPELLS, COUNTING_SAVE_SPELLS };
+export default { SPELL_CATALOG, lookupSpell, isConcentrationSpell, SPELL_SAVES, spellSaveAbility, SPELL_EFFECTS, spellEffectSpec, REPEAT_SAVE_SPELLS, COUNTING_SAVE_SPELLS, spellSaveList, spellMaterial, materialIsEnforced };
