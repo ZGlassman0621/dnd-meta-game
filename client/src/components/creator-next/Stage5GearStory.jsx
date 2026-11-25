@@ -6,6 +6,7 @@ import { ALIGNMENT_DESCRIPTIONS, LIFESTYLES as LIFESTYLE_DETAILS, formatDailyCos
 import equipmentData from '../../data/equipment.json' with { type: 'json' }
 import { THEME_GOLD_MODIFIERS, applyGoldModifier } from '../../data/themeGoldModifiers.js'
 import { choiceCountOf, describeSentinel, isHeldOption, normalizeChoiceValues, resolveChoiceOptions } from './choiceOptions.js'
+import { ALIGNMENT_TAG_NAMES, OTHER_STARTER_VALUE, checkedMoments, pickerState, storyStarterOptions, toggleMoment } from './storyStarters.js'
 
 /**
  * Creator-next Stage 5 — Gear & Story (2026-11-07).
@@ -521,6 +522,10 @@ export default function Stage5GearStory({ state, set, themes = null, speciesEntr
   const [packageData, setPackageData] = useState(null)
   const [packagesLoading, setPackagesLoading] = useState(false)
   const [packagesFailed, setPackagesFailed] = useState(false)
+  // story-starters: which story fields have "Other / write your own"
+  // open (a fresh Other with nothing typed yet has no stored value to
+  // show it by — same reason Stage 1 keeps regionOtherOpen).
+  const [starterOtherOpen, setStarterOtherOpen] = useState({})
   useEffect(() => {
     if (!classId) { setPackageData(null); setPackagesFailed(false); setPackagesLoading(false); return }
     let live = true
@@ -831,6 +836,122 @@ export default function Stage5GearStory({ state, set, themes = null, speciesEntr
       </div>
     )
   }
+  // story-starters job: a story field with a starter set for this
+  // character (storyStarters.js — theme for personality / ideals /
+  // bonds / flaws / backstory, species and size for appearance) shows
+  // the list plus "Other / write your own"; a field with no set keeps
+  // its plain text box (textField, unchanged). The pick is the plain
+  // string the field already stores.
+  const sourceLine = (starters) => (
+    <div className="help" data-starter-source={starters.field} style={{ fontStyle: 'normal', marginTop: 4, color: 'var(--ink-2)' }}>{starters.source}</div>
+  )
+  const setOther = (key, open) => setStarterOtherOpen(prev => ({ ...prev, [key]: open }))
+  const starterField = (key, label, tip, multiline = false, guide = null) => {
+    const starters = storyStarterOptions(key, state, speciesEntry)
+    if (!starters) return textField(key, label, tip, multiline, guide)
+    if (starters.multi) {
+      const ticked = new Set(checkedMoments(state[key], starters))
+      return (
+        <div key={key} data-starter-field={key}>
+          <label style={labelStyle}>{label}</label>
+          <div className="help" style={{ fontStyle: 'normal', marginTop: 2 }}>{tip}</div>
+          {sourceLine(starters)}
+          <div style={{ marginTop: 6 }}>
+            {starters.options.map(o => (
+              <label key={o.value} style={{ display: 'block', margin: '4px 0', fontFamily: 'var(--serif)', fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={ticked.has(o.value)}
+                  onChange={e => update({ [key]: toggleMoment(state[key], o.value, e.target.checked) })}
+                /> {o.label}
+              </label>
+            ))}
+          </div>
+          <textarea
+            aria-label={label}
+            value={state[key] || ''}
+            onChange={e => update({ [key]: e.target.value })}
+            rows={5}
+            placeholder="Write your own here, alongside any moments you ticked."
+            style={{ ...inputStyle, minHeight: 96, marginTop: 6 }}
+          />
+        </div>
+      )
+    }
+    const shown = pickerState(state[key], starters)
+    const otherShown = starterOtherOpen[key] === true || shown.mode === 'other'
+    if (starters.driver === 'theme') {
+      return (
+        <div key={key} data-starter-field={key}>
+          <label style={labelStyle}>{label}</label>
+          <div className="help" style={{ fontStyle: 'normal', marginTop: 2 }}>{tip}</div>
+          {guide && (
+            <div className="help" style={{ fontStyle: 'normal', marginTop: 4 }}>
+              {guide.map(q => (<div key={q}>· {q}</div>))}
+            </div>
+          )}
+          {sourceLine(starters)}
+          <div role="radiogroup" aria-label={label} style={{ marginTop: 6 }}>
+            {starters.options.map(o => (
+              <label key={o.value} style={{ display: 'block', margin: '4px 0', fontFamily: 'var(--serif)', fontSize: 14 }}>
+                <input
+                  type="radio" name={`starter-${key}`}
+                  checked={!otherShown && shown.value === o.value}
+                  onChange={() => { setOther(key, false); update({ [key]: o.value }) }}
+                /> {o.alignment && <span title="The alignment this starter was written for — a guide, not a limit" style={{ fontSize: 12, color: 'var(--ink-2)', border: '1px solid var(--rule, #ccc)', padding: '0 4px', marginRight: 4 }}>{ALIGNMENT_TAG_NAMES[o.alignment] || o.alignment}</span>} {o.label}
+              </label>
+            ))}
+            <label style={{ display: 'block', margin: '4px 0', fontFamily: 'var(--serif)', fontSize: 14 }}>
+              <input
+                type="radio" name={`starter-${key}`}
+                checked={otherShown}
+                onChange={() => setOther(key, true)}
+              /> Other — write your own
+            </label>
+          </div>
+          {otherShown && (
+            <textarea
+              aria-label={`${label} (your own words)`}
+              value={state[key] || ''}
+              onChange={e => update({ [key]: e.target.value })}
+              rows={3}
+              placeholder="Write your own — or edit the starter you picked."
+              style={{ ...inputStyle, minHeight: 72, marginTop: 6 }}
+            />
+          )}
+        </div>
+      )
+    }
+    return (
+      <div key={key} data-starter-field={key}>
+        <label style={labelStyle}>{label}</label>
+        <div className="help" style={{ fontStyle: 'normal', marginTop: 2 }}>{tip}</div>
+        <select
+          aria-label={label}
+          value={otherShown ? OTHER_STARTER_VALUE : shown.value}
+          onChange={e => {
+            if (e.target.value === OTHER_STARTER_VALUE) { setOther(key, true); update({ [key]: '' }) }
+            else { setOther(key, false); update({ [key]: e.target.value }) }
+          }}
+          style={selectStyle}
+        >
+          <option value="">—</option>
+          {starters.options.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
+          <option value={OTHER_STARTER_VALUE}>Other… (type your own)</option>
+        </select>
+        {sourceLine(starters)}
+        {otherShown && (
+          <input
+            type="text"
+            aria-label={`${label} (your own words)`}
+            value={state[key] || ''}
+            onChange={e => update({ [key]: e.target.value })}
+            style={{ ...inputStyle, marginTop: 6 }}
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="card">
@@ -983,27 +1104,27 @@ export default function Stage5GearStory({ state, set, themes = null, speciesEntr
       })}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-        {textField('age', 'Age', 'How old you are, in years or by your people’s own reckoning. Optional; you can change it later.')}
-        {textField('height', 'Height', 'How tall you are, in feet and inches or your people’s own measure. Optional; you can change it later.')}
-        {textField('weight', 'Weight', 'How much you weigh. Optional; you can change it later.')}
-        {textField('physical_build', 'Build', 'Your build: slender, stocky, wiry, broad, or in your own words. Optional; you can change it later.')}
-        {textField('eye_color', 'Eyes', 'The color of your eyes. Optional; you can change it later.')}
-        {textField('hair_color', 'Hair', 'Your hair’s color and style — or none at all, or something stranger. Optional; you can change it later.')}
-        {textField('skin_color', 'Skin', 'The color and texture of your skin. Optional; you can change it later.')}
+        {starterField('age', 'Age', 'How old you are, in years or by your people’s own reckoning. Optional; you can change it later.')}
+        {starterField('height', 'Height', 'How tall you are, in feet and inches or your people’s own measure. Optional; you can change it later.')}
+        {starterField('weight', 'Weight', 'How much you weigh. Optional; you can change it later.')}
+        {starterField('physical_build', 'Build', 'Your build: slender, stocky, wiry, broad, or in your own words. Optional; you can change it later.')}
+        {starterField('eye_color', 'Eyes', 'The color of your eyes. Optional; you can change it later.')}
+        {starterField('hair_color', 'Hair', 'Your hair’s color and style — or none at all, or something stranger. Optional; you can change it later.')}
+        {starterField('skin_color', 'Skin', 'The color and texture of your skin. Optional; you can change it later.')}
       </div>
 
-      {textField('personality_traits', 'Personality traits', 'How you act: your habits, mannerisms, and the things people notice first. The DM uses this to shape how the world reacts to you. Optional; you can change it later.', true, [
+      {starterField('personality_traits', 'Personality traits', 'How you act: your habits, mannerisms, and the things people notice first. The DM uses this to shape how the world reacts to you. Optional; you can change it later.', true, [
         'What do people notice about you first?',
         'What habit gives you away?',
         'What do you do when you’re nervous?',
       ])}
-      {textField('ideals', 'Ideals', 'The principles you live by — the beliefs you would never give up. The DM will put them to the test. Optional; you can change it later.', true)}
-      {textField('bonds', 'Bonds', 'The people, places, and promises you are tied to. The DM weaves them into your story. Optional; you can change it later.', true)}
-      {textField('flaws', 'Flaws', 'Your weaknesses — the fears, vices, and blind spots the world can use against you. Optional; you can change it later.', true)}
+      {starterField('ideals', 'Ideals', 'The principles you live by — the beliefs you would never give up. The DM will put them to the test. Optional; you can change it later.', true)}
+      {starterField('bonds', 'Bonds', 'The people, places, and promises you are tied to. The DM weaves them into your story. Optional; you can change it later.', true)}
+      {starterField('flaws', 'Flaws', 'Your weaknesses — the fears, vices, and blind spots the world can use against you. Optional; you can change it later.', true)}
       {textField('organizations', 'Organizations', 'The groups you belong to: a guild, a temple, an order, a crew. Optional; you can change it later.', true)}
       {textField('allies', 'Allies', 'The people on your side: friends, patrons, and those who owe you a favor. Optional; you can change it later.', true)}
       {textField('enemies', 'Enemies', 'The people against you: rivals, hunters, and those you owe. Optional; you can change it later.', true)}
-      {textField('backstory', 'Backstory', 'Your story so far, in your own words: where you come from and what brought you here. The DM reads it and weaves it into the adventure. Optional; you can change it later.', true)}
+      {starterField('backstory', 'Backstory', 'Your story so far, in your own words: where you come from and what brought you here. The DM reads it and weaves it into the adventure. Optional; you can change it later.', true)}
       {textField('other_notes', 'Other notes', 'Anything else you would like the DM to know about your character. Optional; you can change it later.', true)}
 
       <div className="help" style={{ fontStyle: 'normal' }}>

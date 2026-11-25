@@ -191,7 +191,9 @@ group('R2-4 size never changes speed — explanation, not a slider');
   ok(stage1.includes('Size never changes your speed. Locked at creation.'), 'the mixed Size Tip states it');
   ok(stage1.includes('It never changes your speed.'), 'the single-species Size Tip states it');
   ok(!stage5.includes('type="range"'), 'no height slider exists on Stage 5 (height stays free text)');
-  ok(stage5.includes("textField('height', 'Height'"), 'height is still a free-text flavor field');
+  // story-starters: height offers the species' suggested heights (flavor
+  // only, size-gated) with "Other… (type your own)" free text beside them.
+  ok(stage5.includes("starterField('height', 'Height'") && stage5.includes('Other… (type your own)'), 'height is still a flavor field with free text (species list + Other)');
 }
 
 // --- R2-5: mixed Versatile aligned ----------------------------------------------

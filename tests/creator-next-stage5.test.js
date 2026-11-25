@@ -723,7 +723,10 @@ group('(i) Shell wiring + static guards');
   // redundant literal <Tip> (story helpers now render the tip as a
   // visible help line), so the literal floor is 8, not 9.
   const tipCount = (stage5Src.match(/<Tip /g) || []).length;
-  const fieldTips = (stage5Src.match(/textField\('/g) || []).length + (stage5Src.match(/selectField\('/g) || []).length;
+  // story-starters: starterField renders the same inline tip line (and
+  // falls back to textField when a field has no starter set), so its
+  // call sites count too.
+  const fieldTips = (stage5Src.match(/textField\('/g) || []).length + (stage5Src.match(/selectField\('/g) || []).length + (stage5Src.match(/starterField\('/g) || []).length;
   check(tipCount >= 8 && fieldTips >= 19,
     `Stage 5 carries tooltips on its choices (${tipCount} literal <Tip> uses + ${fieldTips} helper-rendered field tooltips)`);
 }

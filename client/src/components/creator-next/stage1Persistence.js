@@ -533,6 +533,14 @@ function parseStoredJson(value) {
  * A field absent from the stores means "not yet chosen" and is left
  * blank — never defaulted, never an empty list written over a pick.
  */
+/** The 19 Stage 5 story columns (alignment … other_notes), in Stage 5 order. */
+export const STAGE5_STORY_KEYS = [
+  'alignment', 'faith', 'lifestyle',
+  'age', 'height', 'weight', 'physical_build', 'eye_color', 'hair_color', 'skin_color',
+  'personality_traits', 'ideals', 'bonds', 'flaws',
+  'organizations', 'allies', 'enemies', 'backstory', 'other_notes',
+]
+
 export function rehydrateStateFromServerRow(row, progression, speciesEntries = null) {
   const patch = {}
   if (row && typeof row === 'object') {
@@ -598,6 +606,15 @@ export function rehydrateStateFromServerRow(row, progression, speciesEntries = n
     }
     if (row.subclass_origin_explanation) patch.subclassOriginExplanation = row.subclass_origin_explanation
     if (row.faith) patch.faith = row.faith
+    // story-starters (fix-as-you-find): the Stage 5 story columns
+    // rehydrate on resume / edit. Only faith did before, so a pick or
+    // written text from an earlier session came back blank. Each is
+    // the plain string the column holds; Stage 5 shows a value that
+    // matches a starter as that pick, anything else as "Other".
+    for (const key of STAGE5_STORY_KEYS) {
+      if (key === 'faith') continue
+      if (row[key] != null && String(row[key]) !== '') patch[key] = String(row[key])
+    }
     const storedChoices = parseStoredJson(row.subclass_choices_json)
     if (storedChoices && typeof storedChoices === 'object' && !Array.isArray(storedChoices)
       && Object.keys(storedChoices).length) {
