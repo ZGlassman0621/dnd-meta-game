@@ -33,7 +33,7 @@ import { spellDescriptionText, spellFactsLine } from './spellBlurb.js'
  *   instead of substituting the client classes.json subclass list,
  *   which for artificer still carries unverified Forgewright /
  *   Warsmith and omits Cartographer. Classes with no registry
- *   entry at all (artificer, blood_hunter, keeper, warlord) get the
+ *   entry at all (artificer, blood_hunter, warlord) get the
  *   same honest gap note, not a fake picker.
  * - Species cantrips are computed here from `speciesEntry`
  *   (registry client shape: entry/variant innateSpells, level 0
@@ -85,7 +85,7 @@ import { spellDescriptionText, spellFactsLine } from './spellBlurb.js'
  *   picker checked and grayed out + disabled, never hidden.
  * - Subclass choices render from entry.choices. A subclass takes
  *   effect at its class's subclassLevel in classes.json (1 for
- *   magus/scholar, 3 for every other class, 6 for keeper — the 2024
+ *   magus/scholar, 3 for every other class — the 2024
  *   PHB puts every PHB class's subclass choice at 3rd level, so the
  *   old 1st/2nd values for cleric/sorcerer/warlock/druid/wizard were
  *   corrected in the 2024-accuracy audit, 2026-11-05); picking it

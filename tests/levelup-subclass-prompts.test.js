@@ -146,7 +146,8 @@ group('(a) needsSubclassSelection fires at the 2024 level, not the old one');
     check(needsSubclassSelection(cls, oldLevel) === false, `${cls} does NOT prompt at ${oldLevel} (old 2014 level)`);
   }
   // The table agrees with classes.json (the 2024-corrected source) for
-  // every class the table covers — 23 entries.
+  // every class the table covers — 22 entries (keeper left with the
+  // class, REMOVED 2026-11-25).
   for (const [id, level] of Object.entries(SUBCLASS_LEVELS)) {
     check(level === classes[id]?.subclassLevel, `SUBCLASS_LEVELS says ${level} for ${id} (classes.json: ${classes[id]?.subclassLevel})`);
   }
@@ -161,13 +162,11 @@ group('(a) needsSubclassSelection fires at the 2024 level, not the old one');
   for (const [id] of Object.entries(SUBCLASS_LEVELS)) {
     check(needsSubclassSelection(id, 2) === false, `${id} does NOT prompt at 2 (no class chooses at 2nd in 2024)`);
   }
-  // Unchanged classes, named: magus/scholar still prompt at 1, keeper at 6.
+  // Unchanged classes, named: magus/scholar still prompt at 1.
   for (const cls of ['magus', 'scholar']) {
     check(needsSubclassSelection(cls, 1) === true, `${cls} still prompts at 1 (own book)`);
     check(needsSubclassSelection(cls, 3) === false, `${cls} does NOT prompt at 3`);
   }
-  check(needsSubclassSelection('keeper', 6) === true, 'keeper prompts at 6 (Specialization)');
-  check(needsSubclassSelection('keeper', 3) === false, 'keeper does NOT prompt at 3');
   // Blood Hunter joined SUBCLASS_LEVELS 2026-11-06 (4 Orders registered):
   // it prompts at 3rd now. Warlord joined 2026-11-06 too (gaps-batch
   // item 8b): it prompts at 1st — its own book prints the Presence
@@ -220,18 +219,11 @@ group('(b) level-up-info prompts at 3rd, not at the old level');
     check(existingOption(info1)?.choices.needsSubclass === false, `${cls} 1->2: needsSubclass false (no L1 prompt anymore)`);
   }
 
-  // Keeper: still prompts at 6, not at 3.
-  const keeper5 = await makeLeveled({ name: 'KeeperFive', cls: 'keeper', level: 5, xp: XP.to6 });
-  const keeper5Info = await req('GET', `/api/character/level-up-info/${keeper5}`);
-  check(existingOption(keeper5Info)?.choices.needsSubclass === true, 'keeper 5->6: needsSubclass true');
-  check(existingOption(keeper5Info)?.subclassLevel === 6, 'keeper 5->6: subclassLevel 6');
-  const keeper2 = await makeLeveled({ name: 'KeeperTwo', cls: 'keeper', level: 2, xp: XP.to3 });
-  const keeper2Info = await req('GET', `/api/character/level-up-info/${keeper2}`);
-  check(existingOption(keeper2Info)?.choices.needsSubclass === false, 'keeper 2->3: needsSubclass false');
-  check(existingOption(keeper2Info)?.subclassLevel === 6, 'keeper 2->3: subclassLevel still 6');
+  // Keeper was REMOVED from the game (2026-11-25): its level-up
+  // prompts are gone with it (tests/keeper-removal.test.js).
 
   // Multiclass options on a fighter: magus/scholar prompt at 1, the
-  // five corrected classes do NOT prompt at 1, keeper not until 6.
+  // five corrected classes do NOT prompt at 1.
   const fighter1 = await makeLeveled({ name: 'FighterOne', cls: 'fighter', level: 1, xp: XP.to2 });
   const fighterInfo = await req('GET', `/api/character/level-up-info/${fighter1}`);
   check(fighterInfo.status === 200, 'fighter L1 info loads');
@@ -266,10 +258,7 @@ group('(b) level-up-info prompts at 3rd, not at the old level');
     check(opt?.choices.needsSubclass === false, `multiclass into ${cls}: needsSubclass false (not at class level 1 anymore)`);
     check(opt?.subclassLevel === 3, `multiclass into ${cls}: subclassLevel 3`);
   }
-  const keeperOpt = multiclassOption(fighterInfo, 'keeper');
-  check(keeperOpt !== undefined, 'multiclass option exists for keeper');
-  check(keeperOpt?.choices.needsSubclass === false, 'multiclass into keeper: needsSubclass false at class level 1');
-  check(keeperOpt?.subclassLevel === 6, 'multiclass into keeper: subclassLevel 6');
+  check(multiclassOption(fighterInfo, 'keeper') === undefined, 'no multiclass option for keeper (class removed)');
 
   // V8 (2026-11-07, spellbook replacement): the multiclass-into-wizard
   // envelope option offers the settled seed — SPELLBOOK_START_SIZE (6)
@@ -352,11 +341,6 @@ group('(c) level-up submit refuses at the old level, requires at 3rd');
     `multiclass into magus refusal names the class (got ${JSON.stringify(multiMagus.json)})`);
   const magusRow = await readCharacter(fighterMagus);
   check(magusRow.level === 1, 'refused magus multiclass left the level at 1');
-
-  // Keeper 5 -> 6 without a subclass is refused (still prompts at 6).
-  const keeper5 = await makeLeveled({ name: 'KeeperSubmitFive', cls: 'keeper', level: 5, xp: XP.to6 });
-  const keeperRes = await req('POST', `/api/character/level-up/${keeper5}`, {});
-  check(keeperRes.status === 422, 'keeper 5->6 without subclass: 422');
 
   const missing = await req('POST', '/api/character/level-up/999999', {});
   check(missing.status === 404, 'level-up 404s for an unknown character');

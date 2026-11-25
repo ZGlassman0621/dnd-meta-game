@@ -224,31 +224,6 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     spellSection = `\n- Spellcasting: ${spellParts.join('; ')}`;
   }
 
-  // Build Keeper abilities section
-  let keeperSection = '';
-  if (character.class?.toLowerCase() === 'keeper') {
-    const keeperParts = [];
-    const keeperTexts = typeof character.keeper_texts === 'string' ? JSON.parse(character.keeper_texts || '[]') : (character.keeper_texts || []);
-    const keeperRecitations = typeof character.keeper_recitations === 'string' ? JSON.parse(character.keeper_recitations || '[]') : (character.keeper_recitations || []);
-
-    if (keeperRecitations.length > 0) {
-      keeperParts.push(`Recitations (at-will): ${keeperRecitations.join(', ')}`);
-    }
-    if (keeperTexts.length > 0) {
-      keeperParts.push(`Library Texts (weapon + Passage each): ${keeperTexts.join(', ')}`);
-    }
-    if (character.keeper_genre_domain) {
-      keeperParts.push(`Genre Domain: ${character.keeper_genre_domain}`);
-    }
-    if (character.keeper_specialization) {
-      keeperParts.push(`Specialization: ${character.keeper_specialization}`);
-    }
-    if (keeperParts.length > 0) {
-      keeperSection = `\n- Keeper Abilities: ${keeperParts.join('; ')}`;
-      keeperSection += `\n  KEEPER RULES: Uses CHA for manifested weapon attacks. Manifest Weapon = bonus action to summon weapon from a text. Each text has a Passage (once per short rest special effect). Recitations are cantrip equivalents (at will). Keeper save DC = 8 + proficiency + CHA mod.${character.level >= 2 ? ' Keeper\'s Study = bonus action to mark a creature as Studied (PB/long rest) — Recitations and weapon attacks deal extra damage to Studied creatures, and Keeper learns one fact about them.' : ''}`;
-    }
-  }
-
   // Split character info into two blocks for prompt-cache stratification:
   //
   //   staticText  — identity that does NOT change during a session: name,
@@ -292,11 +267,11 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
     formatOriginLine(character.origin_setting, character.origin_region, character.origin_explanation, character.race)
       ? `- ${formatOriginLine(character.origin_setting, character.origin_region, character.origin_explanation, character.race)}`
       : null,
-    `- Class: ${character.class}${character.subclass ? ` (${character.subclass})` : ''}${character.keeper_specialization ? ` [${character.keeper_specialization}]` : ''}`,
+    `- Class: ${character.class}${character.subclass ? ` (${character.subclass})` : ''}`,
     `- Level: ${character.level}`,
     `- Background: ${character.background || 'Unknown'}`,
     `- Abilities: STR ${abilities?.str || 10}, DEX ${abilities?.dex || 10}, CON ${abilities?.con || 10}, INT ${abilities?.int || 10}, WIS ${abilities?.wis || 10}, CHA ${abilities?.cha || 10}`,
-    `- Skills: ${skills.length > 0 ? skills.join(', ') : 'None specified'}${featsSection}${spellSection}${keeperSection}`,
+    `- Skills: ${skills.length > 0 ? skills.join(', ') : 'None specified'}${featsSection}${spellSection}`,
     character.alignment ? `- Alignment: ${character.alignment}` : null,
     character.faith ? `- Faith: ${character.faith}` : null,
     character.lifestyle ? `- Lifestyle: ${character.lifestyle}` : null,

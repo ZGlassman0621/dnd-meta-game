@@ -493,8 +493,8 @@ group('(i) Item 23: generated dataset matches the server catalog; bundled fallba
     `generated dataset holds every catalog spell (${generated.spells.length} vs ${catalogKeys.length})`);
   check(JSON.stringify(generatedKeys) === JSON.stringify(catalogKeys),
     'generated spell keys are exactly the catalog keys');
-  check(Object.keys(generated.level1ByClass).length === 23,
-    `generated level1ByClass covers 23 classes (got ${Object.keys(generated.level1ByClass).length})`);
+  check(Object.keys(generated.level1ByClass).length === 22,
+    `generated level1ByClass covers 22 classes (keeper removed 2026-11-25) (got ${Object.keys(generated.level1ByClass).length})`);
   // Per-class L1 numbers agree with the server at every probed mod.
   for (const [cls, info] of Object.entries(generated.level1ByClass)) {
     for (const mod of [-1, 0, 3, 5]) {
@@ -641,13 +641,12 @@ group('(l) Item 29: derived selectionLevel equals the class record; no per-entry
     check(found?.selectionLevel === 3, `${cls}/${key} derives selectionLevel 3 (got ${found?.selectionLevel})`);
   }
   // The class-level exceptions survive derivation: magus/scholar 1.
-  // Keeper has NO registry entries (its data lives elsewhere, no
-  // server file) — nothing to derive, so the keeper 6 is asserted
-  // on the class record alone, not on entries that do not exist.
   check(listSubclasses('magus').every((e) => e.selectionLevel === 1), 'magus entries derive selectionLevel 1');
   check(listSubclasses('scholar').every((e) => e.selectionLevel === 1), 'scholar entries derive selectionLevel 1');
-  check(listSubclasses('keeper').length === 0 && SUBCLASS_LEVELS.keeper === 6,
-    'keeper has no registry entries (pinned gap); the class record still says 6');
+  // Keeper (REMOVED 2026-11-25) has no registry entries and no
+  // SUBCLASS_LEVELS row.
+  check(listSubclasses('keeper').length === 0 && SUBCLASS_LEVELS.keeper === undefined,
+    'keeper has no registry entries and no SUBCLASS_LEVELS row (class removed)');
 }
 
 // (m) Items 10/11 — magus multiclass free (prerequisites removed

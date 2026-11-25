@@ -395,13 +395,9 @@ group('(a) Stage 5 validator (unit)');
   check(monkPartial.ok === true, `monk nested pick missing passes (draft — ${monkPartial.errors.join('; ')})`);
   const monkFull = validateCreatorNextStage5({ creator: MARKER, class: 'monk', gear_choice: 'packages', package_id: 'A', package_picks: J({ toolOrInstrument: { alternative: 0 }, tool: ["Smith's Tools"] }) });
   check(monkFull.ok === true, `monk nested tool pick passes (${monkFull.errors.join('; ')})`);
-  // Grant-once (real resolver): a pick naming an already-granted
-  // item is given once, at the greater quantity — keeper grants
-  // Dagger x2 fixed, so picking Dagger resolves to Dagger x2, not x3.
-  const keeperDup = resolvePackage('keeper', 'A', { c1: { alternative: 1 }, c1b: ['Dagger'], c2: { alternative: 0 } });
-  check(keeperDup.ok === true, `keeper Dagger pick resolves ok (${keeperDup.errors.map((e) => e.message).join('; ')})`);
-  check(keeperDup.items.find((it) => it.name === 'Dagger')?.quantity === 2,
-    `keeper grant-once: Dagger quantity is 2, not 3 (got ${JSON.stringify(keeperDup.items)})`);
+  // Grant-once of a fixed item + the same item picked: pinned with a
+  // fixture in package-resolution.test.js (d). The Keeper package that
+  // pinned it here left with the class (REMOVED 2026-11-25).
   // Same name twice in one count-2 pick SUMS (two physical items).
   const bhDup = resolvePackage('blood_hunter', 'A', { weapons: ['Longsword', 'Longsword'] });
   check(bhDup.ok === true, `blood hunter double Longsword resolves ok (${bhDup.errors.map((e) => e.message).join('; ')})`);

@@ -13376,24 +13376,6 @@
       "spellcastingAbility": null,
       "spellSlots": {}
     },
-    "keeper": {
-      "spellsKnown": null,
-      "spellsPrepared": {
-        "kind": "none",
-        "byMod": {
-          "0": null,
-          "1": null,
-          "2": null,
-          "3": null,
-          "4": null,
-          "5": null,
-          "-1": null
-        }
-      },
-      "cantripsKnown": 0,
-      "spellcastingAbility": null,
-      "spellSlots": {}
-    },
     "magus": {
       "spellsKnown": 0,
       "spellsPrepared": {

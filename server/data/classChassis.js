@@ -33,7 +33,6 @@ export const CLASS_CHASSIS = {
   druid: { skillChoices: 2, skillOptions: ['Arcana', 'Animal Handling', 'Insight', 'Medicine', 'Nature', 'Perception', 'Religion', 'Survival'] },
   duelist: { skillChoices: 3, skillOptions: ['Acrobatics', 'Animal Handling', 'Athletics', 'Persuasion', 'Insight', 'Perception', 'Deception', 'Sleight of Hand'] },
   fighter: { skillChoices: 2, skillOptions: ['Acrobatics', 'Animal Handling', 'Athletics', 'History', 'Insight', 'Intimidation', 'Perception', 'Persuasion', 'Survival'] },
-  keeper: { skillChoices: 3, skillOptions: ['Arcana', 'Deception', 'History', 'Insight', 'Investigation', 'Perception', 'Performance', 'Persuasion'] },
   magus: { skillChoices: 1, skillOptions: ['Acrobatics', 'Arcana', 'Athletics', 'History', 'Insight', 'Investigation', 'Perception'] },
   monk: { skillChoices: 2, skillOptions: ['Acrobatics', 'Athletics', 'History', 'Insight', 'Religion', 'Stealth'] },
   paladin: { skillChoices: 2, skillOptions: ['Athletics', 'Insight', 'Intimidation', 'Medicine', 'Persuasion', 'Religion'] },

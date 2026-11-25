@@ -28,7 +28,7 @@ const LIFESTYLES = [
 
 const ALL_CLASSES = [
   'Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid',
-  'Fighter', 'Keeper', 'Monk', 'Paladin', 'Ranger', 'Rogue',
+  'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue',
   'Sorcerer', 'Warlock', 'Wizard'
 ]
 

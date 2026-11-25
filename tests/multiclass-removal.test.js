@@ -93,7 +93,9 @@ assert.equal(F.needsSubclassSelection('magus', 1), true);
 assert.equal(F.needsSubclassSelection('scholar', 1), true);
 assert.equal(F.needsSubclassSelection('wizard', 1), false);
 
-// --- 6. Client static guards: list + hit dice cover all 23 ---
+// --- 6. Client static guards: list + hit dice cover all 23 but the
+// REMOVED keeper (2026-11-25; the server route filters it from the
+// multiclass options, and levelProgression keeps its data) ---
 assert.ok(levelUpSrc.includes('Object.keys(classesData)'),
   'ALL_CLASSES is derived from classes.json keys, not a hardcoded 14');
 assert.ok(!levelUpSrc.includes("'Sorcerer', 'Warlock', 'Wizard'\n]"),
@@ -103,8 +105,9 @@ assert.ok(hitDiceBlock, 'HIT_DICE block found in LevelUpPage.jsx');
 const clientDice = Object.fromEntries(
   [...hitDiceBlock[1].matchAll(/([a-z_]+):\s*(\d+)/g)].map((m) => [m[1], Number(m[2])]),
 );
-assert.equal(Object.keys(clientDice).length, 23, 'client HIT_DICE covers all 23 classes');
-for (const cls of ALL_23) {
+assert.equal(Object.keys(clientDice).length, 22, 'client HIT_DICE covers the 22 live classes');
+assert.ok(!('keeper' in clientDice), 'client HIT_DICE has no keeper (class removed)');
+for (const cls of ALL_23.filter((c) => c !== 'keeper')) {
   assert.equal(clientDice[cls], F.HIT_DICE[cls],
     `client HIT_DICE.${cls} (${clientDice[cls]}) matches server (${F.HIT_DICE[cls]})`);
 }

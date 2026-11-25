@@ -34,7 +34,7 @@ import {
   WARLORD_MULTICLASS_GRANT,
   isCastingSubclass
 } from '../config/levelProgression.js';
-import { validateClassSubclass, KNOWN_CLASSES, isClassPcCreatable, MVP_DEFERRED_CLASS_NOTE } from '../services/classValidationService.js';
+import { validateClassSubclass, KNOWN_CLASSES, isClassPcCreatable, isClassRemoved, classUnavailableNote, REMOVED_CLASS_NOTE } from '../services/classValidationService.js';
 import { isPcCreatable, resolveSpecies, resolvedASIFor, innateSpellsFor, allowedSizesFor, walkSpeedFor, MVP_DEFERRED_NOTE, isOutsideFRSetting } from '../services/speciesService.js';
 import { canLearnSpell, canonicalizeSpellName } from '../services/spellSelectionService.js';
 import { validatePreparedSpells, plansKnownForLevel, plansAvailableAtLevel, MULTI_LEARN_PLANS, learnPlan, loadArtificerState, saveArtificerState } from '../services/artificerService.js';
@@ -119,19 +119,17 @@ import { SPELL_DATA_ENTRIES } from '../data/spellCatalogData.js';
 //   - a subclass sent for a class that does not choose one at level 1
 //     (subclassId) — after the 6-note polish, Stage 2 only collects
 //     a subclass for level-1 classes (magus, scholar, warlord);
-//     everyone else picks at level 3 (level 6 for keeper).
+//     everyone else picks at level 3.
 // No species/class consistency rule exists in this game (any species
 // can be any class), so none is checked here. Cantrips are not
 // validated here either — the spell-gating hook is a separate
 // follow-up; Stage 2 saves do not send cantrips yet.
 const CREATOR_NEXT_KNOWN_CLASSES = [
   ...KNOWN_CLASSES,
-  // Client-offered classes whose subclasses are not server-registered
-  // (keeper: subclassLevel 6). Stage 2 never collects a subclass for
-  // them, so only the class check can fire — refusing them here would
-  // break drafts the client legitimately offers. Their subclasses
-  // stay unverifiable until the registry covers them (a separate data
-  // build). Warlord's 8 Presences ARE registered (2026-11-06,
+  // Keeper was on this list until 2026-11-25, when it was REMOVED
+  // from the game (classValidationService.js REMOVED_CLASSES); it is
+  // no longer a known class here, and the POST/PUT class guard
+  // refuses it with 400. Warlord's 8 Presences ARE registered (2026-11-06,
   // gaps-batch item 8b — it is in KNOWN_CLASSES via NEW_BASE_CLASSES
   // and the client picks at level 1); its entry below is now
   // redundant belt-and-braces, kept so the extension list still
@@ -139,7 +137,7 @@ const CREATOR_NEXT_KNOWN_CLASSES = [
   // obvious way. Blood_hunter was on this list until 2026-11-06,
   // when its 4 Orders were registered and it joined KNOWN_CLASSES
   // (classValidationService.js).
-  'keeper', 'warlord',
+  'warlord',
 ];
 
 // Creator-next subclass levels (2026-11-05, 2024-accuracy audit of all
@@ -1226,7 +1224,7 @@ export function validateCreatorNextStage4(body = {}, ctx = {}) {
     const knownRaw = body.known_spells ?? body.knownSpells ?? null;
     const prepRaw = body.prepared_spells ?? body.preparedSpells ?? null;
     if (!isKnownCaster && !isPreparedCaster) {
-      // Non-caster at level 1 (incl. keeper, blood_hunter, warlord,
+      // Non-caster at level 1 (incl. blood_hunter, warlord,
       // warden/scholar before their casting subclass casts at 3rd):
       // any spell pick is a refusal, without calling canLearnSpell
       // (which fails closed / unknown-class for these anyway).
@@ -2518,7 +2516,7 @@ export async function validateCreatorNextStage6(merged = {}, ctx = {}) {
     // for edit-mode commits — a deferred class or subclass is
     // refused at Review even if the draft predates the gray-out.
     if (!isClassPcCreatable(cls)) {
-      errors.push(`classId: Class ${displayClassName(cls)} is not available for player characters yet — ${MVP_DEFERRED_CLASS_NOTE}`);
+      errors.push(`classId: ${classRefusalText(cls)}`);
     } else if (SUBCLASS_LEVELS[cls] === 1 && !subclass) {
       errors.push(`subclassId: ${cls} chooses its subclass at level 1 — pick one at Review`);
     }
@@ -3144,10 +3142,14 @@ function displayClassName(raw) {
 function classScopeRefusal(cls) {
   const norm = String(cls || '').trim().toLowerCase();
   if (!norm || norm === 'creating' || norm === 'prelude') return null;
-  if (!isClassPcCreatable(norm)) {
-    return `Class ${displayClassName(norm)} is not available for player characters yet — ${MVP_DEFERRED_CLASS_NOTE}`;
-  }
+  if (!isClassPcCreatable(norm)) return classRefusalText(norm);
   return null;
+}
+// The refusal text for a class that is not PC-creatable: a removed
+// class (keeper, 2026-11-25) says so; a deferred one keeps the MVP note.
+function classRefusalText(cls) {
+  if (isClassRemoved(cls)) return `Class ${displayClassName(cls)} — ${REMOVED_CLASS_NOTE}`;
+  return `Class ${displayClassName(cls)} is not available for player characters yet — ${classUnavailableNote(cls)}`;
 }
 function subclassScopeRefusal(cls, sub) {
   if (sub == null || !String(sub).trim()) return null;
@@ -6826,7 +6828,9 @@ router.get('/level-up-info/:id', async (req, res) => {
 
     // Option 2: Multiclass into new classes (all available —
     // prerequisites removed 2026-11-08, all classes multiclass freely)
-    const availableMulticlasses = getAvailableMulticlassOptions(classLevels);
+    // A removed class (keeper, 2026-11-25) is not offered at all.
+    const availableMulticlasses = getAvailableMulticlassOptions(classLevels)
+      .filter((c) => !isClassRemoved(c));
 
     // Always show multiclass options — every class is offered (minus
     // held ones); deferred classes stay listed but flagged
@@ -6848,7 +6852,7 @@ router.get('/level-up-info/:id', async (req, res) => {
         // POST /level-up guard below is the enforcement; this flag
         // is display only.
         pcCreatable: isClassPcCreatable(newClass),
-        pcCreatableNote: isClassPcCreatable(newClass) ? null : MVP_DEFERRED_CLASS_NOTE,
+        pcCreatableNote: isClassPcCreatable(newClass) ? null : classUnavailableNote(newClass),
         newFeatures,
         // Magus (2026-11-06, item 10; prerequisites removed
         // 2026-11-08): the per-society requirement fields are gone
@@ -7118,6 +7122,13 @@ router.post('/level-up/:id', async (req, res) => {
     // the same way (Q12): the newly-sent subclass is judged against
     // the target class, so a fighter 2->3 picking Monster Hunter and
     // a monk 2->3 picking Warrior of Waves both 400 here.
+    // A REMOVED class (keeper, 2026-11-25) is refused on every
+    // level-up, held or new: the class is out of the game, and its
+    // level-up branch (texts, recitations, genre, specialization) was
+    // removed with it.
+    if (isClassRemoved(targetClassName)) {
+      return res.status(400).json({ error: classRefusalText(targetClassName) });
+    }
     if (isMulticlass) {
       const levelUpClassRefusal = classScopeRefusal(targetClassName);
       if (levelUpClassRefusal) {
@@ -7876,31 +7887,6 @@ router.post('/level-up/:id', async (req, res) => {
       }
     }
 
-    // Keeper-specific pending writes
-    const keeperWrites = {};
-    if (targetClassName === 'keeper') {
-      const { keeperGenreDomain, keeperNewTexts, keeperNewRecitations, keeperSpecialization,
-              keeperSecondGenre, keeperGenreMastery, keeperSubclassText } = req.body;
-
-      if (keeperGenreDomain) keeperWrites.genre_domain = keeperGenreDomain;
-      if (keeperSecondGenre) keeperWrites.genre_domain_2 = keeperSecondGenre;
-      if (keeperGenreMastery) keeperWrites.genre_mastery = 1;
-
-      const allNewTexts = [...(keeperNewTexts || [])];
-      if (keeperSubclassText) allNewTexts.push(keeperSubclassText);
-      if (allNewTexts.length > 0) {
-        const existingTexts = safeParse(character.keeper_texts, []);
-        keeperWrites.texts = JSON.stringify([...new Set([...existingTexts, ...allNewTexts])]);
-      }
-
-      if (keeperNewRecitations && Array.isArray(keeperNewRecitations) && keeperNewRecitations.length > 0) {
-        const existingRec = safeParse(character.keeper_recitations, []);
-        keeperWrites.recitations = JSON.stringify([...new Set([...existingRec, ...keeperNewRecitations])]);
-      }
-
-      if (keeperSpecialization) keeperWrites.specialization = keeperSpecialization;
-    }
-
     // Compute final character fields
     const newXPToNextLevel = getXPToNextLevel(newTotalLevel);
     const hitDiceBreakdown = getHitDiceBreakdown(classLevels);
@@ -7911,7 +7897,7 @@ router.post('/level-up/:id', async (req, res) => {
     // ==== Transactional write phase ====
     // All writes happen inside a single transaction. If any write fails, all are
     // rolled back — no more orphaned state where cantrips got added but the level
-    // didn't, or Keeper specialization changed but the HP didn't update.
+    // didn't, or a subclass changed but the HP didn't update.
     const tx = await db.transaction('write');
     try {
       if (pendingFeatsJson !== null) {
@@ -7938,43 +7924,6 @@ router.post('/level-up/:id', async (req, res) => {
           args: [pendingPreparedSpellsJson, req.params.id]
         });
       }
-      if (keeperWrites.genre_domain) {
-        await tx.execute({
-          sql: 'UPDATE characters SET keeper_genre_domain = ? WHERE id = ?',
-          args: [keeperWrites.genre_domain, req.params.id]
-        });
-      }
-      if (keeperWrites.genre_domain_2) {
-        await tx.execute({
-          sql: 'UPDATE characters SET keeper_genre_domain_2 = ? WHERE id = ?',
-          args: [keeperWrites.genre_domain_2, req.params.id]
-        });
-      }
-      if (keeperWrites.genre_mastery) {
-        await tx.execute({
-          sql: 'UPDATE characters SET keeper_genre_mastery = 1 WHERE id = ?',
-          args: [req.params.id]
-        });
-      }
-      if (keeperWrites.texts) {
-        await tx.execute({
-          sql: 'UPDATE characters SET keeper_texts = ? WHERE id = ?',
-          args: [keeperWrites.texts, req.params.id]
-        });
-      }
-      if (keeperWrites.recitations) {
-        await tx.execute({
-          sql: 'UPDATE characters SET keeper_recitations = ? WHERE id = ?',
-          args: [keeperWrites.recitations, req.params.id]
-        });
-      }
-      if (keeperWrites.specialization) {
-        await tx.execute({
-          sql: 'UPDATE characters SET keeper_specialization = ? WHERE id = ?',
-          args: [keeperWrites.specialization, req.params.id]
-        });
-      }
-
       // Main character update (level, HP, class_levels, etc.)
       await tx.execute({
         sql: `UPDATE characters

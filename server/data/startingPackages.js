@@ -47,9 +47,11 @@
 //     gold 5d4x10 = 125 (positive control in gold-baselines.md).
 //   - warlord: KibblesTasty's Warlord v1.5 PDF choices (matches live
 //     classes.json); gold 5d4x10 = 125.
-//   - artificer, keeper: NO staging fragment and no source re-verified
+//   - artificer: NO staging fragment and no source re-verified
 //     this job — live classes.json used as-is and FLAGGED in the staging
-//     note (packages.md). Do not treat these two as source-verified.
+//     note (packages.md). Do not treat it as source-verified. (Keeper
+//     had a package here too until the class was REMOVED 2026-11-25;
+//     its startingEquipment is kept in client/src/data/keeperClass.json.)
 //
 // NAME NORMALISATION (chapter wins): "Leather Armor" -> "Leather",
 // "Studded Leather Armor" -> "Studded Leather", "20 Arrows" ->
@@ -100,7 +102,6 @@ export const GOLD_SOURCES = {
   blackguard: 'Libris Mortis 5e Conversion',
   blood_hunter: 'Blood Hunter 2024 (GM Binder fan conversion)',
   duelist: 'Duelist Class Overview',
-  keeper: 'classes.json (no fragment; source not re-verified this job)',
   magus: 'Magus Class',
   pugilist: 'Pugilist Class',
   scholar: 'Scholar Class',
@@ -472,32 +473,6 @@ export const STARTING_PACKAGES = {
       },
     ],
     goldOption: 125,
-  },
-  keeper: {
-    options: [
-      {
-        id: 'A',
-        gold: 0,
-        items: [
-          {
-            key: 'c1', choose: 1, count: 1, label: 'Weapon',
-            from: [
-              [{ name: 'Shortsword', quantity: 1 }],
-              [{ key: 'c1b', choose: 1, count: 1, label: 'Simple Weapon', from: 'any_simple_weapon' }],
-            ],
-          },
-          {
-            key: 'c2', choose: 1, count: 1, label: 'Pack',
-            from: [{ name: "Scholar's Pack", quantity: 1 }, { name: "Explorer's Pack", quantity: 1 }],
-          },
-          { name: 'Leather', quantity: 1 },
-          { name: "Calligrapher's Supplies", quantity: 1 },
-          { name: 'A Worn Leather-Bound Journal', quantity: 1 },
-          { name: 'Dagger', quantity: 2 },
-        ],
-      },
-    ],
-    goldOption: 100,
   },
   magus: {
     options: [

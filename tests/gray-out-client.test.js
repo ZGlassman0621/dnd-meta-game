@@ -8,7 +8,7 @@
 // What this pins:
 //   - classes.json carries pcCreatable: false + the Q7 note on the
 //     three class entries and the one subclass entry (dual-source
-//     flag, Q2/Q9); 23 classes still listed; the Q10 rename leaves
+//     flag, Q2/Q9); 22 classes listed (keeper REMOVED 2026-11-25); the Q10 rename leaves
 //     no 'Way of Waves' string in classes.json.
 //   - Stage2ClassCalling renders the three classes as disabled
 //     <option>s (R2-7, 2026-11-09: the Q7 banner/help line under the
@@ -227,7 +227,7 @@ function companionOverrides() {
 function classesJsonFailures(data, raw) {
   const failures = [];
   const fail = (cond, msg) => { if (!cond) failures.push(msg); };
-  fail(Object.keys(data).length === 23, `classes.json lists 23 classes (got ${Object.keys(data).length})`);
+  fail(Object.keys(data).length === 22, `classes.json lists 22 classes (got ${Object.keys(data).length})`);
   for (const key of DEFERRED_CLASSES) {
     fail(data[key]?.pcCreatable === false, `classes.json: ${key} carries pcCreatable: false`);
     fail(data[key]?.pcCreatableNote === CLASS_NOTE, `classes.json: ${key} carries the Q7 class note`);
@@ -263,14 +263,14 @@ function stage2Failures(tree) {
   fail(!!select, 'Stage2 render: the #stage2-class select is present (render precondition)');
   if (!select) return failures;
   const opts = optionsOf(select);
-  fail(opts.length === 24, `Stage2 render: 24 options (placeholder + 23 classes, got ${opts.length})`);
+  fail(opts.length === 23, `Stage2 render: 23 options (placeholder + 22 classes, got ${opts.length})`);
   for (const key of DEFERRED_CLASSES) {
     const opt = opts.find((o) => o.props.value === key);
     fail(opt?.props.disabled === true, `Stage2 render: ${key} option is disabled`);
   }
   const others = opts.filter((o) => o.props.value && !DEFERRED_CLASSES.includes(o.props.value));
-  fail(others.length === 20 && others.every((o) => o.props.disabled !== true),
-    `Stage2 render: the other 20 class options stay enabled (got ${others.length} others, ${others.filter((o) => o.props.disabled === true).length} disabled)`);
+  fail(others.length === 19 && others.every((o) => o.props.disabled !== true),
+    `Stage2 render: the other 19 class options stay enabled (got ${others.length} others, ${others.filter((o) => o.props.disabled === true).length} disabled)`);
   const helps = helpTexts(tree);
   // R2-7 (2026-11-09): the Q7 banner/help line under the select is
   // deleted — no rendered help line may carry the note. The one-line
@@ -373,7 +373,7 @@ group('(b) Stage2 class picker (true render)');
       'bundled Stage2 contains the Q7 class note');
     const Stage2 = await importBundle(path.join(tmpDir, 'stage2.bundle.mjs'));
     const tree = renderComponent(Stage2, stage2Props(stage2BaseState));
-    reportFailures('Stage2 render: 3 deferred classes disabled, 23 listed, note visible', stage2Failures(tree));
+    reportFailures('Stage2 render: 3 deferred classes disabled, 22 listed, note visible', stage2Failures(tree));
     // Draft edge: a draft saved before the gray-out keeps its stored
     // classId selected — the select still shows the disabled option
     // as its value; nothing here clears it.

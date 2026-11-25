@@ -20,7 +20,7 @@
 //   unverified Forgewright/Warsmith and omits Cartographer) is
 //   therefore never treated as registry truth by this service.
 // - Homebrew classes.json classes with no server registry
-//   (keeper, pugilist) are reported as outside the server
+//   (pugilist, historically; keeper is now REMOVED, below) are reported as outside the server
 //   registry, not as "invalid classes" in general — the
 //   distinction matters because the shared POST route
 //   historically accepts any class string. Warlord left this
@@ -68,16 +68,42 @@ export const MVP_DEFERRED_CLASSES = new Set(['magus', 'blackguard', 'scholar']);
 
 export const MVP_DEFERRED_CLASS_NOTE = 'Coming after the MVP — NPCs can still be this class.';
 
+// REMOVED classes (Zach, 2026-11-25, class-audit amendment to item 9):
+// the Keeper is out of the game. Its design documents are lost and
+// its 8 genre-bonus texts exist nowhere. Unlike the MVP-deferred set
+// it is NOT offered anywhere (client classes.json no longer lists it)
+// and the server refuses it for player characters (400). Its data is
+// deliberately kept in the repo, unwired, so it can come back:
+// client/src/data/keeperTexts.js, client/src/data/keeperClass.json
+// (the former classes.json entry: genre domains, subclasses,
+// keeperAbilities, polymath track), levelProgression
+// KEEPER_PROGRESSION + its keeper rows, migration 020_keeper_class
+// and the keeper_* DB columns. Bringing it back is deleting it from
+// this set, re-adding the client entry, and restoring the level-up /
+// DM-prompt branches from the git history of this change.
+export const REMOVED_CLASSES = new Set(['keeper']);
+
+export const REMOVED_CLASS_NOTE = 'This class has been removed from the game.';
+
+export function isClassRemoved(classId) {
+  return REMOVED_CLASSES.has(String(classId || '').trim().toLowerCase());
+}
+
 /**
  * Is this class pick creatable as a player character in the MVP?
  * Unknown classes stay creatable — the v1 no-rejection rule
  * (character.js has historically accepted any class string);
- * only known deferred classes refuse.
+ * only known deferred classes and removed classes refuse.
  */
 export function isClassPcCreatable(classId) {
   const cls = String(classId || '').trim().toLowerCase();
   if (!cls) return true;
-  return !MVP_DEFERRED_CLASSES.has(cls);
+  return !MVP_DEFERRED_CLASSES.has(cls) && !REMOVED_CLASSES.has(cls);
+}
+
+/** The refusal note for a class that is not PC-creatable. */
+export function classUnavailableNote(classId) {
+  return isClassRemoved(classId) ? REMOVED_CLASS_NOTE : MVP_DEFERRED_CLASS_NOTE;
 }
 
 function norm(value) {
@@ -126,4 +152,4 @@ export function validateClassSubclass({ classId = null, subclassId = null } = {}
   };
 }
 
-export default { validateClassSubclass, REGISTRY_CLASSES, KNOWN_CLASSES, MVP_DEFERRED_CLASSES, MVP_DEFERRED_CLASS_NOTE, isClassPcCreatable };
+export default { validateClassSubclass, REGISTRY_CLASSES, KNOWN_CLASSES, MVP_DEFERRED_CLASSES, MVP_DEFERRED_CLASS_NOTE, isClassPcCreatable, REMOVED_CLASSES, REMOVED_CLASS_NOTE, isClassRemoved, classUnavailableNote };

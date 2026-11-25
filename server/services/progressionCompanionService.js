@@ -37,8 +37,7 @@ const CLASS_TO_THEME = {
   monk: 'hermit',
   druid: 'hermit',
   bard: 'entertainer',
-  artificer: 'guild_artisan',
-  keeper: 'hermit'
+  artificer: 'guild_artisan'
 };
 
 export function mapCompanionClassToTheme(className) {

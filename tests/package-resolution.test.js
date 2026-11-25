@@ -101,8 +101,6 @@ group('(b) Non-PHB 11 options present');
       [{ name: 'Studded Leather', quantity: 1 }, { name: 'Longsword', quantity: 1 }, { name: 'Battleaxe', quantity: 1 }, { name: 'Light Crossbow', quantity: 1 }, { name: 'Crossbow Bolts (20)', quantity: 1 }, { name: "Alchemist's Supplies", quantity: 1 }, { name: "Explorer's Pack", quantity: 1 }], 8],
     ['duelist', { c1: { alternative: 2 }, c2: { alternative: 0 }, c3: { alternative: 1 }, gamingSet: ['Dragonchess'] },
       [{ name: 'Sabre', quantity: 1 }, { name: 'Chain Shirt', quantity: 1 }, { name: "Dungeoneer's Pack", quantity: 1 }, { name: 'Dagger', quantity: 5 }, { name: 'Dragonchess', quantity: 1 }], 0],
-    ['keeper', { c1: { alternative: 0 }, c2: { alternative: 1 } },
-      [{ name: 'Shortsword', quantity: 1 }, { name: "Explorer's Pack", quantity: 1 }, { name: 'Leather', quantity: 1 }, { name: "Calligrapher's Supplies", quantity: 1 }, { name: 'A Worn Leather-Bound Journal', quantity: 1 }, { name: 'Dagger', quantity: 2 }], 0],
     ['magus', { c1: { alternative: 2 }, c2: { alternative: 1 }, c3: { alternative: 0 }, c3a: { alternative: 3 } },
       [{ name: 'Longbow', quantity: 1 }, { name: 'Arrows (20)', quantity: 1 }, { name: 'Scale Mail', quantity: 1 }, { name: 'Staff', quantity: 1 }, { name: "Explorer's Pack", quantity: 1 }], 0],
     ['magus', { c1: { alternative: 0 }, c1a: ['Spear'], c2: { alternative: 0 }, c3: { alternative: 1 }, c3b: { alternative: 1 } },
@@ -136,8 +134,10 @@ group('(b) Non-PHB 11 options present');
     expectItems(r.items, items, `${cls} A items`);
     check(r.gold === gold, `${cls} A gold ${r.gold} === ${gold}`);
   }
-  // Every class has at least one option; 23 classes total.
-  check(Object.keys(STARTING_PACKAGES).length === 23, `23 classes in STARTING_PACKAGES (got ${Object.keys(STARTING_PACKAGES).length})`);
+  // Every class has at least one option; 22 classes total (keeper
+  // REMOVED from the game 2026-11-25 — no package).
+  check(!('keeper' in STARTING_PACKAGES), 'keeper has no starting package (class removed)');
+  check(Object.keys(STARTING_PACKAGES).length === 22, `22 classes in STARTING_PACKAGES (got ${Object.keys(STARTING_PACKAGES).length})`);
   for (const [cls, pkg] of Object.entries(STARTING_PACKAGES)) {
     check(pkg.options.length >= 1, `${cls} has >= 1 option`);
     check(pkg.options.every((o) => typeof o.gold === 'number'), `${cls} options all carry a gold number`);
@@ -145,8 +145,8 @@ group('(b) Non-PHB 11 options present');
 }
 
 // ------------------------------------------------------------------ (c)
-// The six gold-silent classes have null goldOptions; the other 17 have values.
-group('(c) Gold options: six null, seventeen valued');
+// The six gold-silent classes have null goldOptions; the other 16 have values.
+group('(c) Gold options: six null, sixteen valued');
 {
   const nulls = ['blackguard', 'magus', 'pugilist', 'scholar', 'spellshot', 'warden'];
   for (const cls of nulls) {
@@ -155,7 +155,7 @@ group('(c) Gold options: six null, seventeen valued');
   const valued = {
     barbarian: 75, bard: 90, cleric: 110, druid: 50, fighter: 155, monk: 50,
     paladin: 150, ranger: 150, rogue: 100, sorcerer: 50, warlock: 100, wizard: 55,
-    artificer: 125, blood_hunter: 100, duelist: 125, keeper: 100, warlord: 125,
+    artificer: 125, blood_hunter: 100, duelist: 125, warlord: 125,
   };
   for (const [cls, gold] of Object.entries(valued)) {
     check(STARTING_PACKAGES[cls].goldOption === gold, `${cls} goldOption ${STARTING_PACKAGES[cls].goldOption} === ${gold}`);
@@ -172,13 +172,31 @@ group('(c) Gold options: six null, seventeen valued');
 // Dedup: an item in both a choice and the given list is granted once.
 group('(d) Dedup (choice + given granted once)');
 {
-  // Keeper is given two daggers; picking Dagger as the simple weapon
-  // must not add a second Dagger row — one row, greater quantity wins.
-  const r = resolvePackage('keeper', 'A', { c1: { alternative: 1 }, c1b: ['Dagger'], c2: { alternative: 0 } });
-  check(r.ok, `keeper dagger-pick resolves ok (errors: ${JSON.stringify(r.errors)})`);
+  // A package that GIVES two daggers; picking Dagger as the simple
+  // weapon must not add a second Dagger row — one row, greater
+  // quantity wins. The live data used to pin this with the Keeper
+  // package; no remaining class gives an item it also offers as a
+  // pick, so a fixture package (the old Keeper option A shape) is
+  // registered for this check and removed after it.
+  STARTING_PACKAGES.__dedup_fixture__ = {
+    options: [{
+      id: 'A', gold: 0,
+      items: [
+        { key: 'c1', choose: 1, count: 1, label: 'Weapon', from: [
+          [{ name: 'Shortsword', quantity: 1 }],
+          [{ key: 'c1b', choose: 1, count: 1, label: 'Simple Weapon', from: 'any_simple_weapon' }],
+        ] },
+        { name: 'Dagger', quantity: 2 },
+      ],
+    }],
+    goldOption: null,
+  };
+  const r = resolvePackage('__dedup_fixture__', 'A', { c1: { alternative: 1 }, c1b: ['Dagger'] });
+  delete STARTING_PACKAGES.__dedup_fixture__;
+  check(r.ok, `fixture dagger-pick resolves ok (errors: ${JSON.stringify(r.errors)})`);
   const daggers = r.items.filter((i) => i.name === 'Dagger');
-  check(daggers.length === 1, `keeper Dagger appears once (got ${daggers.length} rows)`);
-  check(daggers[0]?.quantity === 2, `keeper Dagger quantity is 2, not 2+1 (got ${daggers[0]?.quantity})`);
+  check(daggers.length === 1, `fixture Dagger appears once (got ${daggers.length} rows)`);
+  check(daggers[0]?.quantity === 2, `fixture Dagger quantity is 2, not 2+1 (got ${daggers[0]?.quantity})`);
   // Same for a fixed-item overlap: warlock has no overlap, so pin the
   // rule a second way — blood hunter picking a weapon twice in one
   // count-2 pick still yields one row with quantity 2.

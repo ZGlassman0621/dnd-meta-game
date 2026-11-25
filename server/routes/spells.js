@@ -79,13 +79,13 @@ import {
   spellcastingAbilityFor,
 } from '../config/levelProgression.js';
 
-// Classes the creator offers whose subclasses are not
-// server-registered (blood_hunter, warlord: subclassLevel 3;
-// keeper: 6). Same extension as CREATOR_NEXT_KNOWN_CLASSES in
-// routes/character.js: Stage 2 never collects a subclass for them,
-// and this route must still answer for them (with an empty list —
-// none of the three can pick spells at level 1).
-const SPELL_ROUTE_KNOWN_CLASSES = new Set([...KNOWN_CLASSES, 'blood_hunter', 'keeper', 'warlord']);
+// Classes the creator offers beyond the spread (blood_hunter,
+// warlord: subclassLevel 3). Same extension as
+// CREATOR_NEXT_KNOWN_CLASSES in routes/character.js: this route must
+// still answer for them (with an empty list — neither can pick
+// spells at level 1). Keeper was here until it was REMOVED from the
+// game (2026-11-25); it now gets the unknown-class 400.
+const SPELL_ROUTE_KNOWN_CLASSES = new Set([...KNOWN_CLASSES, 'blood_hunter', 'warlord']);
 
 function titleCaseSpellKey(key) {
   return String(key || '')

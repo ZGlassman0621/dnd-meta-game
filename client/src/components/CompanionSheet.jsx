@@ -1426,7 +1426,7 @@ function ConvertToClassModal({ companion, onClose, onConvert }) {
 
   const classes = [
     'Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid',
-    'Fighter', 'Keeper', 'Monk', 'Paladin', 'Ranger', 'Rogue',
+    'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue',
     'Sorcerer', 'Warlock', 'Wizard'
   ]
 

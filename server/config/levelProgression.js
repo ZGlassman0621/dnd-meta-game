@@ -935,8 +935,7 @@ const CLASS_FEATURES = {
 // Subclass selection levels by class — 2024 PHB: every PHB class chooses
 // its subclass at 3rd level (druid included; the 2014 rule had druid at
 // 2nd, cleric/sorcerer/warlock at 1st, wizard at 2nd). Magus/scholar stay
-// 1st (their own books print the choice at 1st); keeper stays 6th (its
-// class table prints Specialization at 6th); warlord is 1st (KibblesTasty
+// 1st (their own books print the choice at 1st); warlord is 1st (KibblesTasty
 // Warlord v1.5 prints the Presence choice at 1st — gaps-batch item 8b,
 // 2026-11-06; coordinator ruling: the 2024 3rd-level rule covers PHB
 // classes only, third-party classes follow their own books).
@@ -957,7 +956,9 @@ const SUBCLASS_LEVELS = {
   warlock: 3,
   wizard: 3,
   artificer: 3,
-  keeper: 6,
+  // keeper (6th) left this table 2026-11-25: the class was REMOVED
+  // (classValidationService REMOVED_CLASSES); subclassLevel 6 is kept
+  // in client/src/data/keeperClass.json.
   spellshot: 3,
   warden: 3,
   magus: 1,

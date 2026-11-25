@@ -145,7 +145,10 @@ group('Class descriptions are PHB-style, no mechanics (polish note 3)');
 {
   const classes = (await import(svc('client/src/data/classes.json'), { with: { type: 'json' } })).default;
   const stage2Src = fs.readFileSync(path.join(REPO, 'client/src/components/creator-next/Stage2ClassCalling.jsx'), 'utf8');
-  ok(Object.keys(classes).length === 23, `classes.json holds 23 classes (${Object.keys(classes).length})`);
+  // 22 since the Keeper was REMOVED (2026-11-25); its entry lives,
+  // unwired, in client/src/data/keeperClass.json.
+  ok(Object.keys(classes).length === 22, `classes.json holds 22 classes (${Object.keys(classes).length})`);
+  ok(!('keeper' in classes), 'classes.json no longer lists keeper (class removed)');
   const banned = ['NOT a paladin subclass', 'mutual exclusion', 'Channel Divinity', 'wires only', 'No spellcasting is stated', 'Vice', 'Hit die', 'Saving throws', 'Primary ability', 'Cantrips known'];
   for (const [id, c] of Object.entries(classes)) {
     const desc = c.description || '';
@@ -198,15 +201,14 @@ group('Subclass picker only for level-1 classes (polish note 6 + 2024 audit)');
   // EVERY PHB class's subclass choice at 3rd level — including druid
   // (the "druid at 2nd" line was the 2014 rule, not 2024) — and the
   // registry's own PHB entries/headers agree. Magus/scholar stay 1st
-  // (their own books print the choice at 1st); keeper stays 6th (its
-  // class table prints Specialization at 6th); warlord is 1st
+  // (their own books print the choice at 1st); warlord is 1st
   // (KibblesTasty Warlord v1.5 prints the Presence choice at 1st —
   // corrected 2026-11-06, gaps-batch item 8b, from the old
   // display-only 3). This map is the
   // regression guard for every class whose level did NOT change.
   const EXPECTED_2024 = {
     artificer: 3, barbarian: 3, bard: 3, blackguard: 3, blood_hunter: 3,
-    cleric: 3, druid: 3, duelist: 3, fighter: 3, keeper: 6, magus: 1,
+    cleric: 3, druid: 3, duelist: 3, fighter: 3, magus: 1,
     monk: 3, paladin: 3, pugilist: 3, ranger: 3, rogue: 3, scholar: 1,
     sorcerer: 3, spellshot: 3, warden: 3, warlock: 3, warlord: 1,
     wizard: 3,
@@ -234,9 +236,9 @@ group('Subclass picker only for level-1 classes (polish note 6 + 2024 audit)');
   }
   // Classes outside the progression table derive from their own
   // classes.json first subclass feature (the class source's table);
-  // keeper cross-checks both sources at once (6 in each). Warlord
-  // left this list with the staged patch (SUBCLASS_LEVELS warlord: 1).
-  for (const id of ['blood_hunter', 'keeper']) {
+  // Warlord left this list with the staged patch (SUBCLASS_LEVELS
+  // warlord: 1); keeper left it when the class was REMOVED.
+  for (const id of ['blood_hunter']) {
     const firstLevels = classes[id].subclasses.map(s => Math.min(...Object.keys(s.featuresByLevel || {}).map(Number)));
     const level = Math.min(...firstLevels);
     ok(classes[id].subclassLevel === level, `${id} subclassLevel ${classes[id].subclassLevel} matches its first subclass feature (level ${level})`);

@@ -133,7 +133,7 @@ const KNOWN_NONCASTERS = new Set([
 
 const KNOWN_CLASSES = new Set([
   ...EXISTING_SLOT_CLASSES, ...KNOWN_NONCASTERS,
-  'spellshot', 'magus', 'blackguard', 'scholar', 'warden', 'keeper',
+  'spellshot', 'magus', 'blackguard', 'scholar', 'warden',
   'blood_hunter',
 ]);
 
@@ -297,13 +297,6 @@ export function canLearnSpell({
         + ` (spells learned at fighter levels ${ELDRITCH_KNIGHT_ANY_SCHOOL_LEVELS.join(', ')} may be any school, but those picks require learning history this service does not take)`);
     }
     return { ok: true, reason: null, spell: display };
-  }
-
-  // ---- Keeper: known to the engine but has no slot table in
-  // getSpellSlots (its progression is KEEPER_PROGRESSION, not
-  // slots). Fail closed rather than inventing a table.
-  if (key === 'keeper') {
-    return fail(display, 'Keeper has no slot table available to this service; max spell level cannot be verified');
   }
 
   // ---- Magus: society list is the membership proof (see header).

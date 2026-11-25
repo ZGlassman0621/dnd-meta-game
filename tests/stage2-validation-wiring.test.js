@@ -132,7 +132,8 @@ group('(a) validateCreatorNextStage2 — unit, real route export');
   check(validateCreatorNextStage2({ classId: 'magus', subclassName: 'The Arcane Order' }).ok === true,
     'magus + The Arcane Order passes (still level 1)');
   check(validateCreatorNextStage2({ classId: 'blood_hunter' }).ok === true, 'blood_hunter passes (client-only class)');
-  check(validateCreatorNextStage2({ classId: 'keeper' }).ok === true, 'keeper passes (client-only class)');
+  // Keeper was REMOVED from the game 2026-11-25: no longer a known class.
+  check(validateCreatorNextStage2({ classId: 'keeper' }).ok === false, 'keeper is refused (class removed)');
   check(validateCreatorNextStage2({ classId: 'warlord' }).ok === true, 'warlord passes (client-only class)');
 
   const unknownClass = validateCreatorNextStage2({ classId: 'not-a-class' });
@@ -204,10 +205,13 @@ group('(b) POST /api/character — marker-gated validation');
   const okDraft = await postCharacter({ name: 'W2 Draft', race: 'human', creator: MARKER });
   check(okDraft.status === 201, `marker + Stage-1-only body accepted with 201 (got ${okDraft.status})`);
 
-  for (const cls of ['blood_hunter', 'keeper', 'warlord']) {
+  for (const cls of ['blood_hunter', 'warlord']) {
     const r = await postCharacter({ name: `W2 ${cls}`, race: 'human', creator: MARKER, class: cls });
     check(r.status === 201, `marker + ${cls} accepted with 201 (got ${r.status})`);
   }
+  const keeperPost = await postCharacter({ name: 'W2 keeper', race: 'human', creator: MARKER, class: 'keeper' });
+  check(keeperPost.status === 400, `marker + keeper refused with 400 — class removed (got ${keeperPost.status})`);
+  check(await characterCountByName('W2 keeper') === 0, 'refused keeper created no row');
 
   const badClass = await postCharacter({ name: 'W2 Bad Class', race: 'human', creator: MARKER, class: 'not-a-class' });
   check(badClass.status === 400, `marker + unknown class refused with 400 (got ${badClass.status})`);

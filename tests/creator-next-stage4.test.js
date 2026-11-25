@@ -203,7 +203,6 @@ group('(a) Level-1 per-class table (unit)');
     ['monk', 0, null, null, null],
     ['pugilist', 0, null, null, null],
     ['duelist', 0, null, null, null],
-    ['keeper', 0, null, null, null],
     ['warden', 0, null, null, null],
     ['scholar', 0, null, null, null],
     ['blood_hunter', 0, null, null, null],
@@ -509,8 +508,8 @@ group('(d) Spell gating (validator unit)');
   const prepCasterKnown = validateCreatorNextStage4(dwarfClericBody({ known_spells: ['bless'] }));
   check(prepCasterKnown.ok === false && errText(prepCasterKnown).includes('knownSpells:') && errText(prepCasterKnown).includes('prepares spells instead'),
     `prepared-caster sending known_spells refuses (got ${errText(prepCasterKnown)})`);
-  // Non-casters at L1 (incl. keeper, warden/scholar before L3).
-  for (const cls of ['fighter', 'rogue', 'keeper', 'warden', 'scholar', 'blood_hunter', 'warlord']) {
+  // Non-casters at L1 (incl. warden/scholar before L3).
+  for (const cls of ['fighter', 'rogue', 'warden', 'scholar', 'blood_hunter', 'warlord']) {
     const r = validateCreatorNextStage4({ creator: MARKER, class: cls, race: 'human', prepared_spells: ['cure wounds'] });
     check(r.ok === false && errText(r).includes('preparedSpells:') && errText(r).includes('has no spells to pick at level 1'),
       `${cls} sending a prepared spell at L1 refuses (got ${errText(r)})`);
@@ -832,7 +831,7 @@ group('(h) GET /api/spells (real HTTP)');
     ['artificer', 18, null, 3],
     ['paladin', 20, null, 2], ['ranger', 18, null, 2], ['spellshot', 0, 0, null],
     ['magus', 0, 0, null], ['blackguard', 0, null, 0],
-    ['fighter', 0, null, null], ['keeper', 0, null, null], ['warden', 0, null, null],
+    ['fighter', 0, null, null], ['warden', 0, null, null],
     ['scholar', 0, null, null], ['blood_hunter', 0, null, null], ['warlord', 0, null, null],
   ];
   for (const [cls, n, known, prep] of counts) {
@@ -844,6 +843,10 @@ group('(h) GET /api/spells (real HTTP)');
     check(Array.isArray(r.json?.spells) && r.json.spells.every((s) => Number(s.level) >= 1),
       `/api/spells ${cls} list has no cantrips (all level >= 1)`);
   }
+  // Keeper was REMOVED from the game (2026-11-25): the route no
+  // longer knows it and answers the unknown-class 400.
+  const keeperSpells = await getSpells('?class=keeper&level=1&abilityMod=3');
+  check(keeperSpells.status === 400, `/api/spells keeper is refused as an unknown class (got ${keeperSpells.status})`);
   const cleric0 = await getSpells('?class=cleric&level=1');
   check(cleric0.json?.spellsPrepared === 4, 'cleric spellsPrepared at the default mod 0 is the table 4 (H3; was 1)');
   const cleric3 = await getSpells('?class=cleric&level=1&abilityMod=3');
