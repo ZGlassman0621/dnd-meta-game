@@ -109,7 +109,7 @@ None. The Faith duplication stays open from earlier jobs, and this brief leaves 
 
 ## Verification evidence
 
-- **Commit:** the hash is recorded in the commit that follows this report (`Report: record … commit`), on branch `phase-4-hybrid-combat`, in the PC repo at `E:\DnD Meta Game\dnd-meta-game`, pushed to origin.
+- **Commit:** `2ea007cbc32ddb3cc0d1943296f1bd14ee5e4b8e` (`2ea007c`), on branch `phase-4-hybrid-combat`, in the PC repo at `E:\DnD Meta Game\dnd-meta-game`, pushed to origin.
 - **File hashes:** in the Files changed table above.
 - **Tests:** `npm test repo-check-fixes-alignment-lifestyle` gives 35 passed, 0 failed. The full `npm test` gives 260/260 files green.
 - **At :5173:**
