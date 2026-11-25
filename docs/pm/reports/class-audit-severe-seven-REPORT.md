@@ -179,7 +179,7 @@ Each is reversible and flagged for Zach's veto at the gate.
 
 ## Verification evidence
 
-- **Branch:** `phase-4-hybrid-combat`. **PC repo:** `E:\DnD Meta Game\dnd-meta-game`. **Commit:** see the follow-up commit that records the hash.
+- **Branch:** `phase-4-hybrid-combat`. **PC repo:** `E:\DnD Meta Game\dnd-meta-game`. **Commit:** `1ea7d62` (the follow-up commit only records this hash).
 - **SHA-256 of every changed file:**
 
 | File | SHA-256 |
