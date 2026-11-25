@@ -103,11 +103,13 @@ function buildSheetFns(source) {
   const prepBody = extractFnBody(source, 'const getMaxPrepared = () => {');
   const casterBody = extractFnBody(source, 'const isPreparedCaster = () => {');
   const getMaxPrepared = new Function(
-    'isThirdCaster', 'isProfaneSoul', 'classData', 'abilities', 'character',
+    // isTheologian / knownSpellInfo (class-audit gap 6): the Theologian
+    // scholar's cap comes from GET /api/spells; undefined = not one.
+    'isThirdCaster', 'isProfaneSoul', 'classData', 'abilities', 'character', 'isTheologian', 'knownSpellInfo',
     `${thirdCasterDecl[0]};\n${paladinDecl[0]};\n${prepBody}`,
   );
   const isPreparedCaster = new Function(
-    'isThirdCaster', 'isProfaneSoul', 'classData',
+    'isThirdCaster', 'isProfaneSoul', 'classData', 'isTheologian',
     casterBody,
   );
   return { getMaxPrepared, isPreparedCaster };
@@ -311,6 +313,18 @@ group('(e) Mutation check: deleting a branch breaks its asserts');
   const mutatedWizard = without("if (className === 'wizard') return WIZARD_PREPARED[character.level - 1] ?? 0");
   check(mutatedWizard.getMaxPrepared(false, false, classesJson.wizard, INT3, { class: 'wizard', subclass: null, level: 1 }) === 0,
     'wizard branch deleted -> wizard L1 cap is 0 (asserts would fail)');
+}
+
+// class-audit gap 6: a Theologian scholar is a prepared caster, capped by
+// the server's spellsPrepared (GET /api/spells), 0 until it loads.
+group('(theologian) Theologian scholar cap comes from the server');
+{
+  check(sheet.getMaxPrepared(false, false, classesJson.scholar || {}, {}, { class: 'scholar', level: 5 }, true, { spellsPrepared: 5 }) === 5,
+    'Theologian: cap is the server spellsPrepared');
+  check(sheet.getMaxPrepared(false, false, classesJson.scholar || {}, {}, { class: 'scholar', level: 5 }, true, null) === 0,
+    'Theologian: cap 0 before the server answers');
+  check(sheet.isPreparedCaster(false, false, classesJson.scholar || {}, true) === true,
+    'Theologian: isPreparedCaster true');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

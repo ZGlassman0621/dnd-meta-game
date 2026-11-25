@@ -286,6 +286,11 @@ export async function combatantCanAct(sessionId, entry) {
     if (!row) return true;
     return row.status === 'active' && (row.hp == null || row.hp > 0);
   }
+  // class-audit gap 8: a summon acts while it is alive and still summoned.
+  if (entry.type === 'ally') {
+    const { allyCanAct } = await import('./allyCombatService.js');
+    return allyCanAct(entry);
+  }
   return true;
 }
 
@@ -300,7 +305,7 @@ export async function activeEnemyCount(sessionId, encounterSeq) {
 export function npcTurnDirective(entry, state, playerName) {
   const who = entry.name;
   const player = playerName || 'Player';
-  const markerHint = entry.type === 'companion'
+  const markerHint = (entry.type === 'companion' || entry.type === 'ally')
     ? `for an attack emit [ATTACK: Attacker="${who}" Target="<enemy name>"] (the engine rolls and resolves a companion's attack at once)`
     : `for an attack emit [ENEMY_ATTACK: Enemy="${who}" Target="${player}"] (or a companion's name as Target); for a spell, [ENEMY_CAST: …]; if ${who} runs off, [ENEMY_FLEE: Enemy="${who}"]; if ${who} gives up, [ENEMY_SURRENDER: Enemy="${who}"]; if ${who}'s side takes a deal, a bribe or a truce the party offered, [COMBAT_SETTLE: Terms="what was agreed"] (every enemy still standing stands down)`;
   return `[SYSTEM — COMBAT TURN (round ${state.round}): It is ${who}'s turn. You control ${who}: choose what ${who} does now — attack, move, cast, flee, talk, anything that fits the fight. ` +

@@ -346,9 +346,40 @@ export async function grantHeroicInspiration(kind, id) {
  * is refused. The previous outcome (if the caller has it) rides on
  * pending.rerollFrom for the record.
  */
-export async function requestHeroicReroll(sessionId, previousOutcome = null) {
-  const pending = await getPendingRoll(sessionId);
-  if (!pending) return { success: false, reason: 'no roll pending' };
+export async function requestHeroicReroll(sessionId, previousOutcome = null, target = null) {
+  const session0 = await dbGet('SELECT character_id FROM dm_sessions WHERE id = ?', [sessionId]);
+  // class-audit gap 8: a companion's reroll (Target="<companion>") re-runs
+  // that companion's last server roll after spending its Heroic Inspiration.
+  if (target && session0?.character_id) {
+    const pc = await dbGet('SELECT name FROM characters WHERE id = ?', [session0.character_id]);
+    if (!isPlayerRef(String(target), pc?.name)) {
+      const compId = await findCompanionIdByName(session0.character_id, String(target));
+      if (!compId) return { success: false, reason: `unknown reroll target: ${target}` };
+      const cfg0 = await readSessionConfig(sessionId);
+      const last = (cfg0.lastCompanionRolls || {})[String(target).toLowerCase()];
+      if (!last) return { success: false, reason: `${target} has no recent roll to reroll` };
+      if (last.rerolled) return { success: false, reason: 'that roll was already rerolled — one Heroic Inspiration reroll per roll' };
+      const spentC = await spendHeroicInspiration('companion', compId);
+      if (!spentC.success) return { success: false, reason: spentC.reason };
+      const r = await rollForNpc({ sessionId, characterId: session0.character_id, ...last.args,
+        context: [last.args.context, 'Heroic Inspiration reroll — the new roll stands'].filter(Boolean).join('; ') });
+      const cfg1 = await readSessionConfig(sessionId);
+      cfg1.lastCompanionRolls = { ...(cfg1.lastCompanionRolls || {}), [String(target).toLowerCase()]: { ...last, rerolled: true } };
+      cfg1.recentRolls = [...(Array.isArray(cfg1.recentRolls) ? cfg1.recentRolls : []), { ...r, rerolled: true }].slice(-5);
+      await writeSessionConfig(sessionId, cfg1);
+      return { success: true, companion: target, outcome: r };
+    }
+  }
+  let pending = await getPendingRoll(sessionId);
+  if (!pending) {
+    // class-audit gap 8: the roll already resolved — re-issue it from the copy.
+    const cfgL = await readSessionConfig(sessionId);
+    const last = cfgL.lastResolvedPcRoll;
+    if (!last) return { success: false, reason: 'no roll to reroll' };
+    const { resolvedTotal, resolvedOutcome, resolvedDice, resolvedAt, ...rest } = last;
+    pending = rest;
+    previousOutcome = previousOutcome || { total: resolvedTotal, outcome: resolvedOutcome, dice: resolvedDice };
+  }
   if (pending.reroll) return { success: false, reason: 'this roll was already rerolled — one Heroic Inspiration reroll per roll' };
   const session = await dbGet('SELECT character_id FROM dm_sessions WHERE id = ?', [sessionId]);
   const spent = await spendHeroicInspiration('player', session?.character_id);
@@ -362,6 +393,40 @@ export async function requestHeroicReroll(sessionId, previousOutcome = null) {
   };
   await writeSessionConfig(sessionId, cfg);
   return { success: true, pending: cfg.pendingRoll };
+}
+
+/**
+ * class-audit gap 8 (Bend Luck, Wild Magic sorcerer 6): apply the d4 (as a
+ * signed amount) to the d20 Test it answers. A pending player roll carries
+ * it to resolution; otherwise the latest server roll the DM has not seen
+ * yet is changed; otherwise the player's just-resolved roll is re-judged.
+ * Returns { appliedTo, total, outcome } or { appliedTo: null }.
+ */
+export async function applyBendLuck(sessionId, signed) {
+  const cfg = await readSessionConfig(sessionId);
+  const judge = (total, dc) => (dc == null ? null : (total >= Number(dc) ? 'success' : 'failure'));
+  if (cfg.pendingRoll) {
+    cfg.pendingRoll.bendLuck = (Number(cfg.pendingRoll.bendLuck) || 0) + signed;
+    await writeSessionConfig(sessionId, cfg);
+    return { appliedTo: 'pending', check: cfg.pendingRoll.name, actor: 'Player' };
+  }
+  const recent = Array.isArray(cfg.recentRolls) ? cfg.recentRolls : [];
+  const last = recent[recent.length - 1];
+  if (last && last.total != null) {
+    last.total = Number(last.total) + signed;
+    if (last.dc != null) last.outcome = judge(last.total, last.dc);
+    last.bendLuck = (Number(last.bendLuck) || 0) + signed;
+    await writeSessionConfig(sessionId, cfg);
+    return { appliedTo: 'server', check: last.check, actor: last.actor, total: last.total, outcome: last.outcome };
+  }
+  const pc = cfg.lastResolvedPcRoll;
+  if (pc && pc.resolvedTotal != null) {
+    pc.resolvedTotal = Number(pc.resolvedTotal) + signed;
+    pc.resolvedOutcome = judge(pc.resolvedTotal, pc.dc) ?? pc.resolvedOutcome;
+    await writeSessionConfig(sessionId, cfg);
+    return { appliedTo: 'resolved', check: pc.name, actor: 'Player', total: pc.resolvedTotal, outcome: pc.resolvedOutcome };
+  }
+  return { appliedTo: null };
 }
 
 export async function logRoll(row) {
@@ -421,6 +486,15 @@ export async function requestPcRoll({ sessionId, characterId, kind, name, dc, lo
     }
     penalty = fx.penalty || 0;
   } catch { /* conditions are best-effort; the roll itself must not fail */ }
+  // class-audit gap 8 (Tides of Chaos): a pending Tides advantage is spent
+  // on the player's next d20 Test.
+  try {
+    const { consumeTidesAdvantage } = await import('./subclassMarkerService.js');
+    if (await consumeTidesAdvantage('player', characterId)) {
+      effAdvantage = mergeAdvantageState(effAdvantage, 'advantage');
+      effReason = [effReason, 'Tides of Chaos'].filter(Boolean).join('; ');
+    }
+  } catch { /* best-effort */ }
   // Family 6: subclass save modifiers join as an additional input beside
   // conditions (same call sites, same algebra). Advantage merges with
   // the condition/marker state; a flat bonus is stored on the pending
@@ -497,7 +571,8 @@ export async function resolveReportedRoll(sessionId, dice) {
   // Family 6: the stored subclass bonus folds in the same way.
   const penalty = pending.penalty || 0;
   // feat-addition-14: the feat rider's flat bonus joins the subclass bonus.
-  const subclassBonus = (pending.subclassBonus || 0) + (pending.featBonus || 0);
+  // class-audit gap 8 (Bend Luck): a Bend Luck d4 waiting on this roll joins too.
+  const subclassBonus = (pending.subclassBonus || 0) + (pending.featBonus || 0) + (pending.bendLuck || 0);
   const res = resolveDice({ dice, modifier: pending.modifier + penalty + subclassBonus, dc: pending.dc, advantage: pending.advantage });
   const rollId = await logRoll({
     sessionId, campaignId: character?.campaign_id ?? null,
@@ -510,6 +585,10 @@ export async function resolveReportedRoll(sessionId, dice) {
   });
 
   const cfg = await readSessionConfig(sessionId);
+  // class-audit gap 8 (Heroic Reroll): the pending roll is gone once
+  // resolved, so keep a copy — a [HEROIC_REROLL] after the result re-issues
+  // it (one reroll per roll: a roll that was already a reroll stays one).
+  cfg.lastResolvedPcRoll = { ...pending, resolvedTotal: res.total, resolvedOutcome: res.outcome, resolvedDice: dice, resolvedAt: Date.now() };
   delete cfg.pendingRoll;
   await writeSessionConfig(sessionId, cfg);
 
@@ -518,7 +597,7 @@ export async function resolveReportedRoll(sessionId, dice) {
   let heroicInspiration = { available: false };
   try {
     const held = await hasHeroicInspiration('player', session?.character_id);
-    heroicInspiration = { available: !!held.held };
+    heroicInspiration = { available: !!held.held && !pending.reroll };
   } catch { /* best-effort — the resolved roll stands either way */ }
 
   // feat-addition-14 (Silver Tongue): a contested roll settles here — the
@@ -573,6 +652,14 @@ export async function rollForNpc({ sessionId = null, characterId = null, actorNa
     try {
       const compId = await findCompanionIdByName(characterId, actorName);
       if (compId) {
+        // class-audit gap 8 (Tides of Chaos): a companion's pending Tides advantage.
+        try {
+          const { consumeTidesAdvantage } = await import('./subclassMarkerService.js');
+          if (await consumeTidesAdvantage('companion', compId)) {
+            effAdvantage = mergeAdvantageState(effAdvantage, 'advantage');
+            context = [context, 'Tides of Chaos'].filter(Boolean).join('; ');
+          }
+        } catch { /* best-effort */ }
         const compConds = await getConditions('companion', compId);
         // Combat item 8: a deafened companion auto-fails hearing
         // checks, like the PC branch of the ROLL_REQUEST handler.
@@ -757,6 +844,9 @@ export function formatRollOutcomeBlock(o) {
   }
   return `\n\n══════════════ ROLL RESULT (system — this outcome is fact) ══════════════\n` +
     `${o.actor ? `${o.actor} — ` : ''}${o.check} check: rolled [${diceStr}] → ${o.takenDie} ${modStr}${penStr} = ${o.total} vs DC ${o.dc}.\n${verdict}\n` +
+    (o.heroicInspiration?.available
+      ? `The player holds Heroic Inspiration and may reroll this d20 (write [HEROIC_REROLL] if they say so); until they do, this result stands.\n`
+      : '') +
     `═══════════════════════════════════════════════════════════════════════\n`;
 }
 
@@ -1098,11 +1188,20 @@ registerMarkerHandler('ROLL_REQUEST', async (parsed, context) => {
         }
       } catch { /* best-effort */ }
     }
-    const r = await rollForNpc({
-      sessionId: context.sessionId, characterId: context.characterId,
+    const npcArgs = {
       actorName: actor, kind, name, dc, advantage: npcAdvantage, context: npcContext,
       hearing: parsed?.Hearing === true || ['true', 'yes', '1'].includes(String(parsed?.Hearing || '').toLowerCase().trim())
-    });
+    };
+    const r = await rollForNpc({ sessionId: context.sessionId, characterId: context.characterId, ...npcArgs });
+    // class-audit gap 8 (Heroic Reroll): remember a companion's roll so a
+    // [HEROIC_REROLL: Target="<companion>"] can re-run it.
+    if (r?.actorType === 'companion') {
+      try {
+        const cfgC = await readSessionConfig(context.sessionId);
+        cfgC.lastCompanionRolls = { ...(cfgC.lastCompanionRolls || {}), [actor.toLowerCase()]: { args: npcArgs, at: Date.now() } };
+        await writeSessionConfig(context.sessionId, cfgC);
+      } catch { /* best-effort */ }
+    }
     try {
       const cfg = await readSessionConfig(context.sessionId);
       const prior = Array.isArray(cfg.recentRolls) ? cfg.recentRolls : [];

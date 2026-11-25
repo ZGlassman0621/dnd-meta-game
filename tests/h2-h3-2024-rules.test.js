@@ -140,7 +140,7 @@ group('H3 (d) the character sheet getMaxPrepared (extracted from the live JSX an
   const body = fnSrc.slice(fnSrc.indexOf('{') + 1, fnSrc.lastIndexOf('}'));
   const third = sheetSrc.match(/const THIRD_CASTER_PREPARED_SPELLS = \[[^\]]*\]/)[0];
   const pal = sheetSrc.match(/const PALADIN_PREPARED_SPELLS = \[[^\]]*\]/)[0];
-  const getMax = new Function('isThirdCaster', 'isProfaneSoul', 'classData', 'abilities', 'character', `${third};\n${pal};\n${body}`);
+  const getMax = new Function('isThirdCaster', 'isProfaneSoul', 'classData', 'abilities', 'character', 'isTheologian', 'knownSpellInfo', `${third};\n${pal};\n${body}`);
   const scoreFor = (mod) => 10 + 2 * mod;
   for (const cls of Object.keys(TABLE)) {
     const ability = classesJson[cls]?.spellcasting?.ability?.toLowerCase().slice(0, 3);

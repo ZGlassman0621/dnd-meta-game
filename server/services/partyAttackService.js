@@ -239,7 +239,8 @@ export function buildAttackProfile(kind, row, { spellName = null, damageOverride
   if (spellName && (hand === 'off' || thrown || cleave)) return { error: 'a spell attack cannot be an off-hand, thrown, or Cleave attack' };
   if (spellName) {
     const actorShape = { ability_scores: abilities, level };
-    const sp = spellProfileFor(actorShape, className);
+    // class-audit gap 1 (sibling): the casting subclass resolves the ability.
+    const sp = spellProfileFor(actorShape, className, kind === 'player' ? row.subclass : row.companion_subclass);
     if (!sp) return { error: `${className || 'that class'} has no spell attack` };
     if (damageOverride) {
       const spec = parseDamageSpec(damageOverride);
@@ -590,6 +591,12 @@ export async function computeAttackMode(attackerKind, attackerId, enemy, marker 
   if (def.attackerDisadvantage) { hasDisadvantage = true; reasons.push(...def.reasons.map(r => `target ${r}`)); }
   if (marker.advantage) hasAdvantage = true;
   if (marker.disadvantage) hasDisadvantage = true;
+  // class-audit gap 8 (Tides of Chaos, Wild Magic sorcerer 3): a pending
+  // Tides advantage is spent on this attack roll (the next d20 Test).
+  try {
+    const { consumeTidesAdvantage } = await import('./subclassMarkerService.js');
+    if (await consumeTidesAdvantage(attackerKind, attackerId)) { hasAdvantage = true; reasons.push('Tides of Chaos'); }
+  } catch { /* best-effort */ }
   // Mechanics hooks, Family 4: subclass advantage/disadvantage
   // source, same presence algebra as every source above. Only
   // triggers the mode function can evaluate from live state are
@@ -2163,7 +2170,18 @@ registerMarkerHandler('ATTACK', async (parsed, context) => {
       return { type: 'party_attack', success: true, pending: true, ...pending };
     }
     const compId = await findCompanionIdByName(context.characterId, attackerRaw);
-    if (!compId) return { type: 'party_attack', success: false, reason: `unknown attacker: ${attackerRaw}` };
+    if (!compId) {
+      // class-audit gap 8: a summon (Hound of Ill Omen, Accursed Specter,
+      // Faithful Summons beast) attacks with its own stats; the engine rolls.
+      const { findActiveAlly, resolveAllyAttack } = await import('./allyCombatService.js');
+      const ally = await findActiveAlly(context.sessionId, attackerRaw);
+      if (ally) {
+        const outcome = await resolveAllyAttack(context.sessionId, encounterSeq, ally, enemy, context.characterId);
+        await stashOutcome(context.sessionId, outcome);
+        return outcome;
+      }
+      return { type: 'party_attack', success: false, reason: `unknown attacker: ${attackerRaw}` };
+    }
     const companionRow = await dbGet(
       `SELECT c.*, n.name AS display_name FROM companions c LEFT JOIN npcs n ON n.id = c.npc_id WHERE c.id = ?`,
       [compId]

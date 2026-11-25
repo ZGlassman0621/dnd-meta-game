@@ -321,7 +321,11 @@ export const MARKER_SCHEMAS = {
       Choice: { type: 'string', required: false },
       // feat-addition-14 (Trapper): cast Hunter's Mark with one of the
       // feat's free casts instead of a slot.
-      Free: { type: 'bool', required: false }
+      Free: { type: 'bool', required: false },
+      // class-audit gap 7: pay with a Pact Magic slot (a warlock multiclass
+      // casting at its pact slot level); otherwise the Spellcasting slot
+      // pays first and the pact slot only when those are spent.
+      Pact: { type: 'bool', required: false }
     }
   },
 

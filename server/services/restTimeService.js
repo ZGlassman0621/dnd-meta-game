@@ -54,7 +54,7 @@ import {
   setPendingMemorizeSwap, alwaysPreparedSpells, applyMemorizeSwap,
   wizardLevelFromClassLevels, arcaneRecoveryBudget, pendingArcaneRecovery,
   setPendingArcaneRecovery, setArcaneRecoveryUsed, arcaneRecoveryMaxSlots,
-  applyArcaneRecovery, warlockLevelFromClassLevels, resetPactSlots,
+  applyArcaneRecovery, warlockLevelFromClassLevels, resetPactSlots, resetPactSlotsTracked,
 } from './spellbookService.js'; // Rest consolidation 2026-11-07: banked Memorize Swap consume; Arcane Recovery 2026-11-08: banked slot recovery consume + used-flag reset; spellbook follow-ups 2026-11-08: scoped pact-slot reset (D2)
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { processExposureForSession, processExposure, getColdScene, recoverFrost, formatColdBlock, queuePlayerColdSaves } from './coldExposureService.js';
@@ -444,8 +444,8 @@ async function restPc(pc, type, diceCount) {
     detail.diceRegained = totalDice(used) - totalDice(newUsed);
     detail.tempHpCleared = (pc.temp_hp || 0) > 0;
     await dbRun(
-      'UPDATE characters SET current_hp = ?, spell_slots_used = ?, hit_dice_used = ?, temp_hp = 0 WHERE id = ?',
-      [pc.max_hp, '{}', JSON.stringify(newUsed), pc.id]
+      'UPDATE characters SET current_hp = ?, spell_slots_used = ?, pact_slots_used = ?, hit_dice_used = ?, temp_hp = 0 WHERE id = ?',
+      [pc.max_hp, '{}', '{}', JSON.stringify(newUsed), pc.id]
     );
     // Arcane Recovery (2026-11-08): a long rest clears the used-flag
     // — the recovery returns. It does NOT consume a banked recovery
@@ -566,8 +566,10 @@ async function restPc(pc, type, diceCount) {
     const pactLevel = pactWarlockLevel(pc.class_levels, pc.class, pc.level);
     const hasPact = pactLevel != null;
     const usedRawForReset = safeParse(pc.spell_slots_used, {});
+    // class-audit gap 7 (D3): subtract exactly the recorded pact spends
+    // (pact_slots_used); a pre-116 row with no record keeps the old reset.
     const usedAfterPactReset = hasPact
-      ? resetPactSlots(usedRawForReset && typeof usedRawForReset === 'object' ? usedRawForReset : {}, pactLevel)
+      ? resetPactSlotsTracked(usedRawForReset && typeof usedRawForReset === 'object' ? usedRawForReset : {}, pactLevel, safeParse(pc.pact_slots_used, null)).used
       : (usedRawForReset && typeof usedRawForReset === 'object' ? usedRawForReset : {});
     const arcBanked = pendingArcaneRecovery(pc.spellbook_json);
     let arcaneRecoveryDetail = null;
@@ -638,6 +640,7 @@ async function restPc(pc, type, diceCount) {
     // no applying recovery pushes nothing, as before.
     const finalSlotsJson = newSlotsJson ?? (hasPact ? JSON.stringify(usedAfterPactReset) : null);
     if (finalSlotsJson !== null) { sets.push('spell_slots_used = ?'); params.push(finalSlotsJson); }
+    if (hasPact) { sets.push('pact_slots_used = ?'); params.push('{}'); } // the pact spends are back
     if (newPreparedJson !== null) { sets.push('prepared_spells = ?'); params.push(newPreparedJson); }
     if (newSpellbookJson !== null) { sets.push('spellbook_json = ?'); params.push(newSpellbookJson); }
     params.push(pc.id);
@@ -683,7 +686,7 @@ async function restCompanion(comp, type, diceCount) {
       detail.deathSavesReset = true;
     }
     await dbRun(
-      'UPDATE companions SET companion_current_hp = ?, companion_spell_slots_used = ?, companion_hit_dice_used = ?, death_save_successes = 0, death_save_failures = 0 WHERE id = ?',
+      "UPDATE companions SET companion_current_hp = ?, companion_spell_slots_used = ?, pact_slots_used = '{}', companion_hit_dice_used = ?, death_save_successes = 0, death_save_failures = 0 WHERE id = ?",
       [comp.companion_max_hp, '{}', JSON.stringify(newUsed), comp.id]
     );
     await applyResourceRest('companions', comp.id, comp.class_resources_json, comp.companion_class, comp.companion_level, 'long', {
@@ -730,11 +733,11 @@ async function restCompanion(comp, type, diceCount) {
     // spent wizard slots stay spent. Same helper as the PC path.
     const compUsedRaw = safeParse(comp.companion_spell_slots_used, {});
     const compFinalSlots = hasPact
-      ? JSON.stringify(resetPactSlots(compUsedRaw && typeof compUsedRaw === 'object' ? compUsedRaw : {}, pactLevel))
+      ? JSON.stringify(resetPactSlotsTracked(compUsedRaw && typeof compUsedRaw === 'object' ? compUsedRaw : {}, pactLevel, safeParse(comp.pact_slots_used, null)).used)
       : null;
     await dbRun(
       'UPDATE companions SET companion_current_hp = ?, companion_hit_dice_used = ?' +
-      (hasPact ? ', companion_spell_slots_used = ?' : '') + ' WHERE id = ?',
+      (hasPact ? ", companion_spell_slots_used = ?, pact_slots_used = '{}'" : '') + ' WHERE id = ?',
       hasPact
         ? [spend.newHp, JSON.stringify(mergeUsed(used, spend.spent)), compFinalSlots, comp.id]
         : [spend.newHp, JSON.stringify(mergeUsed(used, spend.spent)), comp.id]
@@ -756,7 +759,7 @@ async function restCompanion(comp, type, diceCount) {
  */
 export async function applyRest({ sessionId = null, characterId, type, actor = null, dice = null }) {
   const pc = await dbGet(
-    'SELECT id, name, class, level, class_levels, subclass, race, subrace, current_hp, max_hp, temp_hp, ability_scores, spell_slots_used, hit_dice, hit_dice_used, current_location, inventory, class_resources_json, prepared_spells, known_spells, spellbook_json FROM characters WHERE id = ?',
+    'SELECT id, name, class, level, class_levels, subclass, race, subrace, current_hp, max_hp, temp_hp, ability_scores, spell_slots_used, pact_slots_used, hit_dice, hit_dice_used, current_location, inventory, class_resources_json, prepared_spells, known_spells, spellbook_json FROM characters WHERE id = ?',
     [characterId]
   );
   if (!pc) return { success: false, reason: 'character not found' };
@@ -901,7 +904,7 @@ export async function applyDowntimeRest({ characterId, type }) {
     return { success: false, reason: 'type must be short or long' };
   }
   const pc = await dbGet(
-    'SELECT id, class, level, class_levels, subclass, race, subrace, current_hp, max_hp, temp_hp, ability_scores, spell_slots_used, hit_dice, hit_dice_used, class_resources_json, spellbook_json FROM characters WHERE id = ?',
+    'SELECT id, class, level, class_levels, subclass, race, subrace, current_hp, max_hp, temp_hp, ability_scores, spell_slots_used, pact_slots_used, hit_dice, hit_dice_used, class_resources_json, spellbook_json FROM characters WHERE id = ?',
     [characterId]
   );
   if (!pc) return { success: false, reason: 'character not found' };
@@ -911,8 +914,8 @@ export async function applyDowntimeRest({ characterId, type }) {
     const used = parseDicePool(pc.hit_dice_used);
     const newUsed = hitDiceRegain(pool, used);
     await dbRun(
-      'UPDATE characters SET spell_slots_used = ?, hit_dice_used = ?, temp_hp = 0 WHERE id = ?',
-      ['{}', JSON.stringify(newUsed), pc.id]
+      'UPDATE characters SET spell_slots_used = ?, pact_slots_used = ?, hit_dice_used = ?, temp_hp = 0 WHERE id = ?',
+      ['{}', '{}', JSON.stringify(newUsed), pc.id]
     );
     // Arcane Recovery flag clear — the bug this fold fixes: a
     // downtime long rest used to restore slots while leaving
@@ -966,8 +969,8 @@ export async function applyDowntimeRest({ characterId, type }) {
   const hasPact = pactLevel != null;
   if (hasPact) {
     const usedRaw = safeParse(pc.spell_slots_used, {});
-    await dbRun('UPDATE characters SET spell_slots_used = ? WHERE id = ?',
-      [JSON.stringify(resetPactSlots(usedRaw && typeof usedRaw === 'object' ? usedRaw : {}, pactLevel)), pc.id]);
+    await dbRun("UPDATE characters SET spell_slots_used = ?, pact_slots_used = '{}' WHERE id = ?",
+      [JSON.stringify(resetPactSlotsTracked(usedRaw && typeof usedRaw === 'object' ? usedRaw : {}, pactLevel, safeParse(pc.pact_slots_used, null)).used), pc.id]);
   }
   return { success: true, slotsRestored: hasPact, arcaneRecoveryReset: false };
 }

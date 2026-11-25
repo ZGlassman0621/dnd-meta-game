@@ -37,7 +37,7 @@ import {
 import { validateClassSubclass, KNOWN_CLASSES, isClassPcCreatable, MVP_DEFERRED_CLASS_NOTE } from '../services/classValidationService.js';
 import { isPcCreatable, resolveSpecies, resolvedASIFor, innateSpellsFor, allowedSizesFor, walkSpeedFor, MVP_DEFERRED_NOTE, isOutsideFRSetting } from '../services/speciesService.js';
 import { canLearnSpell, canonicalizeSpellName } from '../services/spellSelectionService.js';
-import { validatePreparedSpells } from '../services/artificerService.js';
+import { validatePreparedSpells, plansKnownForLevel, plansAvailableAtLevel, MULTI_LEARN_PLANS, learnPlan, loadArtificerState, saveArtificerState } from '../services/artificerService.js';
 import { validatePreparedSpells as validateBlackguardPreparedSpells } from '../services/blackguardService.js';
 import { validatePreparedSpells as validatePaladinPreparedSpells } from '../services/paladinService.js';
 import { validatePreparedSpells as validateSorcererPreparedSpells } from '../services/sorcererService.js';
@@ -51,6 +51,7 @@ import { validatePreparedSpells as validateClericPreparedSpells } from '../servi
 import { validatePreparedSpells as validateDruidPreparedSpells } from '../services/druidService.js';
 import {
   SPELLBOOK_START_SIZE,
+  SPELLBOOK_SPELLS_PER_LEVEL,
   parseSpellbookState,
   serializeSpellbookState,
   pendingMemorizeSwap,
@@ -261,6 +262,24 @@ export function validateCreatorNextStage2(body = {}, ctx = {}) {
 const ORIGIN_FEAT_SPELL_ABILITIES = new Set(['intelligence', 'wisdom', 'charisma']);
 const ORIGIN_FEAT_SPELL_LISTS = new Set(['cleric', 'druid', 'wizard']);
 const ORIGIN_SUBCHOICE_FEATS = new Set(['skilled', 'musician', 'crafter']);
+
+// class-audit gap 6: the Theologian scholar prepares cleric spells under
+// levelProgression.getSpellsPrepared's Theologian arm (3 at 3rd -> 13 at
+// 20th). Returns null when the rule does not apply (not a Theologian, or
+// below 3rd), else { ok, max, counted, error }. A non-list is refused.
+export function validateTheologianPreparedSpells(subclass, level, list) {
+  const norm = String(subclass || '').trim().toLowerCase().replace(/^the\s+/, '');
+  if (norm !== 'theologian') return null;
+  const max = getSpellsPrepared('scholar', Number(level) || 1, 0, 'Theologian');
+  if (max == null) return null;
+  if (!Array.isArray(list) || list.some((s) => typeof s !== 'string' || !s.trim())) {
+    return { ok: false, max, counted: 0, error: 'preparedSpells: prepared_spells must be a JSON array of spell names' };
+  }
+  const counted = new Set(list.map((s) => s.trim().toLowerCase())).size;
+  return counted <= max
+    ? { ok: true, max, counted }
+    : { ok: false, max, counted, error: `preparedSpells: a Theologian scholar may prepare at most ${max} spells at scholar level ${level}, got ${counted}` };
+}
 
 function normFeatKey(value) {
   return String(value || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -4515,6 +4534,35 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    // Scholar (Theologian) prepared-spell cap (class-audit gap 6):
+    // mirrors the cleric block above. Same gates — no creator marker,
+    // prepared_spells present, primary scholar only — plus the
+    // Theologian field of study and scholar level 3+ (casting begins at
+    // 3rd). The cap is levelProgression.getSpellsPrepared's Theologian
+    // arm (3 at 3rd -> 13 at 20th, no ability modifier). Never trims.
+    if (
+      req.body.creator !== 'creator-next' &&
+      (req.body.prepared_spells !== undefined || req.body.preparedSpells !== undefined)
+    ) {
+      const thRow = await dbGet(
+        'SELECT class, subclass, level, class_levels FROM characters WHERE id = ?',
+        [req.params.id]
+      );
+      const thClass = String(req.body.class ?? thRow?.class ?? '').toLowerCase();
+      if (thRow && thClass === 'scholar') {
+        const thLevels = safeParse(thRow.class_levels, null);
+        const thEntry = Array.isArray(thLevels)
+          ? thLevels.find((e) => String(e?.class ?? '').toLowerCase() === 'scholar')
+          : null;
+        const thLevel = Number(thEntry?.level) || Number(thRow.level) || 1;
+        const thSubclass = req.body.subclass ?? thEntry?.subclass ?? thRow.subclass ?? null;
+        const thCheck = validateTheologianPreparedSpells(thSubclass, thLevel, stage4ParseStringList(req.body.prepared_spells ?? req.body.preparedSpells));
+        if (thCheck && !thCheck.ok) {
+          return validationError(res, thCheck.error);
+        }
+      }
+    }
+
     // Druid prepared-spell cap (2026-11-09, mechanics hooks Family
     // 3): mirrors the cleric block above exactly. Same gates: no
     // creator marker (marker bodies went through the Stage 4
@@ -6432,6 +6480,34 @@ router.delete('/:id/arcane-recovery-bank', async (req, res) => {
   }
 });
 
+// class-audit gap 5: an artificer's infusion plans, for the level-up picker
+// and the sheet. ?level= previews a level (the level-up target). The plans
+// live in class_resources_json.artificer (artificerService); the DM marker
+// path writes the same state.
+function artificerLevelOf(row) {
+  const levels = safeParse(row?.class_levels, null);
+  const entry = Array.isArray(levels) ? levels.find((e) => String(e?.class ?? '').toLowerCase() === 'artificer') : null;
+  if (entry) return Number(entry.level) || 0;
+  return String(row?.class || '').toLowerCase() === 'artificer' ? Number(row.level) || 1 : 0;
+}
+router.get('/artificer-plans/:id', async (req, res) => {
+  try {
+    const row = await dbGet('SELECT id, class, level, class_levels FROM characters WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Character not found' });
+    const current = artificerLevelOf(row);
+    if (!current) return res.json({ artificerLevel: 0, max: 0, known: [], available: [] });
+    const level = req.query.level != null && Number.isInteger(Number(req.query.level)) ? Number(req.query.level) : current;
+    const state = await loadArtificerState('player', row.id);
+    const known = Array.isArray(state?.plansKnown) ? state.plansKnown : [];
+    const available = plansAvailableAtLevel(level).map((p) => ({
+      name: p.name, attunement: p.attunement ?? null, needsDetail: MULTI_LEARN_PLANS.has(p.name),
+    }));
+    res.json({ artificerLevel: current, level, max: plansKnownForLevel(level), known, available });
+  } catch (error) {
+    handleServerError(res, error, 'fetch artificer plans');
+  }
+});
+
 // Get character's spell slots (max and used)
 router.get('/spell-slots/:id', async (req, res) => {
   try {
@@ -6486,6 +6562,11 @@ router.post('/spell-slots/:id/use', async (req, res) => {
     usedSlots[level] = usedForLevel + 1;
 
     await dbRun('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
+    // class-audit gap 7: a Pact Magic spend is recorded apart (D3 split).
+    try {
+      const { recordPactSpend } = await import('../services/spellCastService.js');
+      await recordPactSpend(true, Number(req.params.id), Number(level), usedForLevel, req.body?.pact === true);
+    } catch { /* best-effort */ }
 
     res.json({
       success: true,
@@ -6524,6 +6605,10 @@ router.post('/spell-slots/:id/restore', async (req, res) => {
     usedSlots[level] = usedForLevel - 1;
 
     await dbRun('UPDATE characters SET spell_slots_used = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(usedSlots), req.params.id]);
+    try {
+      const { clampPactRecord } = await import('../services/spellCastService.js');
+      await clampPactRecord(true, Number(req.params.id), Number(level)); // class-audit gap 7
+    } catch { /* best-effort */ }
 
     res.json({
       success: true,
@@ -6709,7 +6794,15 @@ router.get('/level-up-info/:id', async (req, res) => {
             needsSubclass: needsSubclassSelection(className, newClassLevel) && !classInfo.subclass,
             needsASI: hasASI(className, newClassLevel),
             newCantrips: Math.max(0, getCantripsKnown(className, newClassLevel, classInfo.subclass) - getCantripsKnown(className, currentClassLevel, classInfo.subclass)),
+            // class-audit gap 5: infusion plans gained at this artificer level.
+            newPlans: className === 'artificer' ? Math.max(0, plansKnownForLevel(newClassLevel) - plansKnownForLevel(currentClassLevel)) : 0,
             newSpellsKnown: (() => {
+              // class-audit gap 3: a wizard levelling up IN wizard adds 2
+              // spells to the book (2024 PHB). getSpellsKnown is null for a
+              // prepared caster, so the old envelope said 0 and the client's
+              // +2 picker never rendered. Multiclass-in (the 6-spell seed)
+              // is the separate branch below and is unchanged.
+              if (className === 'wizard' && currentClassLevel >= 1) return SPELLBOOK_SPELLS_PER_LEVEL;
               const current = getSpellsKnown(className, currentClassLevel, classInfo.subclass);
               const next = getSpellsKnown(className, newClassLevel, classInfo.subclass);
               // Null-tolerant: a class that starts casting at this
@@ -6994,7 +7087,8 @@ router.post('/level-up/:id', async (req, res) => {
       newSpells, // array of spell names to learn
       swapSpell, // { old: string, new: string } - swap one spell at level-up: a known spell for known casters, a prepared spell for prepared casters (PHB: one prepared spell per Long Rest)
       // Phase 5: progression choices at level-up
-      ancestryFeatId // L3/L7/L13/L18 — the feat.id chosen from the 3 options
+      ancestryFeatId, // L3/L7/L13/L18 — the feat.id chosen from the 3 options
+      newPlans // class-audit gap 5: [{ plan, detail? }] for an artificer level that grants plans
     } = req.body;
 
     // Determine which class we're leveling up
@@ -7261,20 +7355,38 @@ router.post('/level-up/:id', async (req, res) => {
         wizardLevel: newClassLevel,
         maxCount: isMulticlass ? 6 : 2,
         // V4: the multiclass seed is exactly 6. In-class adds pass
-        // no floor (max-only, as before): the client sends no
-        // newSpells at all for an in-class wizard level-up (the
-        // envelope says newSpellsKnown 0 for a prepared caster, so
-        // the +2 picker never renders), so an exact-2 floor here
-        // would only constrain hand-built requests while the real
-        // client path sends 0 — the in-class +2 picker is a client
-        // gap to fix, not a server validation change. Recorded,
-        // not fixed.
+        // no floor (max-only): the 2024 text says a wizard "can add"
+        // two spells per level, so fewer is allowed. Since
+        // class-audit gap 3 the envelope offers newSpellsKnown 2 for
+        // an in-class wizard level-up, so the client's +2 picker
+        // renders and sends up to two here.
         minCount: isMulticlass ? 6 : null,
       });
       if (!levelUpAdds.ok) {
         return res.status(400).json({ error: levelUpAdds.errors.join('; ') });
       }
     }
+    // class-audit gap 5: an artificer's new infusion plans. Validated
+    // in memory through artificerService.learnPlan (the same rules the DM
+    // marker uses: the plan must be in the tables for the new level, known
+    // once, under the plans-known cap; generic plans need a detail) before
+    // any write; saved after the level-up transaction commits.
+    let pendingArtificerState = null;
+    if (targetClassName === 'artificer' && newPlans !== undefined) {
+      if (!Array.isArray(newPlans)) return res.status(400).json({ error: 'newPlans: must be a list of { plan, detail }' });
+      const due = Math.max(0, plansKnownForLevel(newClassLevel) - plansKnownForLevel(newClassLevel - 1));
+      if (newPlans.length > due) return res.status(400).json({ error: `newPlans: artificer level ${newClassLevel} grants ${due} new plan${due === 1 ? '' : 's'}, got ${newPlans.length}` });
+      let state = await loadArtificerState('player', character.id);
+      for (const entry of newPlans) {
+        const plan = String(entry?.plan ?? entry ?? '').trim();
+        const detail = entry?.detail != null && String(entry.detail).trim() ? String(entry.detail).trim() : undefined;
+        const r = learnPlan(state, newClassLevel, plan, detail);
+        if (!r.success) return res.status(400).json({ error: `newPlans: '${plan}' cannot be learned — ${String(r.reason).replace(/_/g, ' ')}` });
+        state = r.state;
+      }
+      if (newPlans.length) pendingArtificerState = state;
+    }
+
     // Savant free-adds (2026-11-07): a separate level-up field,
     // `savantSpells`. Due only at 3rd (two school spells ≤ L2) and
     // at each new spell-slot level (one school spell); the school
@@ -7717,6 +7829,18 @@ router.post('/level-up/:id', async (req, res) => {
       }
     }
 
+    // Scholar (Theologian) prepared-spell cap re-check (class-audit
+    // gap 6): leveling up IN scholar re-checks the stored list against
+    // the NEW scholar level, like the cleric block above. A refusal
+    // leaves the level unchanged (no DB writes have happened yet).
+    if (!isMulticlass && targetClassName === 'scholar') {
+      const thStored = safeParse(character.prepared_spells, []);
+      const thLevelUpCheck = validateTheologianPreparedSpells(subclass || existingSubclass, newClassLevel, Array.isArray(thStored) ? thStored : []);
+      if (thLevelUpCheck && !thLevelUpCheck.ok) {
+        return res.status(400).json({ error: `${thLevelUpCheck.error} — fix the prepared list on the character sheet before leveling up` });
+      }
+    }
+
     // Druid prepared-spell cap re-check (2026-11-09, mechanics
     // hooks Family 3): mirrors the cleric block above. Leveling
     // up IN druid (not multiclassing into it — the stored list
@@ -7910,6 +8034,9 @@ router.post('/level-up/:id', async (req, res) => {
       await tx.rollback();
       throw txErr;
     }
+
+    // class-audit gap 5: the validated plans, saved after the commit.
+    if (pendingArtificerState) await saveArtificerState('player', character.id, pendingArtificerState);
 
     const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
 

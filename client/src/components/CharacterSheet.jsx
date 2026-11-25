@@ -136,6 +136,36 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     return () => { cancelled = true }
   }, [character.id])
 
+  // class-audit gap 4: the known-spells cap and the spells this character
+  // may learn come from the server (GET /api/spells), which already knows
+  // the subclass casters (casting warden, Ritualist scholar) and the
+  // per-level tables (spellshot, magus). A number for spellsKnown is what
+  // makes a "known" caster; null means a prepared caster or no casting.
+  const [knownSpellInfo, setKnownSpellInfo] = useState(null)
+  // class-audit gap 5: an artificer's infusion plans (known / max), from
+  // GET /api/character/artificer-plans/:id — null for a non-artificer.
+  const [artificerPlans, setArtificerPlans] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/character/artificer-plans/${character.id}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled) setArtificerPlans(d && d.artificerLevel > 0 ? d : null) })
+      .catch(() => { if (!cancelled) setArtificerPlans(null) })
+    return () => { cancelled = true }
+  }, [character.id, character.level, character.class_levels])
+  useEffect(() => {
+    let cancelled = false
+    const cls = String(character.class || '').toLowerCase()
+    if (!cls) return undefined
+    const qs = new URLSearchParams({ class: cls, level: String(character.level || 1) })
+    if (character.subclass) qs.set('subclass', character.subclass)
+    fetch(`/api/spells?${qs.toString()}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { if (!cancelled) setKnownSpellInfo(data || null) })
+      .catch(() => { if (!cancelled) setKnownSpellInfo(null) })
+    return () => { cancelled = true }
+  }, [character.class, character.level, character.subclass])
+
   // Check if character can level up
   useEffect(() => {
     const checkLevelUp = async () => {
@@ -729,6 +759,8 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
     // spellcasting: null in classes.json (only the Profane Soul
     // subclass casts). Same table as the server
     // (levelProgression PROFANE_SOUL_SPELLS_PREPARED).
+    // class-audit gap 6: the Theologian cap is the server's (3 at 3rd -> 13 at 20th).
+    if (isTheologian) return knownSpellInfo?.spellsPrepared ?? 0
     if (isProfaneSoul) {
       const PROFANE_SOUL_PREPARED = [0, 0, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 11]
       return PROFANE_SOUL_PREPARED[character.level - 1] ?? 0
@@ -788,15 +820,17 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
   // Check if class is a prepared caster
   const isPreparedCaster = () => {
     if (isThirdCaster) return true
+    if (isTheologian) return true // class-audit gap 6
     if (isProfaneSoul) return true
     const spellsKnown = classData?.spellcasting?.spellsKnown
     return spellsKnown === 'All prepared' || spellsKnown === 'Spellbook'
   }
 
   // Check if class is a known caster
-  const isKnownCaster = () => {
-    return classData?.spellcasting?.spellsKnown === 'Limited known'
-  }
+  // class-audit gap 4: the old gate read spellsKnown === 'Limited known', a
+  // string that appears nowhere in classes.json, so the section never
+  // rendered. A server-given known-spells cap is the gate now.
+  const isKnownCaster = () => typeof knownSpellInfo?.spellsKnown === 'number' && knownSpellInfo.spellsKnown > 0
 
   // Get available class spells for a given level
   const getClassSpellsForLevel = (spellLevel) => {
@@ -807,6 +841,12 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
 
   // Get all spells the character can prepare from (by level)
   const getPreparableSpells = () => {
+    // class-audit gap 6: a Theologian prepares from the cleric list — the
+    // server's allowed spells (GET /api/spells) already apply that rule.
+    if (isTheologian) {
+      const ord = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`)
+      return (knownSpellInfo?.spells || []).map(s => ({ ...s, spellLevel: ord(s.level) }))
+    }
     if (!spellSlots) return []
     const className = character.class?.toLowerCase()
     const isWizard = className === 'wizard'
@@ -1371,7 +1411,16 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
   // carve-out: the base class carries spellcasting: null, so the
   // subclass is what makes the sheet treat the character as a caster.
   const isProfaneSoul = classKey === 'blood_hunter' && character.subclass === 'Order of the Profane Soul' && character.level >= 3
-  const effectiveSpellcasting = classData?.spellcasting || (isThirdCaster ? subclassData?.spellcasting : null)
+  // class-audit gaps 4/6: warden and scholar carry spellcasting: null in
+  // classes.json — their casting comes from the subclass (Loreseeker,
+  // Soulblood Shaman, Ritualist, Theologian). The server's spell route
+  // names the casting ability for that subclass; with it, the spells tab
+  // renders for them too (Known Spells / Prepared Spells).
+  const effectiveSpellcasting = classData?.spellcasting
+    || (isThirdCaster ? subclassData?.spellcasting : null)
+    || (knownSpellInfo?.spellcastingAbility ? { ability: knownSpellInfo.spellcastingAbility } : null)
+  // class-audit gap 6: the Theologian scholar prepares cleric spells from 3rd.
+  const isTheologian = classKey === 'scholar' && /^(the\s+)?theologian$/i.test(String(character.subclass || '').trim()) && character.level >= 3
 
   // Get class features by level
   const getClassFeatures = () => {
@@ -1945,7 +1994,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
           {canLevelUp && onLevelUp && (
             <button
               className="button level-up-button"
-              onClick={onLevelUp}
+              onClick={() => onLevelUp()}
               title="Level up your character!"
             >
               Level Up!
@@ -1981,7 +2030,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
             </span>
             <button
               className="button level-up-button"
-              onClick={onLevelUp}
+              onClick={() => onLevelUp()}
             >
               Level Up Now →
             </button>
@@ -3772,13 +3821,27 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                   </section>
                 )}
 
-                {/* Known Spells - for Bard, Warlock */}
+                {/* Infusion plans — artificer (class-audit gap 5) */}
+                {artificerPlans && (
+                  <section className="sheet-section">
+                    <h3>Infusion Plans ({artificerPlans.known.length}/{artificerPlans.max})</h3>
+                    {artificerPlans.known.length > 0 ? (
+                      <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
+                        {artificerPlans.known.map(p => <li key={p}>{p}</li>)}
+                      </ul>
+                    ) : (
+                      <p style={{ color: '#888', fontSize: '0.85rem' }}>
+                        {artificerPlans.max > 0 ? 'No plans learned yet — you learn them when you level up, or at a long rest in play.' : 'Artificers learn their first plans at 2nd level.'}
+                      </p>
+                    )}
+                  </section>
+                )}
+
+                {/* Known Spells — spellshot, magus, casting warden, Ritualist scholar (class-audit gap 4) */}
                 {isKnownCaster() && (
                   <section className="sheet-section">
                     <h3>Known Spells ({knownSpells.length}
-                      {effectiveSpellcasting?.spellsKnownByLevel && (
-                        <span>/{effectiveSpellcasting.spellsKnownByLevel[character.level - 1] || '?'}</span>
-                      )}
+                      <span>/{knownSpellInfo?.spellsKnown ?? '?'}</span>
                     )</h3>
                     {spellSaveError && (
                       <p style={{ fontSize: '0.8rem', color: '#e74c3c', marginBottom: '0.5rem' }}>{spellSaveError}</p>
@@ -3824,8 +3887,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                     )}
 
                     {/* Learn Spell Button */}
-                    {!showLearnSpell && effectiveSpellcasting?.spellsKnownByLevel &&
-                      knownSpells.length < (effectiveSpellcasting.spellsKnownByLevel[character.level - 1] || 0) && (
+                    {!showLearnSpell && knownSpells.length < (knownSpellInfo?.spellsKnown || 0) && (
                       <button
                         onClick={() => {
                           setShowLearnSpell(true)
@@ -3836,7 +3898,7 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                           background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '6px',
                           padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem'
                         }}
-                      >+ Learn New Spell ({(effectiveSpellcasting.spellsKnownByLevel[character.level - 1] || 0) - knownSpells.length} remaining)</button>
+                      >+ Learn New Spell ({(knownSpellInfo?.spellsKnown || 0) - knownSpells.length} remaining)</button>
                     )}
 
                     {/* Learn Spell Panel */}
@@ -3896,16 +3958,11 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                         {/* Available Spells */}
                         <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                           {(() => {
-                            const className = character.class?.toLowerCase()
-                            let spells = []
-                            if (spellSlots) {
-                              for (const [level, max] of Object.entries(spellSlots.max || {})) {
-                                if (max <= 0) continue
-                                const levelKey = level === '1' ? '1st' : level === '2' ? '2nd' : level === '3' ? '3rd' : `${level}th`
-                                const levelSpells = (spellsData.spells[levelKey] || []).filter(s => s.classes?.includes(className))
-                                levelSpells.forEach(s => spells.push({ ...s, spellLevel: levelKey }))
-                              }
-                            }
+                            // class-audit gap 4: the learnable spells come from the
+                            // server's class/subclass rules (GET /api/spells) — the
+                            // client catalog tags none of these classes.
+                            const ordinal = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`)
+                            let spells = (knownSpellInfo?.spells || []).map(s => ({ ...s, spellLevel: ordinal(s.level) }))
                             // Filter out already known
                             spells = spells.filter(s => !knownSpells.includes(s.name))
                             if (spellLevelFilter !== 'all') {

@@ -50,6 +50,57 @@ const HIT_DICE = {
   blackguard: 10
 }
 
+// class-audit gap 5: pick the infusion plans an artificer level grants.
+// The available plans (by level) and the ones already known come from
+// GET /api/character/artificer-plans/:id?level=N; the server validates the
+// picks again at submit. Generic plans ("Common magic item", "Uncommon /
+// Rare Wondrous Item") need the item named.
+function ArtificerPlanPicker({ characterId, level, due, picks, setPicks, catalog, setCatalog }) {
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/character/artificer-plans/${characterId}?level=${level}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled) setCatalog(d) })
+      .catch(() => { if (!cancelled) setCatalog(null) })
+    return () => { cancelled = true }
+  }, [characterId, level, setCatalog])
+  const known = new Set(catalog?.known || [])
+  const isPicked = (name) => picks.some(p => p.plan === name)
+  const toggle = (plan) => {
+    if (isPicked(plan.name)) setPicks(picks.filter(p => p.plan !== plan.name))
+    else if (picks.length < due) setPicks([...picks, { plan: plan.name, detail: '' }])
+  }
+  const setDetail = (name, detail) => setPicks(picks.map(p => (p.plan === name ? { ...p, detail } : p)))
+  return (
+    <section className="choice-section">
+      <h3>Infusion Plans</h3>
+      <p>Artificer level {level} lets you learn {due} new plan{due === 1 ? '' : 's'} ({picks.length} of {due} chosen). You will know {(catalog?.known?.length ?? 0) + picks.length} of {catalog?.max ?? '?'} after this level.</p>
+      {!catalog && <p style={{ color: '#888' }}>Loading plans…</p>}
+      {catalog && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          {catalog.available.filter(p => p.needsDetail || !known.has(p.name)).map(p => {
+            const picked = isPicked(p.name)
+            return (
+              <div key={p.name}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" style={{ width: 'auto', flex: '0 0 auto', margin: 0 }} checked={picked}
+                    disabled={!picked && picks.length >= due} onChange={() => toggle(p)} />
+                  <span>{p.name}{p.attunement === true ? ' (requires attunement)' : ''}</span>
+                </label>
+                {picked && p.needsDetail && (
+                  <input type="text" placeholder="Name the item (required)" value={picks.find(x => x.plan === p.name)?.detail || ''}
+                    onChange={e => setDetail(p.name, e.target.value)}
+                    style={{ marginLeft: 26, marginTop: 4, padding: '0.3rem 0.5rem', width: 'calc(100% - 26px)' }} />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function LevelUpPage({ character, onLevelUp, onBack }) {
   const [levelUpInfo, setLevelUpInfo] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -71,6 +122,10 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   const [asiOrFeat, setAsiOrFeat] = useState('asi')
   const [selectedFeatKey, setSelectedFeatKey] = useState('')
   const [selectedFeatAbility, setSelectedFeatAbility] = useState('')
+  // class-audit gap 5: the artificer's infusion-plan picks at a level that
+  // grants plans — { plan, detail } each; the catalog comes from the server.
+  const [planPicks, setPlanPicks] = useState([])
+  const [planCatalog, setPlanCatalog] = useState(null)
   const [selectedSubclass, setSelectedSubclass] = useState('')
 
   // Spell selection state (for spells step)
@@ -96,9 +151,27 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   // Progression (Phase 5): ancestry feat choice at L3/L7/L13/L18
   const [selectedAncestryFeatId, setSelectedAncestryFeatId] = useState(null)
 
+  // The spells this class may learn at its new level, from GET /api/spells
+  // (canLearnSpell enforces the slot table). classes.json carries no
+  // spellSlotsByLevel, so the old client-side count found no spells for any
+  // class but warlock — the wizard's +2 picker was always empty.
+  const [serverSpellList, setServerSpellList] = useState(null)
+
   useEffect(() => {
     fetchLevelUpInfo()
   }, [character.id])
+
+  useEffect(() => {
+    const cls = selectedClassOption?.class?.toLowerCase()
+    if (!cls) { setServerSpellList(null); return }
+    const sub = selectedClassOption.subclass || selectedSubclass || ''
+    let cancelled = false
+    fetch(`/api/spells?class=${encodeURIComponent(cls)}&level=${selectedClassOption.newLevel || 1}${sub ? `&subclass=${encodeURIComponent(sub)}` : ''}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled) setServerSpellList(Array.isArray(d?.spells) ? d.spells : null) })
+      .catch(() => { if (!cancelled) setServerSpellList(null) })
+    return () => { cancelled = true }
+  }, [selectedClassOption, selectedSubclass])
 
   useEffect(() => {
     if (selectedClassOption) {
@@ -280,8 +353,19 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
     const existingSpells = JSON.parse(character.known_spells || '[]')
     const swappedOut = swapSpell?.old
     const available = []
+    const ordinals = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th']
 
-    // Determine max spell level this class can cast at its new level
+    if (serverSpellList) {
+      for (const spell of serverSpellList) {
+        const isKnown = existingSpells.includes(spell.name) && spell.name !== swappedOut
+        if (!isKnown && !selectedNewSpells.includes(spell.name)) {
+          available.push({ ...spell, level: ordinals[spell.level - 1] || `${spell.level}th` })
+        }
+      }
+      return available
+    }
+
+    // Fallback while the server list loads: max spell level from classes.json
     const classInfo = classesData[key]
     const spellcasting = classInfo?.spellcasting
     if (!spellcasting) return []
@@ -429,6 +513,11 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
       if (activeChoices.needsSubclass && selectedSubclass) {
         body.subclass = selectedSubclass
+      }
+
+      // class-audit gap 5: the new infusion plans.
+      if (activeChoices.newPlans > 0 && planPicks.length > 0) {
+        body.newPlans = planPicks.map(p => ({ plan: p.plan, ...(p.detail ? { detail: p.detail } : {}) }))
       }
 
       // Progression (Phase 5): include ancestry feat pick when an L3/L7/L13/L18 tier crossed
@@ -1239,6 +1328,19 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
               <p className="current-hp">Current HP: {character.current_hp}/{character.max_hp}</p>
             </section>
 
+            {/* class-audit gap 5: Artificer infusion plans */}
+            {activeChoices.newPlans > 0 && (
+              <ArtificerPlanPicker
+                characterId={character.id}
+                level={selectedClassOption.newLevel}
+                due={activeChoices.newPlans}
+                picks={planPicks}
+                setPicks={setPlanPicks}
+                catalog={planCatalog}
+                setCatalog={setPlanCatalog}
+              />
+            )}
+
             {/* ASI or Feat choice */}
             {activeChoices.needsASI && (
               <section className="choice-section asi-section">
@@ -1906,7 +2008,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                         {selectedClassOption.type === 'multiclass'
                           ? `${getClassDisplay()} / ${selectedClassOption.class} 1`
                           : levelUpInfo.classLevels.map(c =>
-                              c.class === selectedClassOption.class
+                              c.class.toLowerCase() === selectedClassOption.class.toLowerCase()
                                 ? `${c.class} ${c.level + 1}`
                                 : `${c.class} ${c.level}`
                             ).join(' / ')
@@ -1982,6 +2084,17 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                       <div className="review-row">
                         <span className="review-label">Chosen</span>
                         <span className="review-value">{selectedSubclass}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* class-audit gap 5: the infusion plans being learned */}
+                  {planPicks.length > 0 && (
+                    <div className="review-card">
+                      <h3>Infusion Plans</h3>
+                      <div className="review-row">
+                        <span className="review-label">Learning</span>
+                        <span className="review-value">{planPicks.map(p => (p.detail ? `${p.plan} (${p.detail})` : p.plan)).join(', ')}</span>
                       </div>
                     </div>
                   )}

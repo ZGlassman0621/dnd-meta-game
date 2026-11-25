@@ -114,6 +114,7 @@ export async function ledgerKeyForCompanion(companionRow) {
 /** kind 'player' | 'companion'; id is the character or companion-row id. */
 export async function ledgerKeyForTarget(kind, id) {
   if (kind === 'player') return ledgerKeyForPlayer(id);
+  if (kind === 'ally') return `ally:${id}`; // class-audit gap 8: summons are keyed by their combat_allies id
   try {
     const row = await dbGet('SELECT npc_id FROM companions WHERE id = ?', [id]);
     if (row) return ledgerKeyForCompanion({ id, npc_id: row.npc_id });

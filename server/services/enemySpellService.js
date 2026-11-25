@@ -163,9 +163,9 @@ async function enemyCr(enemyRow) {
 export function partySpellProfile(kind, row) {
   if (!row) return null;
   if (kind === 'player') {
-    return spellProfileFor({ ability_scores: row.ability_scores, level: row.level }, row.class);
+    return spellProfileFor({ ability_scores: row.ability_scores, level: row.level }, row.class, row.subclass); // class-audit gap 1 (sibling)
   }
-  return spellProfileFor({ ability_scores: row.companion_ability_scores, level: row.companion_level }, row.companion_class);
+  return spellProfileFor({ ability_scores: row.companion_ability_scores, level: row.companion_level }, row.companion_class, row.companion_subclass);
 }
 
 // ---------------------------------------------------------------------------

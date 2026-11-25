@@ -314,6 +314,15 @@ registerMarkerHandler('COMBAT_START', async (parsed, context) => {
       });
     }
 
+    // class-audit gap 8: summons already serving (Hound of Ill Omen,
+    // Accursed Specter, Faithful Summons beasts) join the new fight with
+    // their own engine-rolled initiative.
+    try {
+      const { allyTurnEntries } = await import('./allyCombatService.js');
+      const { listActiveFriendlyActors } = await import('./entityService.js');
+      for (const e of allyTurnEntries(await listActiveFriendlyActors(context.sessionId))) turnOrder.push(e);
+    } catch { /* summons are best-effort; the fight starts either way */ }
+
     // Sort: initiative descending; ties broken by modifier; remaining ties random.
     turnOrder.sort((a, b) => {
       if (b.initiative !== a.initiative) return b.initiative - a.initiative;
@@ -458,6 +467,15 @@ async function resolvePartyTarget(context, encounterSeq, targetName) {
        WHERE c.recruited_by_character_id = ? AND c.status = 'active' AND LOWER(n.name) = LOWER(?) LIMIT 1`,
       [context.characterId, targetName]);
     if (comp) target = { type: 'companion', id: comp.id, armorClass: comp.armor_class || 10, name: comp.name };
+    else {
+      // class-audit gap 8: an enemy can target a summon (hound, specter,
+      // Faithful Summons beast) by name.
+      try {
+        const { findActiveAlly } = await import('./allyCombatService.js');
+        const ally = await findActiveAlly(context.sessionId, targetName);
+        if (ally) target = { type: 'ally', id: ally.id, armorClass: ally.armorClass || 10, name: ally.name };
+      } catch { /* no summon target */ }
+    }
   }
   if (target) {
     const cover = await getPartyCover(context.sessionId, encounterSeq, target.name).catch(() => null);

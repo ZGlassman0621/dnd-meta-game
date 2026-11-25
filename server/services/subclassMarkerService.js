@@ -293,6 +293,17 @@ async function oncePerLongRestUsed(kind, id, key) {
   return !!got?.raw?.[key]?.used;
 }
 
+// class-audit gap 8: slot new summons into a running fight; returns the
+// sentence the DM gets about where they act ('' when no fight is running).
+async function joinSummonsNote(sessionId, encounterSeq, allies) {
+  try {
+    const { joinAlliesToFight } = await import('./allyCombatService.js');
+    const res = await joinAlliesToFight(sessionId, encounterSeq, (allies || []).filter(Boolean));
+    if (!res.joined?.length) return '';
+    return ` In the turn order: ${res.joined.map((j) => `${j.name} (initiative ${j.initiative})`).join(', ')} — on its turn the engine asks you what it does; it attacks with [ATTACK: Attacker="<its name>" Target="<enemy>"], and enemies can target it by name.`;
+  } catch { return ''; }
+}
+
 async function markOncePerLongRestUsed(kind, id, key) {
   const got = await readResourcesRaw(kind, id);
   if (!got) return;
@@ -367,13 +378,21 @@ async function applyHealToTarget(kind, id, amount) {
 // requestHeroicReroll. Companion branch is DM-triggered via the
 // Target= name (re-runs the companion roll with rerollWithHeroic).
 registerMarkerHandler('HEROIC_REROLL', async (parsed, context) => {
-  const target = String(parsed.fields?.Target || '').trim();
+  // class-audit gap 8: every other handler reads parsed.Target (the old
+  // parsed.fields?.Target was always empty); requestHeroicReroll now takes
+  // the target, so a companion's reroll re-runs its last roll.
+  const target = String(parsed?.Target || '').trim();
   try {
-    const result = await requestHeroicReroll(context.sessionId, null, target || undefined);
+    const result = await requestHeroicReroll(context.sessionId, null, target || null);
     if (!result?.success) {
-      return { ok: false, reason: result?.reason || 'no_heroic_inspiration', systemNote: `Heroic Inspiration reroll refused: ${result?.reason || 'no Heroic Inspiration held'}.` };
+      return { ok: false, reason: result?.reason || 'no_heroic_inspiration', systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Heroic Inspiration reroll refused: ${result?.reason || 'no Heroic Inspiration held'}.` };
     }
-    return { ok: true, systemNote: 'Heroic Inspiration spent — roll again; the new roll stands.' };
+    if (result.companion) {
+      const o = result.outcome || {};
+      return { ok: true, companion: result.companion, outcome: o,
+        systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${result.companion} spends Heroic Inspiration and rerolls: ${o.check || 'the roll'} — d20 ${o.takenDie ?? '?'} → total ${o.total ?? '?'}${o.outcome ? ` (${o.outcome})` : ''}. The new roll stands even if lower. Narrate it.` };
+    }
+    return { ok: true, systemNote: '[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Heroic Inspiration spent — the engine is asking the player to roll that d20 again; the new roll stands even if lower. Wait for the result.' };
   } catch (e) {
     return { ok: false, reason: 'handler_error', systemNote: `Heroic Inspiration reroll failed: ${e?.message || e}.` };
   }
@@ -408,11 +427,21 @@ registerMarkerHandler('BEND_LUCK', async (parsed, context) => {
     if (!spent.success) return { type: 'bend_luck', success: false, reason: spent.reason };
     const die = bendLuckDie();
     const rolled = roll(4, 1, { reason: 'bend luck' });
+    // class-audit gap 8: the d4 now lands on the roll it answers.
+    const signed = direction === 'bonus' ? rolled.total : -rolled.total;
+    let applied = { appliedTo: null };
+    try { applied = await (await import('./rollRequestService.js')).applyBendLuck(context.sessionId, signed); } catch { /* reported below */ }
+    const where = applied.appliedTo === 'pending'
+      ? `the player's pending ${applied.check || rollLabel} roll (it joins the total when the d20 comes in)`
+      : applied.appliedTo ? `${applied.actor}'s ${applied.check || rollLabel} roll: total now ${applied.total}${applied.outcome ? ` (${applied.outcome})` : ''}`
+      : null;
     return {
       type: 'bend_luck', success: true, target: target.name, roll: rollLabel,
       direction, die: rolled.rolls[0], amount: rolled.total, dice: die.dice,
       sorceryUsed: spent.used, sorceryMax: spent.max,
-      note: `Apply ${direction === 'bonus' ? '+' : '−'}${rolled.total} to the ${rollLabel} d20 Test total. The DM applies it to the pending roll — the system never rewrites a reported total.`,
+      appliedTo: applied.appliedTo, appliedTotal: applied.total ?? null, appliedOutcome: applied.outcome ?? null,
+      note: where ? `Bend Luck: ${direction === 'bonus' ? '+' : '−'}${rolled.total} applied to ${where}.` : `Bend Luck rolled ${direction === 'bonus' ? '+' : '−'}${rolled.total}, but no recent d20 Test was found to apply it to.`,
+      systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Bend Luck — ${target.name} spends a sorcery point: ${direction === 'bonus' ? '+' : '−'}${rolled.total} (d4) ${where ? `applied to ${where}` : 'rolled, but there was no recent d20 Test to apply it to'}. Narrate the result accordingly.`,
     };
   } catch (e) {
     console.error('[subclassMarkerService] BEND_LUCK handler failed:', e.message);
@@ -690,11 +719,14 @@ registerMarkerHandler('HOUND_OF_ILL_OMEN', async (parsed, context) => {
     );
     if (!created.success) return { type: 'hound_of_ill_omen', success: false, reason: created.reason };
     await spendBonusFor(context, target, 'Hound of Ill Omen');
+    // class-audit gap 8: the hound joins the running fight's turn order.
+    const joinNote = await joinSummonsNote(context.sessionId, encounterSeq, [created.ally]);
     return {
       type: 'hound_of_ill_omen', success: true, target: target.name, creature,
       allyId: created.ally.id, allyName: created.ally.name,
       tempHp: created.ally.tempHp, sorceryUsed: spent.used, sorceryMax: spent.max,
-      note: `The hound appears within 30 feet of ${creature} and hunts it for 5 minutes. While within 5 feet of ${creature}, ${creature} has disadvantage on saving throws against spells ${target.name} casts. The hound rolls its own initiative (turn-order insertion is a follow-up — see NOTES.md).`,
+      note: `The hound appears within 30 feet of ${creature} and hunts it for 5 minutes. While within 5 feet of ${creature}, ${creature} has disadvantage on saving throws against spells ${target.name} casts (the engine applies it). The hound rolls its own initiative.${joinNote}`,
+      systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Hound of Ill Omen — the hound hunts ${creature}; while it is within 5 feet of ${creature}, ${creature} has disadvantage on saves against ${target.name}'s spells (the engine applies it).${joinNote}`,
     };
   } catch (e) {
     console.error('[subclassMarkerService] HOUND_OF_ILL_OMEN handler failed:', e.message);
@@ -740,10 +772,13 @@ registerMarkerHandler('ACCURSED_SPECTER', async (parsed, context) => {
     );
     if (!created.success) return { type: 'accursed_specter', success: false, reason: created.reason };
     await markOncePerLongRestUsed(target.kind, target.id, 'accursedSpecterUsed');
+    // class-audit gap 8: the specter joins the running fight's turn order.
+    const joinNote = await joinSummonsNote(context.sessionId, encounterSeq, [created.ally]);
     return {
       type: 'accursed_specter', success: true, target: target.name,
       allyId: created.ally.id, allyName: created.ally.name, tempHp: created.ally.tempHp,
-      note: `The specter serves until the end of ${target.name}'s next Long Rest and rolls its own initiative.`,
+      note: `The specter serves until the end of ${target.name}'s next Long Rest and rolls its own initiative.${joinNote}`,
+      systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Accursed Specter — the specter serves ${target.name} until the end of their next Long Rest.${joinNote}`,
     };
   } catch (e) {
     console.error('[subclassMarkerService] ACCURSED_SPECTER handler failed:', e.message);
@@ -801,10 +836,13 @@ registerMarkerHandler('FAITHFUL_SUMMONS', async (parsed, context) => {
       created.push(res);
     }
     await markOncePerLongRestUsed(target.kind, target.id, 'faithfulSummonsUsed');
+    // class-audit gap 8: the beasts join the running fight (one group roll).
+    const joinNote = await joinSummonsNote(context.sessionId, encounterSeq, created.map((c) => c.ally));
     return {
       type: 'faithful_summons', success: true, target: target.name,
       allies: created.map((c) => ({ id: c.ally.id, name: c.ally.name })),
-      note: `Four beasts (as Conjure Animals from a 9th-level slot) protect ${target.name} for 1 hour, no concentration. Dismiss with no action.`,
+      note: `Four beasts (as Conjure Animals from a 9th-level slot) protect ${target.name} for 1 hour, no concentration. Dismiss with no action.${joinNote}`,
+      systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Faithful Summons — ${created.map((c) => c.ally.name).join(', ')} protect ${target.name} for 1 hour.${joinNote}`,
     };
   } catch (e) {
     console.error('[subclassMarkerService] FAITHFUL_SUMMONS handler failed:', e.message);

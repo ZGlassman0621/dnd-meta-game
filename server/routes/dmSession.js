@@ -212,6 +212,9 @@ import { getProjectsForPrompt } from '../services/longTermProjectService.js';
 
 const router = express.Router();
 
+// class-audit gap 8: class-feature markers whose results are told to the DM.
+const CLASS_FEATURE_NOTE_KEYS = new Set(['HEROIC_REROLL', 'BEND_LUCK', 'TIDES_OF_CHAOS', 'TAMED_SURGE', 'HOUND_OF_ILL_OMEN', 'ACCURSED_SPECTER', 'FAITHFUL_SUMMONS']);
+
 /**
  * Pick a starting day based on campaign description keywords.
  * Returns a day-of-year (1-365) in the matching season, or random if no match.
@@ -1560,6 +1563,11 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
         ? `⚙ Winning Words: your Persuasion ${c.playerTotal} beats ${c.target}'s Insight — ${c.target} is charmed for 1 minute.`
         : `⚙ Winning Words: your Persuasion ${c.playerTotal} does not beat ${c.target}'s Insight — no charm.`);
     }
+    // class-audit gap 8: say when Heroic Inspiration could reroll this d20
+    // (no DC or total here: the DM narrates the result).
+    if (rollOutcome?.heroicInspiration?.available && !rollOutcome.perceptionBank) {
+      engineLines.push(`⚙ You hold Heroic Inspiration: you can reroll that d20 — say so, and the new roll stands even if lower.`);
+    }
     let initiativeRes = null;
     let deathSaveRes = null;
     let concentrationRes = null;
@@ -2858,6 +2866,16 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       }
       if (hr.schemaKey === 'ROLL_REQUEST' && !hr.result.refusedBankedPerception && hr.result.systemNote) {
         result.messages.push({ role: 'user', content: hr.result.systemNote });
+      }
+      // class-audit gap 8: the seven class-feature markers tell the DM what
+      // the engine did (reroll result, Bend Luck's d4, summons joining the fight).
+      if (CLASS_FEATURE_NOTE_KEYS.has(hr.schemaKey)) {
+        const r = hr.result;
+        const label = hr.schemaKey.replace(/_/g, ' ');
+        const content = r.systemNote
+          || (r.success === false && r.reason ? `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${label} refused: ${r.reason}.` : null)
+          || (r.note ? `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${label}: ${r.note}` : null);
+        if (content) result.messages.push({ role: 'user', content });
       }
     }
 

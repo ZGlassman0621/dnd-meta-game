@@ -291,6 +291,11 @@ export async function resolveEnemyAttack(sessionId, encounterSeq, enemyName, tar
         const cc = await checkCompanionConcentration(target.id, damage);
         if (cc) hpResult.concentrationCheck = cc;
       } catch { /* best-effort */ }
+    } else if (target.type === 'ally') {
+      // class-audit gap 8: a summon takes the hit (temp HP first; 0 HP ends it).
+      const { applyDamageToAlly } = await import('./entityService.js');
+      const res = await applyDamageToAlly(target.id, damage);
+      hpResult = { ...(res || {}), applied: true, damage, hpDamage: res?.damageDealt ?? 0 };
     }
   }
   // Item 6, Tier F2: every damage path writes the last-damage

@@ -800,6 +800,40 @@ export function resetPactSlots(usedSlots, warlockLevel) {
   return next;
 }
 
+// class-audit gap 7 (the D3 split, migration 116): pact spends are
+// recorded apart in pact_slots_used ({ level: count }). The short-rest
+// reset subtracts exactly the recorded pact spends from the shared map and
+// clears the record, so a spent Spellcasting slot at the same level stays
+// spent (and Arcane Recovery can recover it). `pactUsed` null/undefined
+// means "no record yet" (a pre-116 row) — then the old whole-count reset
+// above applies. Pure: returns { used, pactUsed }.
+export function resetPactSlotsTracked(usedSlots, warlockLevel, pactUsed) {
+  if (pactUsed == null || typeof pactUsed !== 'object' || Array.isArray(pactUsed)) {
+    return { used: resetPactSlots(usedSlots, warlockLevel), pactUsed: {} };
+  }
+  const next = { ...(usedSlots || {}) };
+  for (const [lvl, n] of Object.entries(pactUsed)) {
+    const left = (Number(next[lvl]) || 0) - (Number(n) || 0);
+    if (left <= 0) delete next[lvl];
+    else next[lvl] = left;
+  }
+  return { used: next, pactUsed: {} };
+}
+
+// Which pool pays for a slot spent at `slotLevel` (class-audit gap 7)?
+// A pact slot when: the character has Pact Magic at that slot level AND
+// pact slots are left AND (the caster asked for a pact slot, OR it has no
+// Spellcasting slot at that level, OR those are all spent). Otherwise the
+// Spellcasting slot. `nonPactMax` is the Spellcasting-feature slot count at
+// that level (0 for a warlock-only caster). Pure: returns true for pact.
+export function spendsPactSlot({ pact, slotLevel, wantPact = false, nonPactMax = 0, usedAtLevel = 0, pactUsedAtLevel = 0 }) {
+  if (!pact || Number(pact.level) !== Number(slotLevel)) return false;
+  if ((Number(pactUsedAtLevel) || 0) >= (Number(pact.slots) || 0)) return false;
+  if (wantPact) return true;
+  const nonPactUsed = Math.max(0, (Number(usedAtLevel) || 0) - (Number(pactUsedAtLevel) || 0));
+  return (Number(nonPactMax) || 0) <= nonPactUsed;
+}
+
 export default {
   SPELLBOOK_START_SIZE,
   SPELLBOOK_SPELLS_PER_LEVEL,

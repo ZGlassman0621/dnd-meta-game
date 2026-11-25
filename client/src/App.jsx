@@ -249,7 +249,9 @@ function App() {
     // Accept an optional character — if the caller is the character list, it
     // passes the character explicitly. If called from the sheet, selectedCharacter
     // is already the right one.
-    if (character && character.id !== selectedCharacter?.id) {
+    // Only a real character row counts: a click event passed by an
+    // onClick={onLevelUp} has no id and used to replace the selection.
+    if (character && character.id != null && character.id !== selectedCharacter?.id) {
       setSelectedCharacter(character)
     }
     setShowLevelUp(true)

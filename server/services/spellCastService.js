@@ -95,7 +95,10 @@ export async function resolveSpellSave({ sessionId, casterCharacterId, casterKin
   const actorShape = casterKind === 'player'
     ? { ability_scores: casterRow.ability_scores, level: casterRow.level }
     : { ability_scores: casterRow.companion_ability_scores, level: casterRow.companion_level };
-  const profile = spellProfileFor(actorShape, className);
+  // class-audit gap 1: pass the subclass so a magus / warden / scholar
+  // casting subclass resolves its ability (DC and attack bonus).
+  const subclassName = casterKind === 'player' ? casterRow.subclass : casterRow.companion_subclass;
+  const profile = spellProfileFor(actorShape, className, subclassName);
   if (!profile) return null;
   const dc = profile.saveDc;
   const modifier = await enemySaveModifier(enemy, saveAbility);
@@ -121,6 +124,17 @@ export async function resolveSpellSave({ sessionId, casterCharacterId, casterKin
       subclassDisadvantage = res.disadvantage;
       subclassMarks = res.sources || [];
     } catch { /* marks never break a save */ }
+    // class-audit gap 8: Hound of Ill Omen — the creature the caster's
+    // hound hunts saves with disadvantage against the caster's spells
+    // while the hound is within 5 ft of it.
+    try {
+      const { houndSaveDisadvantage } = await import('./allyCombatService.js');
+      const casterId = casterRow?.id;
+      if (casterId && await houndSaveDisadvantage(sessionId, seq, casterKind, casterId, enemy.name)) {
+        subclassDisadvantage = true;
+        subclassMarks = [...subclassMarks, 'Hound of Ill Omen'];
+      }
+    } catch { /* the hound never breaks a save */ }
 
   // Combat item 3, Tier 3: a dodging enemy rolls DEX saves with
   // advantage (advantage + disadvantage cancel to a straight roll,
@@ -523,6 +537,17 @@ export async function runWildMagicHook({ sessionId, characterId, casterKind, cas
       : (encounterSeq && sessionId ? await wildMagicGate(sessionId, encounterSeq, actorKey) : { gated: false, alreadyUsed: false });
     if (gate.alreadyUsed) return { triggered: false, offered: false, forced: false, d20: null, d100: null, row: null, reason: 'once_per_turn' };
 
+    // class-audit gap 8 (Tamed Surge, Wild Magic 18): a row the sorcerer
+    // chose replaces the roll — the surge happens with that effect.
+    let tamedForced = false;
+    if (!opts.tamedSurgeRow && !opts.reportingOffer) {
+      try {
+        const { consumePendingTamedSurge } = await import('./subclassMarkerService.js');
+        const chosen = await consumePendingTamedSurge(actor.kind, actor.id);
+        if (chosen?.range) { opts = { ...opts, tamedSurgeRow: chosen.range }; tamedForced = true; }
+      } catch { /* no choice — the normal surge path */ }
+    }
+
     // Tides of Chaos: forced. The spent flag may come from opts or
     // from session_config (set by the markers family when Tides is
     // spent); a forced roll restores Tides, so the flag clears.
@@ -533,6 +558,14 @@ export async function runWildMagicHook({ sessionId, characterId, casterKind, cas
         ({ cfg } = await readSessionCfg(sessionId));
         tidesSpent = !!cfg.tidesOfChaosSpent;
       } catch { /* no session config — not forced */ }
+    }
+    // class-audit gap 8: the TIDES_OF_CHAOS marker records the spend in
+    // class resources (tidesOfChaos.used), not session_config — read both.
+    if (!tidesSpent) {
+      try {
+        const { isTidesOfChaosSpent } = await import('./subclassMarkerService.js');
+        tidesSpent = await isTidesOfChaosSpent(actor.kind, actor.id);
+      } catch { /* not spent */ }
     }
     if (tidesSpent && isPc && opts.d100Roll == null && opts.d100Rolls == null && !opts.tamedSurgeRow) {
       const chaosNote = hasSubclassFeatureKey(actor, 'controlled_chaos')
@@ -556,7 +589,7 @@ export async function runWildMagicHook({ sessionId, characterId, casterKind, cas
       d100Rolls: opts.d100Rolls ?? null,
       tableChoiceIndex: opts.tableChoiceIndex,
       tamedSurgeRow: opts.tamedSurgeRow,
-      forced: tidesSpent,
+      forced: tidesSpent || tamedForced,
       alreadyRolledThisTurn: false,
     });
     if (roll.offered) {
@@ -574,6 +607,12 @@ export async function runWildMagicHook({ sessionId, characterId, casterKind, cas
       try { ({ cfg } = await readSessionCfg(sessionId)); } catch { cfg = {}; }
     }
     if (tidesSpent && cfg) cfg.tidesOfChaosSpent = false; // the auto-roll restores Tides of Chaos
+    if (tidesSpent) {
+      try {
+        const { restoreTidesOfChaos } = await import('./subclassMarkerService.js');
+        await restoreTidesOfChaos(actor.kind, actor.id, 'wild magic surge'); // class-audit gap 8: one state
+      } catch { /* best-effort */ }
+    }
     const surge = await applySurgeRow(actor, roll.row, {
       sessionConfig: cfg || {},
       sessionId: sessionId || null,
@@ -730,7 +769,7 @@ async function notePcSpellEffect(sessionId, characterId, charRow, spellName, lvl
   if (!sessionId || !charRow) return null;
   const spec = spellEffectSpec(spellName, { slotLevel: lvl, casterLevel: charRow.level || 1 });
   if (!spec) return null;
-  const profile = spellProfileFor({ ability_scores: charRow.ability_scores, level: charRow.level }, charRow.class);
+  const profile = spellProfileFor({ ability_scores: charRow.ability_scores, level: charRow.level }, charRow.class, charRow.subclass);
   const { flat, specStr } = effectNumbers(spec, profile);
   if (spec.flat) {
     return applyFlatPcSpellEffect(sessionId, characterId, charRow, spellName, spec, specStr, flat, spellSave, targetName, lvl);
@@ -780,7 +819,7 @@ async function applyCompanionSpellEffect(sessionId, characterId, compRow, caster
   if (!sessionId) return null;
   const spec = spellEffectSpec(spellName, { slotLevel: lvl, casterLevel: compRow.companion_level || 1 });
   if (!spec) return null;
-  const profile = spellProfileFor({ ability_scores: compRow.companion_ability_scores, level: compRow.companion_level }, compRow.companion_class);
+  const profile = spellProfileFor({ ability_scores: compRow.companion_ability_scores, level: compRow.companion_level }, compRow.companion_class, compRow.companion_subclass);
   const { flat, specStr } = effectNumbers(spec, profile);
   let total;
   if (spec.flat) {
@@ -931,6 +970,64 @@ async function slotMath(isPc, characterId, compId, casterRaw, lvl) {
 
 /** Spend one slot (reaction + countered casts, which bypass castSpell).
  *  Cantrips are free. Returns { ok, consumed, slotsMax, slotsUsed, slotsRemaining }. */
+// class-audit gap 7 (D3, migration 116): after a slot at `lvl` is spent,
+// record it in pact_slots_used when it was a Pact Magic slot — see
+// spellbookService.spendsPactSlot for the rule. `usedBefore` is the shared
+// map's count at that level BEFORE this spend. Best-effort: a failure
+// leaves the old (whole-count) reset behaviour for this row.
+export async function recordPactSpend(isPc, id, lvl, usedBefore, wantPact = false) {
+  try {
+    const { pactSlotsForWarlockLevel, warlockLevelFromClassLevels, spendsPactSlot } = await import('./spellbookService.js');
+    const { getMulticlassSpellSlots } = await import('../config/levelProgression.js');
+    const row = isPc
+      ? await dbGet('SELECT class, level, class_levels, pact_slots_used FROM characters WHERE id = ?', [id])
+      : await dbGet('SELECT companion_class AS class, companion_level AS level, companion_class_levels AS class_levels, pact_slots_used FROM companions WHERE id = ?', [id]);
+    if (!row) return false;
+    const classLevels = safeParse(row.class_levels, null);
+    const warlockLevel = warlockLevelFromClassLevels(classLevels)
+      ?? (String(row.class || '').toLowerCase() === 'warlock' ? Number(row.level) || 1 : null);
+    if (!warlockLevel) return false;
+    const pact = pactSlotsForWarlockLevel(warlockLevel);
+    // Spellcasting-feature (non-pact) slots at this level: the multiclass
+    // table from the other caster classes; 0 for a warlock-only caster.
+    let nonPactMax = 0;
+    if (Array.isArray(classLevels) && classLevels.some((e) => String(e?.class ?? '').toLowerCase() !== 'warlock')) {
+      const mc = getMulticlassSpellSlots(classLevels);
+      nonPactMax = Number((mc?.spellSlots || {})[lvl] || (mc?.spellSlots || {})[String(lvl)] || 0);
+    }
+    const pactUsed = safeParse(row.pact_slots_used, null);
+    const rec = pactUsed && typeof pactUsed === 'object' && !Array.isArray(pactUsed) ? { ...pactUsed } : {};
+    const isPact = spendsPactSlot({ pact, slotLevel: lvl, wantPact, nonPactMax, usedAtLevel: usedBefore, pactUsedAtLevel: Number(rec[lvl] || rec[String(lvl)] || 0) });
+    if (!isPact) {
+      // First spend on a pre-116 row: start the record (empty), so the next
+      // short rest is precise from here on.
+      if (pactUsed == null) await dbRun(`UPDATE ${isPc ? 'characters' : 'companions'} SET pact_slots_used = ? WHERE id = ?`, ['{}', id]);
+      return false;
+    }
+    rec[String(lvl)] = (Number(rec[String(lvl)]) || 0) + 1;
+    await dbRun(`UPDATE ${isPc ? 'characters' : 'companions'} SET pact_slots_used = ? WHERE id = ?`, [JSON.stringify(rec), id]);
+    return true;
+  } catch { return false; }
+}
+
+// class-audit gap 7: after a slot is RESTORED, the pact record at that
+// level never exceeds the shared count (a restored slot is taken from the
+// pact record first only when nothing else is left to restore).
+export async function clampPactRecord(isPc, id, lvl) {
+  try {
+    const table = isPc ? 'characters' : 'companions';
+    const usedCol = isPc ? 'spell_slots_used' : 'companion_spell_slots_used';
+    const row = await dbGet(`SELECT ${usedCol} AS used, pact_slots_used FROM ${table} WHERE id = ?`, [id]);
+    const rec = safeParse(row?.pact_slots_used, null);
+    if (!rec || typeof rec !== 'object') return;
+    const used = Number((safeParse(row.used, {}) || {})[String(lvl)] || 0);
+    if ((Number(rec[String(lvl)]) || 0) > used) {
+      if (used <= 0) delete rec[String(lvl)]; else rec[String(lvl)] = used;
+      await dbRun(`UPDATE ${table} SET pact_slots_used = ? WHERE id = ?`, [JSON.stringify(rec), id]);
+    }
+  } catch { /* best-effort */ }
+}
+
 export async function spendSpellSlot(characterId, casterRaw, isPc, compId, level) {
   const lvl = Math.trunc(Number(level) || 0);
   if (lvl <= 0) return { ok: true, consumed: false, slotsMax: null, slotsUsed: null, slotsRemaining: null };
@@ -943,6 +1040,7 @@ export async function spendSpellSlot(characterId, casterRaw, isPc, compId, level
   } else {
     await dbRun('UPDATE companions SET companion_spell_slots_used = ? WHERE id = ?', [JSON.stringify(m.usedSlots), compId]);
   }
+  await recordPactSpend(isPc, isPc ? characterId : compId, lvl, m.used); // class-audit gap 7
   return { ok: true, consumed: true, slotsMax: m.max, slotsUsed: m.used + 1, slotsRemaining: m.max - (m.used + 1) };
 }
 
@@ -963,6 +1061,7 @@ export async function restoreSpellSlot(characterId, casterRaw, isPc, compId, lev
   } else {
     await dbRun('UPDATE companions SET companion_spell_slots_used = ? WHERE id = ?', [JSON.stringify(m.usedSlots), compId]);
   }
+  await clampPactRecord(isPc, isPc ? characterId : compId, lvl); // class-audit gap 7
   return { ok: true, consumed: false, restored: true, slotsMax: m.max, slotsUsed: m.used - 1, slotsRemaining: m.max - (m.used - 1) };
 }
 
@@ -1221,6 +1320,8 @@ export async function castSpell(characterId, spellName, level, opts = {}) {
     }
     usedSlots[String(lvl)] = used + 1;
     await dbRun('UPDATE characters SET spell_slots_used = ? WHERE id = ?', [JSON.stringify(usedSlots), characterId]);
+    // class-audit gap 7: note a Pact Magic spend (Pact="true" asks for one).
+    await recordPactSpend(true, characterId, lvl, used, !!opts.pact);
   }
 
   // Combat Pipeline #12: Auto-start concentration for concentration spells
@@ -1565,6 +1666,7 @@ async function castPartySpell(context, parsed, spell, level) {
     targets: deduped.length ? deduped : null,
     choice: parsed?.Choice || null, sessionId: sessionId || null,
     free: parsed?.Free === true || /^(true|yes|1)$/i.test(String(parsed?.Free || '')),
+    pact: parsed?.Pact === true || /^(true|yes|1)$/i.test(String(parsed?.Pact || '')),
   });
   if (res && res.success) {
     await tls.spendSpellEconomy(sessionId, encounterSeq, casterKey, { castTime, level, spellName: spell });

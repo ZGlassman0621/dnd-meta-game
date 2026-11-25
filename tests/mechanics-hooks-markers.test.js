@@ -178,7 +178,7 @@ group('1. Schemas validate; ATTUNE/UNATTUNE are schema-only (attunement family o
 }
 
 // ---------------------------------------------------------------------------
-group('2. Bend Luck — reaction, 1 Sorcery Point, 1d4 recorded (never applied to a reported total)');
+group('2. Bend Luck — reaction, 1 Sorcery Point, 1d4 applied to the roll it answers (class-audit gap 8)');
 {
   const pcId = await makePc({ name: 'Mira', cls: 'sorcerer', subclass: 'wild_magic_sorcery', level: 6, cha: 16 });
   const sessionId = await makeSession(pcId);
@@ -188,8 +188,11 @@ group('2. Bend Luck — reaction, 1 Sorcery Point, 1d4 recorded (never applied t
   assert(r.first?.die >= 1 && r.first?.die <= 4, `Bend Luck die is 1d4 (got ${r.first?.die})`);
   assert(r.first?.direction === 'penalty' && r.first?.roll === 'Wisdom save', 'Bend Luck records the roll label + direction');
   assert(await usedPool('player', pcId, 'sorcery') === 1, '1 Sorcery Point spent');
-  assert(typeof r.first?.note === 'string' && r.first.note.includes('DM applies it'),
-    'Bend Luck returns a stated instruction — the system never rewrites a reported total');
+  // class-audit-severe-seven (gap 8) replaced "the DM applies it": the
+  // engine now applies the d4 to the roll (tests/class-audit-severe-seven).
+  // This session has no roll yet, so the DM is told there was none to change.
+  assert(r.first?.appliedTo === null && /no recent d20 Test/.test(r.first?.systemNote || ''),
+    'Bend Luck with no roll to answer says so to the DM');
 
   // No Sorcery Points left → refusal, pool unchanged.
   await setResources('player', pcId, { used: { sorcery: 6 } });
