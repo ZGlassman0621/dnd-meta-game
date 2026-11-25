@@ -22,7 +22,7 @@
 - **Item 2:** the warlock invocation list.
 - **Item 9:** the Keeper's 8 genre-bonus texts. **Superseded 2026-11-25 by Zach's amendment:** the Keeper class is removed instead. See the next section.
 
-## Amendment — item 9: the Keeper class is removed (2026-11-25, v1.0.213)
+## Amendment — item 9: the Keeper class is removed (2026-11-25, v1.0.213, commit d6a34dc)
 
 **The amendment.** The Keeper's design documents are lost, and the 8 genre-bonus texts exist nowhere, so they are not written. The Keeper comes out of the class registry on both the client and the server, so it can't be picked. The server refuses Keeper player-character creation with a 400. It is excluded from the class validators and the class-gated logic. Its data stays in the repo, unwired, so the class can come back if the documents turn up. The Keeper service and rest hook (audit gap 17) are moot and were not built. No real characters are affected.
 
