@@ -1156,14 +1156,17 @@ async function testLevelUpFeatInsteadOfASI() {
   });
   const id = created.id;
 
-  // Level up with feat choice (Resilient with +1 CON — a half-ASI feat)
+  // Level up with feat choice (Resilient +1 WIS — a half-ASI feat). 2024
+  // Resilient takes only an ability the character LACKS save proficiency
+  // in; a Fighter already has STR and CON saves, so CON would be refused
+  // (tests/repo-check-fixes-feats.test.js covers that refusal).
   const { status, body } = await api('POST', `/api/character/level-up/${id}`, {
     hpRoll: 'average',
     asiChoice: {
       type: 'feat',
       feat: 'resilient',
       featName: 'Resilient',
-      featAbilityChoice: 'con'
+      featAbilityChoice: 'wis'
     }
   });
   assert(status === 200, `Level-up with feat returns 200 (got ${status})`);
@@ -1173,12 +1176,12 @@ async function testLevelUpFeatInsteadOfASI() {
   const feats = parseJSON(body.character.feats);
   assert(Array.isArray(feats) && feats.length === 1, `Feats array has 1 entry (got ${feats.length})`);
   assert(feats[0].key === 'resilient', `Feat key is resilient (got ${feats[0].key})`);
-  assert(feats[0].abilityChoice === 'con', 'Feat abilityChoice captured');
+  assert(feats[0].abilityChoice === 'wis', 'Feat abilityChoice captured');
   assert(feats[0].acquiredAtLevel === 4, 'acquiredAtLevel recorded');
 
-  // Verify CON was bumped from 14 to 15 (half-ASI)
+  // Verify WIS was bumped from 12 to 13 (half-ASI)
   const scores = parseJSON(body.character.ability_scores);
-  assert(scores.con === 15, `CON bumped to 15 (got ${scores.con})`);
+  assert(scores.wis === 13, `WIS bumped to 13 (got ${scores.wis})`);
 
   await dbRun('DELETE FROM characters WHERE id = ?', [id]);
 }

@@ -94,6 +94,7 @@ import { shieldBonusForOffHand } from '../data/armsArmorVariants.js';
 import { STARTING_PACKAGES } from '../data/startingPackages.js';
 import { resolvePackage, validatePackageChoice, listPackageOptions, computeGoldFork } from '../services/packageResolutionService.js';
 import { getFeatEffect, listFightingStyleFeats, normalizeFeatName, featPrerequisiteMet } from '../data/featRegistry.js';
+import { getCatalogFeat, checkCatalogFeatPick, saveProficienciesFor } from '../data/featCatalog.js';
 import { initialFeatUses, energyAffinityGrant } from '../services/featMechanicsService.js';
 import {
   validateMixedAncestry,
@@ -7408,6 +7409,32 @@ router.post('/level-up/:id', async (req, res) => {
         // (Mountaineer). Feats known only to the client catalog keep the
         // old trust-the-client behavior.
         const regEntry = getFeatEffect(asiChoice.featName || asiChoice.feat) || getFeatEffect(asiChoice.feat);
+        // repo-check-fixes-feats: every level-up catalog feat is re-checked
+        // against the 2024 PHB prerequisites feats.json records (level,
+        // ability scores, Fighting Style feature, Repeatable, the +1's
+        // options incl. Resilient's "lack saving throw proficiency").
+        // A feat in neither the catalog nor the registry is refused.
+        const catEntry = getCatalogFeat(asiChoice.feat) || getCatalogFeat(asiChoice.featName);
+        if (!catEntry && !regEntry) {
+          return res.status(400).json({ error: `'${asiChoice.featName || asiChoice.feat}' is not a feat in the catalog` });
+        }
+        let featAbilityMax = 20;
+        if (catEntry) {
+          const heldFeatsForCheck = safeParse(character.feats, []);
+          const heldList = Array.isArray(heldFeatsForCheck) ? heldFeatsForCheck : [];
+          const verdict = checkCatalogFeatPick(catEntry, {
+            level: newTotalLevel,
+            scores: abilityScores,
+            heldFeats: heldList,
+            hasFightingStyle: !!(character.fighting_style && String(character.fighting_style).trim())
+              || heldList.some((f) => f && typeof f === 'object' && (f.category === 'fighting_style' || getCatalogFeat(f.key)?.category === 'Fighting Style')),
+            saveProficiencies: saveProficienciesFor(character.class, heldList),
+            abilityChoice: asiChoice.featAbilityChoice,
+          });
+          if (verdict.error) return res.status(400).json({ error: verdict.error });
+          asiChoice.featAbilityChoice = verdict.abilityChoice;
+          featAbilityMax = verdict.abilityMax;
+        }
         if (regEntry && regEntry.source === 'homebrew' && regEntry.rulesetId && regEntry.engine) {
           if (!featPrerequisiteMet(regEntry, abilityScores)) {
             return res.status(400).json({ error: `${regEntry.name} requires ${regEntry.prerequisite?.text || 'a prerequisite you do not meet'}` });
@@ -7440,7 +7467,7 @@ router.post('/level-up/:id', async (req, res) => {
         // Resilient/Actor/Observant). If the feat provides one, apply it now.
         if (asiChoice.featAbilityChoice && newAbilityScores[asiChoice.featAbilityChoice] !== undefined) {
           const ab = asiChoice.featAbilityChoice;
-          newAbilityScores[ab] = Math.min(20, newAbilityScores[ab] + 1);
+          newAbilityScores[ab] = Math.min(featAbilityMax, newAbilityScores[ab] + 1);
           // Same CON retroactivity rule as the ASI path
           if (ab === 'con') {
             const newConMod = Math.floor((newAbilityScores.con - 10) / 2);

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import classesData from '../data/classes.json'
 import spellsData from '../data/spells/index.js'
 import featsData from '../data/feats.json'
-import { featAbilityOptions, featPrerequisiteMet } from './featPickHelpers.js'
+import { featAbilityOptions, featPickBlockReason, characterSaveProficiencies } from './featPickHelpers.js'
 import { SPELLBOOK_START_SIZE } from './spellbookHelpers.js'
 
 // Multiclass list (2026-11-08, prerequisites removed — all classes
@@ -308,6 +308,22 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   }
 
   const currentAbilityScores = JSON.parse(character.ability_scores || '{}')
+
+  // Feat picker context (repo-check-fixes-feats): what the 2024 book's
+  // prerequisites are judged against at this level-up. The server
+  // level-up route re-checks the same rules.
+  const heldFeats = (() => {
+    try { const v = typeof character.feats === 'string' ? JSON.parse(character.feats || '[]') : character.feats; return Array.isArray(v) ? v : [] } catch { return [] }
+  })()
+  const startingClassKey = String(character.class || '').toLowerCase().trim().replace(/\s+/g, '_')
+  const featPickCtx = {
+    level: levelUpInfo?.newLevel || ((character.level || 0) + 1),
+    scores: currentAbilityScores,
+    heldFeats,
+    hasFightingStyle: !!(character.fighting_style && String(character.fighting_style).trim())
+      || heldFeats.some((f) => f && typeof f === 'object' && (f.category === 'fighting_style' || featsData[f.key]?.category === 'Fighting Style')),
+    saveProficiencies: characterSaveProficiencies(classesData[startingClassKey]?.savingThrows, heldFeats),
+  }
 
   const getModifier = (score) => {
     const mod = Math.floor((score - 10) / 2)
@@ -1172,7 +1188,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                         onChange={e => {
                           setSelectedFeatKey(e.target.value)
                           // A fixed +1 (Actor: Cha) needs no choice — preselect it.
-                          const opts = featAbilityOptions(featsData[e.target.value])
+                          const opts = featAbilityOptions(featsData[e.target.value], featPickCtx)
                           setSelectedFeatAbility(opts.length === 1 ? opts[0] : '')
                         }}
                         style={{
@@ -1183,11 +1199,12 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                         }}
                       >
                         <option value="">Select a feat...</option>
-                        {Object.entries(featsData).map(([key, f]) => {
-                          const ok = featPrerequisiteMet(f, currentAbilityScores)
+                        {/* The Ability Score Improvement feat IS the ASI toggle above, so it is not repeated here. */}
+                        {Object.entries(featsData).filter(([key]) => key !== 'ability_score_improvement').map(([key, f]) => {
+                          const blocked = featPickBlockReason(key, f, featPickCtx)
                           return (
-                            <option key={key} value={key} disabled={!ok}>
-                              {f.name}{ok ? '' : ` (requires ${f.prerequisites})`}
+                            <option key={key} value={key} disabled={!!blocked}>
+                              {f.name}{f.category ? ` — ${f.category}` : ''}{blocked ? ` (${blocked})` : ''}
                             </option>
                           )
                         })}
@@ -1232,7 +1249,7 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                               }}
                             >
                               <option value="">Select ability...</option>
-                              {featAbilityOptions(featsData[selectedFeatKey]).map(ab => (
+                              {featAbilityOptions(featsData[selectedFeatKey], featPickCtx).map(ab => (
                                 <option key={ab} value={ab}>{ab.toUpperCase()}</option>
                               ))}
                             </select>
