@@ -24,7 +24,7 @@
 
 **Update, 2026-11-25:** with item 2 built and item 9 superseded, every item in the brief is done or resolved.
 
-## Item 2 — built from the supplied data (2026-11-25, v1.0.214)
+## Item 2 — built from the supplied data (2026-11-25, v1.0.214, commit c1aea1c)
 
 **The data.** Zach sent `warlock-invocations-2024-phb.md`. It holds the names, prerequisites and one-line effects of all 28 options (SRD 5.2.1, cross-checked by the supplier against Roll20 and two SRD mirrors). It also holds the invocations-known column, read from the PHB Warlock Features table photo. It is saved in the repo at `docs/pm/class-audit-severe-seven/warlock-invocations-2024-phb.md`, and the test reads its tables directly. Nothing was written from memory.
 
