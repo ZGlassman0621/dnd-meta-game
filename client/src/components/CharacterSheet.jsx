@@ -153,6 +153,39 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
       .catch(() => { if (!cancelled) setArtificerPlans(null) })
     return () => { cancelled = true }
   }, [character.id, character.level, character.class_levels])
+  // class-audit item 2: a warlock's Eldritch Invocations (held, known cap,
+  // and the options for the catch-up Learn action), from
+  // GET /api/character/invocations/:id — null for a non-warlock.
+  const [invocationInfo, setInvocationInfo] = useState(null)
+  const [invocationLearn, setInvocationLearn] = useState(null) // { key, choice } while the Learn form is open
+  const [invocationError, setInvocationError] = useState(null)
+  const loadInvocations = () => fetch(`/api/character/invocations/${character.id}`)
+    .then(r => (r.ok ? r.json() : null))
+    .then(d => { setInvocationInfo(d && d.warlockLevel > 0 ? d : null) })
+    .catch(() => setInvocationInfo(null))
+  useEffect(() => {
+    loadInvocations()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [character.id, character.level, character.class_levels, character.invocations])
+  const learnInvocation = async () => {
+    if (!invocationLearn?.key) return
+    setInvocationError(null)
+    try {
+      const res = await fetch(`/api/character/invocations/${character.id}/learn`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invocations: [{ key: invocationLearn.key, ...(invocationLearn.choice ? { choice: invocationLearn.choice } : {}) }] })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setInvocationError(data.error || 'Could not learn that invocation'); return }
+      setInvocationLearn(null)
+      const fresh = await fetch(`/api/character/${character.id}`).then(r => (r.ok ? r.json() : null)).catch(() => null)
+      if (fresh) { setCharacter(fresh); onCharacterUpdated && onCharacterUpdated(fresh) }
+      await loadInvocations()
+    } catch {
+      setInvocationError('Could not learn that invocation')
+    }
+  }
   useEffect(() => {
     let cancelled = false
     const cls = String(character.class || '').toLowerCase()
@@ -3818,6 +3851,53 @@ function CharacterSheet({ character: initialCharacter, onBack, onCharacterUpdate
                         <p style={{ fontSize: '0.85rem', color: '#e74c3c', marginTop: '0.5rem' }}>{statusError}</p>
                       )}
                     </div>
+                  </section>
+                )}
+
+                {/* Eldritch Invocations — warlock (class-audit item 2) */}
+                {invocationInfo && (
+                  <section className="sheet-section">
+                    <h3>Eldritch Invocations ({invocationInfo.held.length}/{invocationInfo.known})</h3>
+                    {invocationInfo.held.length > 0 ? (
+                      <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
+                        {invocationInfo.held.map((h, i) => (
+                          <li key={`${h.key}-${i}`} style={{ marginBottom: '0.3rem' }}>
+                            <strong>{h.name}</strong>{h.choiceName ? ` (${h.choiceName})` : ''}
+                            <span style={{ color: '#aaa' }}> — {h.effect}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p style={{ color: '#888', fontSize: '0.85rem' }}>No invocations learned yet.</p>
+                    )}
+                    {invocationInfo.held.length < invocationInfo.known && !invocationLearn && (
+                      <button className="btn-secondary" style={{ marginTop: '0.5rem' }}
+                        onClick={() => setInvocationLearn({ key: '', choice: '' })}>+ Learn Invocation</button>
+                    )}
+                    {invocationLearn && (() => {
+                      const eligible = invocationInfo.options.filter(o => o.eligible)
+                      const picked = eligible.find(o => o.key === invocationLearn.key)
+                      return (
+                        <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
+                          <select value={invocationLearn.key} onChange={e => {
+                            const o = eligible.find(x => x.key === e.target.value)
+                            setInvocationLearn({ key: e.target.value, choice: o?.choiceKind ? (o.choices?.[0] || '') : '' })
+                          }}>
+                            <option value="">Choose an invocation…</option>
+                            {eligible.map(o => <option key={o.key} value={o.key}>{o.name}</option>)}
+                          </select>
+                          {picked?.choiceKind && (
+                            <select value={invocationLearn.choice} onChange={e => setInvocationLearn({ ...invocationLearn, choice: e.target.value })}>
+                              {(picked.choices || []).map(c => <option key={c} value={c}>{picked.choiceNames?.[c] || c}</option>)}
+                            </select>
+                          )}
+                          <button className="btn-primary" disabled={!invocationLearn.key} onClick={learnInvocation}>Learn</button>
+                          <button className="btn-secondary" onClick={() => { setInvocationLearn(null); setInvocationError(null) }}>Cancel</button>
+                          {picked && <p style={{ flexBasis: '100%', margin: 0, fontSize: '0.85rem', color: '#aaa' }}>{picked.effect}</p>}
+                        </div>
+                      )
+                    })()}
+                    {invocationError && <p style={{ fontSize: '0.85rem', color: '#e74c3c', marginTop: '0.5rem' }}>{invocationError}</p>}
                   </section>
                 )}
 

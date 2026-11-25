@@ -38,6 +38,10 @@ import { validateClassSubclass, KNOWN_CLASSES, isClassPcCreatable, isClassRemove
 import { isPcCreatable, resolveSpecies, resolvedASIFor, innateSpellsFor, allowedSizesFor, walkSpeedFor, MVP_DEFERRED_NOTE, isOutsideFRSetting } from '../services/speciesService.js';
 import { canLearnSpell, canonicalizeSpellName } from '../services/spellSelectionService.js';
 import { validatePreparedSpells, plansKnownForLevel, plansAvailableAtLevel, MULTI_LEARN_PLANS, learnPlan, loadArtificerState, saveArtificerState } from '../services/artificerService.js';
+import {
+  warlockLevelOf, invocationsKnownAt, parseInvocations, pactFromInvocations, withPact, validateInvocationSet,
+  validateNewInvocations, validateReplacement, invocationOptions, describeInvocations, syncLessonsFeats,
+} from '../services/warlockInvocationService.js';
 import { validatePreparedSpells as validateBlackguardPreparedSpells } from '../services/blackguardService.js';
 import { validatePreparedSpells as validatePaladinPreparedSpells } from '../services/paladinService.js';
 import { validatePreparedSpells as validateSorcererPreparedSpells } from '../services/sorcererService.js';
@@ -166,6 +170,35 @@ function hasWarlockLevels(cls, levelsRaw) {
   const levels = typeof levelsRaw === 'string' ? safeParse(levelsRaw, null) : levelsRaw;
   return Array.isArray(levels)
     && levels.some((e) => String(e?.class ?? '').toLowerCase() === 'warlock');
+}
+
+// Warlock Eldritch Invocations (class-audit item 2, migration 117).
+// A body that sends `invocations` sends the WHOLE list; it is judged as a
+// set at the resulting Warlock level (validateInvocationSet), and the
+// Pact column is derived from it. Returns { ok, errors, list, pact, feats }
+// where feats is the Lessons-synced feats JSON (or null when unchanged).
+function resolveInvocationWrite(rawList, { cls, level, classLevels, knownCantrips, storedInvocations, storedFeats }) {
+  const parsed = typeof rawList === 'string' ? safeParse(rawList, null) : rawList;
+  if (!Array.isArray(parsed)) return { ok: false, errors: ['invocations: must be a list of { key, choice }'] };
+  const warlockLevel = warlockLevelOf({ class: cls, level, class_levels: classLevels });
+  if (parsed.length && !warlockLevel) {
+    return { ok: false, errors: [`invocations: Eldritch Invocations require warlock levels — ${String(cls || '').trim().toLowerCase() || 'no class'} has none`] };
+  }
+  const set = validateInvocationSet(parsed, { warlockLevel, knownCantrips });
+  if (!set.ok) return set;
+  const before = parseInvocations(storedInvocations);
+  const synced = syncLessonsFeats(storedFeats, before, set.list, Number(level) || null);
+  return { ok: true, errors: [], list: set.list, pact: pactFromInvocations(set.list), feats: synced.changed ? JSON.stringify(synced.feats) : null };
+}
+// The creator's Stage 2 sends `level_one_invocation` (the one invocation
+// a level-1 warlock knows) rather than a whole list: a key -> [{ key }],
+// '' / null -> [] (cleared), absent -> undefined. The PUT allows it only
+// while the stored list holds at most one entry, so a creator resave can
+// never overwrite a higher-level warlock's invocations.
+function levelOneInvocationList(value) {
+  if (value === undefined) return undefined;
+  if (value === null || (typeof value === 'string' && !value.trim())) return [];
+  return [{ key: String(value).trim(), choice: null }];
 }
 
 export function validateCreatorNextStage2(body = {}, ctx = {}) {
@@ -3371,6 +3404,20 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: subclassRefusal });
     }
 
+    // Eldritch Invocations (class-audit item 2): validated as a set
+    // before the insert, so a bad list writes no row. Any caller.
+    let postInvocations = null;
+    const postL1 = levelOneInvocationList(req.body.level_one_invocation);
+    const postInvocationList = req.body.invocations ?? postL1;
+    if (postInvocationList !== undefined && postInvocationList !== null) {
+      const r = resolveInvocationWrite(postInvocationList, {
+        cls: charClass, level, classLevels: req.body.class_levels ?? req.body.classLevels ?? null,
+        knownCantrips: known_cantrips, storedInvocations: '[]', storedFeats: feats,
+      });
+      if (!r.ok) return validationError(res, r.errors.join('; '));
+      postInvocations = r;
+    }
+
     // Creator-next Stage 2 validation (2026-11-05): only for bodies
     // carrying the creator-next marker (stage1Persistence.js sends it).
     // Every other POST caller skips this block, so old-path behavior is
@@ -3592,8 +3639,17 @@ router.post('/', async (req, res) => {
     // would 500 on a bad value). Absent sends nothing, so the column
     // stays NULL.
     const pactKey = typeof pact === 'string' ? normWarlockPact(pact) : null;
-    if (pactKey && hasWarlockLevels(charClass, req.body.class_levels ?? req.body.classLevels ?? null)) {
-      await dbRun('UPDATE characters SET pact = ? WHERE id = ?', [pactKey, characterId]);
+    const postLevels = req.body.class_levels ?? req.body.classLevels ?? null;
+    // Eldritch Invocations (class-audit item 2, migration 117): a body
+    // `invocations` list was validated before the insert (postInvocations)
+    // and owns the pact; otherwise a lone pact becomes the one invocation.
+    if (postInvocations) {
+      await dbRun('UPDATE characters SET invocations = ?, pact = ? WHERE id = ?',
+        [JSON.stringify(postInvocations.list), postInvocations.pact, characterId]);
+      if (postInvocations.feats) await dbRun('UPDATE characters SET feats = ? WHERE id = ?', [postInvocations.feats, characterId]);
+    } else if (pactKey && hasWarlockLevels(charClass, postLevels)) {
+      await dbRun('UPDATE characters SET pact = ?, invocations = ? WHERE id = ?',
+        [pactKey, JSON.stringify(withPact([], pactKey)), characterId]);
     }
 
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
@@ -3720,7 +3776,7 @@ router.put('/:id', async (req, res) => {
     let storedRow = null;
     let storedThemeFeatKey = null;
     try {
-      storedRow = await dbGet('SELECT race, subrace, mixed_ancestry_json, size, class, subclass, class_levels FROM characters WHERE id = ?', [req.params.id]);
+      storedRow = await dbGet('SELECT race, subrace, mixed_ancestry_json, size, class, subclass, class_levels, level, invocations, known_cantrips, feats FROM characters WHERE id = ?', [req.params.id]);
       storedMixed = parseMixedAncestry(storedRow?.mixed_ancestry_json ?? null);
     } catch { /* pre-migration column: no stored record */ }
     // Stored theme feat (item 19): a resumed PUT re-sending only
@@ -4739,10 +4795,42 @@ router.put('/:id', async (req, res) => {
       // The class resolves body-then-stored-row, same as the size
       // block above. Counts as an update, so a PUT carrying only the
       // pact does not 400.
+      // Eldritch Invocations (class-audit item 2, migration 117): the
+      // whole list, judged as a set at the resulting Warlock level; the
+      // pact column is derived from it (a body pact is then ignored).
+      // null / empty list clears both. Counts as an update.
+      if (key === 'invocations' || key === 'level_one_invocation') {
+        if (key === 'invocations' && value == null) continue;
+        if (key === 'level_one_invocation' && req.body.invocations != null) continue;
+        let list = value;
+        if (key === 'level_one_invocation') {
+          if (parseInvocations(storedRow?.invocations).length > 1) {
+            return validationError(res, 'level_one_invocation: this warlock already knows more than one invocation — change them on the character sheet');
+          }
+          list = levelOneInvocationList(value);
+        }
+        const r = resolveInvocationWrite(list, {
+          cls: req.body.class ?? storedRow?.class ?? null,
+          level: req.body.level ?? storedRow?.level ?? 1,
+          classLevels: req.body.class_levels ?? req.body.classLevels ?? storedRow?.class_levels ?? null,
+          knownCantrips: req.body.known_cantrips ?? req.body.knownCantrips ?? storedRow?.known_cantrips ?? '[]',
+          storedInvocations: storedRow?.invocations ?? '[]',
+          storedFeats: req.body.feats ?? storedRow?.feats ?? '[]',
+        });
+        if (!r.ok) return validationError(res, r.errors.join('; '));
+        updates.push('invocations = ?', 'pact = ?');
+        values.push(JSON.stringify(r.list), r.pact);
+        if (r.feats && req.body.feats === undefined) {
+          updates.push('feats = ?');
+          values.push(r.feats);
+        }
+        continue;
+      }
       if (key === 'pact') {
+        if (req.body.invocations != null || req.body.level_one_invocation !== undefined) continue;
         if (value == null || (typeof value === 'string' && !value.trim())) {
-          updates.push('pact = ?');
-          values.push(null);
+          updates.push('pact = ?', 'invocations = ?');
+          values.push(null, JSON.stringify(withPact(parseInvocations(storedRow?.invocations), null)));
         } else if (typeof value === 'string') {
           const pactKey = normWarlockPact(value);
           if (!pactKey) {
@@ -4753,8 +4841,10 @@ router.put('/:id', async (req, res) => {
           if (!hasWarlockLevels(putCls, putLevels)) {
             return validationError(res, `pact: '${pactKey}' requires warlock levels — ${String(putCls || '').trim().toLowerCase() || 'no class'} has none`);
           }
-          updates.push('pact = ?');
-          values.push(pactKey);
+          // The Pact is an invocation (migration 117): swap it into the
+          // stored list so the two columns stay in step.
+          updates.push('pact = ?', 'invocations = ?');
+          values.push(pactKey, JSON.stringify(withPact(parseInvocations(storedRow?.invocations), pactKey)));
         }
         continue;
       }
@@ -4869,7 +4959,8 @@ router.put('/:id', async (req, res) => {
     // from warlock clears a stored pact (computed above as
     // putPactReset) instead of leaving a stale claim on the row.
     if (putPactReset) {
-      await dbRun('UPDATE characters SET pact = NULL WHERE id = ?', [req.params.id]);
+      // Invocations (migration 117) belong to the warlock too.
+      await dbRun("UPDATE characters SET pact = NULL, invocations = '[]' WHERE id = ?", [req.params.id]);
     }
 
     // Creator-next Stage 3 (2026-11-06): PUT never persisted theme
@@ -6510,6 +6601,57 @@ router.get('/artificer-plans/:id', async (req, res) => {
   }
 });
 
+// class-audit item 2: a warlock's Eldritch Invocations, for the level-up
+// picker and the sheet. ?level= previews a Warlock level (the level-up
+// target; it may be one above the current). Each option carries
+// eligible + the refusal reason, and the choices it can be taken for.
+router.get('/invocations/:id', async (req, res) => {
+  try {
+    const row = await dbGet('SELECT id, class, level, class_levels, invocations, known_cantrips FROM characters WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Character not found' });
+    const current = warlockLevelOf(row);
+    const held = parseInvocations(row.invocations);
+    const q = Number(req.query.level);
+    const level = req.query.level != null && Number.isInteger(q) && q >= 1 && q <= 20 ? q : current;
+    if (!level) return res.json({ warlockLevel: 0, level: 0, known: 0, held: [], options: [] });
+    const ctx = { warlockLevel: level, held, knownCantrips: row.known_cantrips };
+    res.json({
+      warlockLevel: current,
+      level,
+      known: invocationsKnownAt(level),
+      held: describeInvocations(held),
+      options: invocationOptions(ctx),
+    });
+  } catch (error) {
+    handleServerError(res, error, 'fetch invocations');
+  }
+});
+
+// class-audit item 2: learn invocations owed at the CURRENT Warlock level
+// (the sheet's catch-up — a pre-117 warlock, a creator draft that skipped
+// the L1 pick, or a level-up that took fewer than it could). Body:
+// { invocations: [{ key, choice }] }. Refused past the known count.
+router.post('/invocations/:id/learn', async (req, res) => {
+  try {
+    const row = await dbGet('SELECT id, class, level, class_levels, invocations, known_cantrips, feats FROM characters WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Character not found' });
+    const warlockLevel = warlockLevelOf(row);
+    if (!warlockLevel) return validationError(res, 'invocations: this character has no warlock levels');
+    const picks = req.body?.invocations;
+    if (!Array.isArray(picks) || picks.length === 0) return validationError(res, 'invocations: send a list of { key, choice }');
+    const held = parseInvocations(row.invocations);
+    const due = Math.max(0, invocationsKnownAt(warlockLevel) - held.length);
+    const r = validateNewInvocations(picks, { warlockLevel, held, knownCantrips: row.known_cantrips, due });
+    if (!r.ok) return validationError(res, `invocations: ${r.errors.join('; ')}`);
+    const synced = syncLessonsFeats(row.feats, held, r.next, Number(row.level) || null);
+    await dbRun('UPDATE characters SET invocations = ?, pact = ?, feats = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify(r.next), pactFromInvocations(r.next), JSON.stringify(synced.feats), row.id]);
+    res.json({ warlockLevel, known: invocationsKnownAt(warlockLevel), held: describeInvocations(r.next) });
+  } catch (error) {
+    handleServerError(res, error, 'learn invocations');
+  }
+});
+
 // Get character's spell slots (max and used)
 router.get('/spell-slots/:id', async (req, res) => {
   try {
@@ -6798,6 +6940,13 @@ router.get('/level-up-info/:id', async (req, res) => {
             newCantrips: Math.max(0, getCantripsKnown(className, newClassLevel, classInfo.subclass) - getCantripsKnown(className, currentClassLevel, classInfo.subclass)),
             // class-audit gap 5: infusion plans gained at this artificer level.
             newPlans: className === 'artificer' ? Math.max(0, plansKnownForLevel(newClassLevel) - plansKnownForLevel(currentClassLevel)) : 0,
+            // class-audit item 2: invocations owed at the new Warlock level —
+            // the table's gain, plus any the character is already behind on.
+            // A warlock level-up may also replace one (canReplaceInvocation).
+            ...(className === 'warlock' ? {
+              newInvocations: Math.max(0, invocationsKnownAt(newClassLevel) - parseInvocations(character.invocations).length),
+              canReplaceInvocation: parseInvocations(character.invocations).length > 0,
+            } : { newInvocations: 0 }),
             newSpellsKnown: (() => {
               // class-audit gap 3: a wizard levelling up IN wizard adds 2
               // spells to the book (2024 PHB). getSpellsKnown is null for a
@@ -6892,6 +7041,8 @@ router.get('/level-up-info/:id', async (req, res) => {
           needsSubclass: needsSubclassSelection(newClass, 1),
           needsASI: hasASI(newClass, 1),
           newCantrips: getCantripsKnown(newClass, 1),
+          // class-audit item 2: a multiclass into warlock learns 1 invocation.
+          newInvocations: newClass === 'warlock' ? invocationsKnownAt(1) : 0,
           // V8 (2026-11-07, spellbook replacement): a multiclass into
           // wizard starts a spellbook of SPELLBOOK_START_SIZE (6) —
           // getSpellsKnown returns null for prepared casters by design,
@@ -7092,7 +7243,9 @@ router.post('/level-up/:id', async (req, res) => {
       swapSpell, // { old: string, new: string } - swap one spell at level-up: a known spell for known casters, a prepared spell for prepared casters (PHB: one prepared spell per Long Rest)
       // Phase 5: progression choices at level-up
       ancestryFeatId, // L3/L7/L13/L18 — the feat.id chosen from the 3 options
-      newPlans // class-audit gap 5: [{ plan, detail? }] for an artificer level that grants plans
+      newPlans, // class-audit gap 5: [{ plan, detail? }] for an artificer level that grants plans
+      newInvocations, // class-audit item 2: [{ key, choice? }] for a warlock level
+      replaceInvocation // class-audit item 2: { from: { key, choice? }, to: { key, choice? } } — one swap per warlock level
     } = req.body;
 
     // Determine which class we're leveling up
@@ -7396,6 +7549,39 @@ router.post('/level-up/:id', async (req, res) => {
         state = r.state;
       }
       if (newPlans.length) pendingArtificerState = state;
+    }
+
+    // class-audit item 2: Eldritch Invocations on a warlock level. Due =
+    // the known count at the new Warlock level minus those held (fewer
+    // is allowed — the sheet's Learn action catches up). The optional
+    // replacement runs first, then the new picks are judged against the
+    // result, at the new level, with this level-up's new cantrips known.
+    // Saved in the level-up transaction; the pact column and a Lessons of
+    // the First Ones Origin feat follow the list.
+    let pendingInvocationsJson = null;
+    let pendingPact;
+    if ((newInvocations !== undefined && newInvocations !== null) || (replaceInvocation !== undefined && replaceInvocation !== null)) {
+      if (targetClassName !== 'warlock') {
+        return res.status(400).json({ error: 'newInvocations: Eldritch Invocations are learned on a warlock level' });
+      }
+      const ictx = { warlockLevel: newClassLevel, knownCantrips: pendingCantripsJson ?? character.known_cantrips };
+      const before = parseInvocations(character.invocations);
+      let held = before;
+      if (replaceInvocation != null) {
+        const rr = validateReplacement(replaceInvocation.from, replaceInvocation.to, { ...ictx, held });
+        if (!rr.ok) return res.status(400).json({ error: `replaceInvocation: ${rr.errors.join('; ')}` });
+        held = rr.next;
+      }
+      if (newInvocations != null) {
+        const due = Math.max(0, invocationsKnownAt(newClassLevel) - held.length);
+        const nr = validateNewInvocations(newInvocations, { ...ictx, held, due });
+        if (!nr.ok) return res.status(400).json({ error: `newInvocations: ${nr.errors.join('; ')}` });
+        held = nr.next;
+      }
+      pendingInvocationsJson = JSON.stringify(held);
+      pendingPact = pactFromInvocations(held);
+      const synced = syncLessonsFeats(pendingFeatsJson ?? character.feats, before, held, newTotalLevel);
+      if (synced.changed) pendingFeatsJson = JSON.stringify(synced.feats);
     }
 
     // Savant free-adds (2026-11-07): a separate level-up field,
@@ -7922,6 +8108,12 @@ router.post('/level-up/:id', async (req, res) => {
         await tx.execute({
           sql: 'UPDATE characters SET prepared_spells = ? WHERE id = ?',
           args: [pendingPreparedSpellsJson, req.params.id]
+        });
+      }
+      if (pendingInvocationsJson !== null) {
+        await tx.execute({
+          sql: 'UPDATE characters SET invocations = ?, pact = ? WHERE id = ?',
+          args: [pendingInvocationsJson, pendingPact ?? null, req.params.id]
         });
       }
       // Main character update (level, HP, class_levels, etc.)

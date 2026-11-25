@@ -486,6 +486,8 @@ group('(e) Mutation checks (exact failing counts)');
   // Stage2 also imports deities.json (the #10 god picker); the
   // temp tree must stage it or the bundle cannot resolve it.
   fs.copyFileSync(path.join(repoRoot, 'client/src/data/deities.json'), path.join(mut1Root, 'data/deities.json'));
+  // ...and the invocation catalog copy (class-audit item 2, level-1 picker).
+  fs.copyFileSync(path.join(repoRoot, 'client/src/data/warlockInvocations.js'), path.join(mut1Root, 'data/warlockInvocations.js'));
   const mut1Data = JSON.parse(readRepo('client/src/data/classes.json'));
   for (const key of DEFERRED_CLASSES) { delete mut1Data[key].pcCreatable; delete mut1Data[key].pcCreatableNote; }
   for (const sub of mut1Data.fighter.subclasses) { delete sub.pcCreatable; delete sub.pcCreatableNote; }

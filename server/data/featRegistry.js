@@ -156,6 +156,12 @@ export function listAddedFeats() {
 
 export const ADDED_FEAT_KEYS = ADDED_FEATS.map(f => f.key);
 
+/** Every Origin feat the registry knows (core + homebrew), for pickers
+ *  that grant one (Warlock Lessons of the First Ones). */
+export function listOriginFeats() {
+  return [...CORE_FEATS, ...ADDED_FEATS].filter(f => f.category === 'origin').map(f => ({ key: f.key, name: f.name }));
+}
+
 /** Does an ability-score set meet a feat's structured prerequisite?
  *  A feat without one (or a free-text-only one) passes — only the
  *  structured `prerequisite { ability, min }` is enforced. */

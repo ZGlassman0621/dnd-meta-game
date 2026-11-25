@@ -319,8 +319,10 @@ group('R2-8 fighting-style effects render from the fetched objects');
 // --- R2-9: Pact Boon label + warlock patron line ------------------------------------------
 group('R2-9 Pact Boon label + warlock patron line');
 {
-  ok(stage2.includes('Pact Boon (Eldritch Invocation)'), 'the picker is labeled "Pact Boon (Eldritch Invocation)"');
-  ok(stage2.includes('Choose a pact boon…'), 'the placeholder matches the new label');
+  // Class-audit item 2 (2026-11-25): the level-1 pick is any of the five
+  // prerequisite-free invocations, not only a Pact — relabeled.
+  ok(stage2.includes('            Eldritch Invocation\n'), 'the picker is labeled "Eldritch Invocation"');
+  ok(stage2.includes('Choose an invocation…'), 'the placeholder matches the label');
   ok(!stage2.includes('>Pact<') && !stage2.includes('\n            Pact\n'), 'no bare "Pact" label remains');
   ok(stage2.includes('Your patron (subclass) — Archfey, Fiend, and the rest — is chosen at level 3.'), 'a warlock sees the patron line at level 3');
   ok(stage2.includes("classId === 'warlock' && subclassLevel === 3"), 'the patron line is warlock-only');

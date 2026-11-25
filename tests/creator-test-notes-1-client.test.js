@@ -178,9 +178,13 @@ group('#10 god picker on Stage 2 (cleric/paladin)');
 // --- #11: pact picker -------------------------------------------------------------
 group('#11 pact picker on Stage 2 (warlock)');
 {
-  ok(stage2.includes('PACT_BOONS'), 'Stage 2 defines the pact list');
+  // Class-audit item 2 (2026-11-25): the list is the level-1 invocations
+  // from the catalog copy (the three Pacts + Armor of Shadows + Eldritch Mind).
+  ok(stage2.includes('L1_INVOCATIONS') && stage2.includes('WARLOCK_INVOCATIONS'), 'Stage 2 builds the level-1 invocation list from the catalog');
+  const { WARLOCK_INVOCATIONS } = await import(svc('client/src/data/warlockInvocations.js'));
+  const l1 = WARLOCK_INVOCATIONS.filter((i) => i.minLevel === 1 && Object.keys(i.requires || {}).length === 0).map((i) => i.name);
   for (const name of ['Pact of the Blade', 'Pact of the Chain', 'Pact of the Tome']) {
-    ok(stage2.includes(name), `Stage 2 offers ${name}`);
+    ok(l1.includes(name), `Stage 2 offers ${name}`);
   }
   // The header comment names Talisman only to document the exclusion;
   // the pin is that no Talisman OPTION value exists.

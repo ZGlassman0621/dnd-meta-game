@@ -19,8 +19,95 @@
 ## Verdict
 
 **PARTIAL.** Items 0, 1, 3, 4, 5, 6, 7 and 8 are built, and the new and touched suites are green. My full-suite numbers are under Test results. Two items are **BLOCKED on data that is not in the repo**, and I did not invent it:
-- **Item 2:** the warlock invocation list.
+- **Item 2:** the warlock invocation list. **Built 2026-11-25** from the data Zach sent (v1.0.214). See "Item 2 — built from the supplied data" below.
 - **Item 9:** the Keeper's 8 genre-bonus texts. **Superseded 2026-11-25 by Zach's amendment:** the Keeper class is removed instead. See the next section.
+
+**Update, 2026-11-25:** with item 2 built and item 9 superseded, every item in the brief is done or resolved.
+
+## Item 2 — built from the supplied data (2026-11-25, v1.0.214)
+
+**The data.** Zach sent `warlock-invocations-2024-phb.md`. It holds the names, prerequisites and one-line effects of all 28 options (SRD 5.2.1, cross-checked by the supplier against Roll20 and two SRD mirrors). It also holds the invocations-known column, read from the PHB Warlock Features table photo. It is saved in the repo at `docs/pm/class-audit-severe-seven/warlock-invocations-2024-phb.md`, and the test reads its tables directly. Nothing was written from memory.
+
+**What a warlock can do now, in play:**
+- **At creation (Stage 2):** the warlock picks the one invocation a level-1 warlock knows. The choices are the five with no prerequisite: Armor of Shadows, Eldritch Mind, and Pact of the Blade, Chain or Tome. Before, only the three Pacts were offered. The label is now "Eldritch Invocation".
+- **At level-up:** the level-up page shows an Eldritch Invocations section whenever a warlock level owes invocations. That covers an in-class level and multiclassing into warlock (1 is owed).
+  - **Picking:** each option shows its effect. An option the warlock doesn't qualify for is grayed out with the reason (for example "requires Warlock level 5").
+  - **Same-time rule:** an option whose only missing prerequisite is a Pact or invocation picked in this same level-up unlocks, so Pact of the Blade and Thirsting Blade can be taken together.
+  - **Choices:** a repeatable invocation names its cantrip or Origin feat.
+  - **Replacement:** the warlock may also swap one invocation they know for another they qualify for.
+  - **Review:** the review screen lists the picks and the swap.
+- **On the sheet:** the Spells tab shows "Eldritch Invocations (held/known)", each with its effect. When a warlock knows fewer than the table allows, "+ Learn Invocation" opens a picker. This catches up a warlock made before this change, a creator draft that skipped the pick, or a level-up that took fewer than it could.
+- **The DM is told.** The DM prompt's character block carries one line, "Eldritch Invocations: Agonizing Blast (Eldritch Blast) — …; Devil's Sight — …", so the DM honours them in narration.
+
+**The rules the server enforces** (`server/services/warlockInvocationService.js`). Every write path uses them: create, PUT, level-up and Learn.
+- **Known count by Warlock level:** 1, 3, 3, 3, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 10, 10, 10. That is the 2024 table, not the 2014 one.
+- **Level prerequisites are Warlock levels.** A fighter 4 / warlock 2 counts as Warlock level 2.
+- **Prerequisites:**
+  - The Pact invocations need their Pact.
+  - Devouring Blade needs Thirsting Blade, not just the Pact.
+  - Both can be met "at the same time": a batch is judged against everything held plus the rest of the batch.
+  - **Cantrip prerequisites** (Agonizing Blast, Eldritch Spear, Repelling Blast): the named cantrip must be one the character knows, and it must meet the prerequisite. Whether a cantrip deals damage, uses an attack roll, or reaches 10+ feet is read from this repo's spell catalog descriptions into a small table (`WARLOCK_CANTRIP_TRAITS`). The test checks that every entry is a real Warlock cantrip and that each range agrees with the catalog.
+- **Repeatable invocations** are taken again only for a different choice.
+- **Refusals:**
+  - more picks than are owed;
+  - replacing an invocation while it is a prerequisite for another one (the Pact can't go while Thirsting Blade is held);
+  - a replacement the warlock doesn't qualify for without the invocation given up.
+- **Lessons of the First Ones** adds the chosen Origin feat to the character's feats, marked with its source. Replacing it away removes only that entry.
+
+**Storage.**
+- **Migration 117:** a new column, `characters.invocations`, a JSON list of `{ key, choice }`.
+  - A held Pact is in that list. The existing `pact` column (migration 113) is kept in step with it, so its readers are unaffected.
+  - A body that sends only `pact` (the old path) swaps the Pact into the list.
+  - A class change away from warlock clears both.
+  - **Backfill:** a warlock with a stored pact gets that Pact as its one invocation.
+- **Creator resaves are safe.** The creator sends `level_one_invocation`, which the server only accepts while the stored list holds at most one entry, so a resave can't overwrite a higher-level warlock's invocations. Stage 2 also hides the picker past Warlock level 1.
+
+**Files.**
+- **New:**
+  - `server/data/warlockInvocations.js`, the catalog;
+  - `server/services/warlockInvocationService.js`, the rules;
+  - `server/migrations/117_warlock_invocations.js`;
+  - `client/src/data/warlockInvocations.js`, the client copy, pinned equal by the test;
+  - the data document under `docs/pm/class-audit-severe-seven/`;
+  - `tests/warlock-invocations.test.js`.
+- **Changed:**
+  - `server/routes/character.js`: create and PUT, the `GET /invocations/:id` options, the `POST /invocations/:id/learn` catch-up, the level-up envelope (`newInvocations`, `canReplaceInvocation`) and the level-up write (`newInvocations`, `replaceInvocation`);
+  - `server/services/dmPromptBuilder.js`;
+  - `server/data/featRegistry.js` (new `listOriginFeats`);
+  - `Stage2ClassCalling.jsx` and `stage1Persistence.js`;
+  - `LevelUpPage.jsx` (the `InvocationPicker` component);
+  - `CharacterSheet.jsx`.
+
+**Tests.**
+- **New file:** `tests/warlock-invocations.test.js`, 244 passed, 0 failed. It covers:
+  - all 28 document rows field by field, and the known table;
+  - the client copy matching the server;
+  - the rules;
+  - the routes over real HTTP, including every refusal above;
+  - multiclass-in, the Learn catch-up, the class-change clear and the creator-resave guard;
+  - the DM prompt line;
+  - the migration backfill and that re-running it is a no-op;
+  - the client wiring.
+
+  Two mutation checks were caught. Dropping the level prerequisite fails 10 checks; dropping the "can't replace a prerequisite" rule fails 1.
+- **Updated files.** Three Stage 2 source checks (creator-test-notes-1-client, creator-test-notes-2-client, gray-out-client) still pinned the old three-Pact list, its label, and the files the gray-out mutation bundle copies. They now pin the catalog-driven list.
+- **Full suite, my run on the PC, 2026-11-25:** `Files: 259/259 green  |  Assertions: 19717 passed, 0 failed`.
+  - `pass*` (the libSQL exit crash after all assertions passed): item-2b-resources-feats, item-3c-bonus-action, mechanics-hooks-pools.
+  - Retried once after the same crash mid-run, both passing: creator-next-stage4, creator-next-stage6-commit.
+- **Client build:** built, no errors. Lint on the new server files: clean except the unused `down(db)` warning that every migration carries.
+
+**Not done / open (item 2):**
+- **The engine does not apply invocation mechanics yet.** That means Agonizing Blast's damage, Armor of Shadows' AC, Thirsting Blade's extra attack, Devil's Sight and the rest. The brief asked for the picker, storage and sheet. In play the DM knows each invocation from the prompt line and narrates it, but the engine doesn't do the math. That is a follow-up job, one invocation at a time.
+- **Lessons of the First Ones adds the feat entry only.** Feat sub-choices (Magic Initiate's spells, Skilled's proficiencies) are not collected, the same as elsewhere in the game. Tough's HP is not applied anywhere in the game today. It does not check whether the character already has that feat from their background.
+- **Cantrip choices are limited to cantrips already known.** In the level-up picker, a cantrip learned in the same level-up isn't listed as a choice yet, though the server accepts it. A cantrip known through another class counts if it is on the Warlock list.
+
+**For Zach — one wording difference to confirm.** The old Stage 2 text for Pact of the Chain listed a Slaad Tadpole familiar. The supplied SRD text does not (SRD 5.2.1 leaves the Slaad Tadpole out), and the new picker uses the supplied text. If the printed PHB lists it and you want it shown, the fix is one line in the catalog. Tell me and I'll change it rather than guess.
+
+**How to verify (item 2).**
+1. Run `npm test warlock-invocations`.
+2. At :5173, make a warlock. Stage 2 offers five invocations.
+3. Give a level-1 warlock 300 XP and level up. The Eldritch Invocations section asks for 2. Agonizing Blast offers Eldritch Blast, and Thirsting Blade is grayed with "requires Warlock level 5".
+4. On the sheet's Spells tab, look for "Eldritch Invocations (3/3)".
 
 ## Amendment — item 9: the Keeper class is removed (2026-11-25, v1.0.213, commit d6a34dc)
 
@@ -91,7 +178,7 @@
 |---|---|---|---|
 | 0 | Audit the audit (22 gaps) | **Done** | 20 verified, 1 partly reproduces (gap 5), 1 partly checkable (gap 21). Table below. |
 | 1 | Spell DC for magus / warden / scholar | **Built** | A casting warden's spell has a real save DC and spell attack bonus (Loreseeker Int 14 at level 3: DC 12, +4 on the sheet). The same holds for a magus or scholar when one is playable. The fix covers the cast path, spell attacks and enemy-spell saves. |
-| 2 | Warlock Eldritch Invocations | **Blocked: data** | Not built. No invocation list exists in the repo: no names, prerequisites or per-level count. See the questions. |
+| 2 | Warlock Eldritch Invocations | **Built (2026-11-25)** | Built from the data Zach supplied: creator pick, level-up picker and swap, sheet section with a Learn catch-up, and the DM prompt line. See "Item 2 — built from the supplied data". |
 | 3 | Wizard +2 spells on in-class level-up | **Built** | A wizard levelling up in wizard gets "Add 2 spells to your spellbook", listing every Wizard spell they can cast. The picks land in the book. Multiclass-in still seeds 6 (unchanged). |
 | 4 | Known Spells sheet section | **Built** | Spellshot, magus, casting warden and Ritualist scholar see "Known Spells (n/cap)" on the Spells tab. "+ Learn New Spell" lists only spells they may learn, and saves the pick. |
 | 5 | Artificer infusion plans | **Built** | At each level that grants plans (4 at 2nd, then 5 / 6 / 7 / 8 at 6 / 10 / 14 / 18), level-up shows an Infusion Plans picker capped at the new plans. A generic plan ("Common magic item") asks for the item's name. Picks show on the review screen, persist, and appear on the sheet as "Infusion Plans (known/max)". |
@@ -186,7 +273,7 @@ I can't measure this session's cost or the usage left against the $30/month cap 
 
 ## What was NOT done / still open
 
-- **Item 2, warlock invocations: blocked on data.** No invocation catalog exists in the repo: no names, no prerequisites, and no count of invocations known per warlock level. The only invocation text is the Pact boon descriptions in the creator (`Stage2ClassCalling.jsx:120`). I did not write the list from memory. The picker, the storage and the sheet section are straightforward once the list exists; see question 1.
+- **Item 2, warlock invocations: resolved 2026-11-25.** Built once the data arrived; see "Item 2 — built from the supplied data". The original note: no invocation catalog exists in the repo: no names, no prerequisites, and no count of invocations known per warlock level. The only invocation text is the Pact boon descriptions in the creator (`Stage2ClassCalling.jsx:120`). I did not write the list from memory. The picker, the storage and the sheet section are straightforward once the list exists; see question 1.
 - **Item 9, Keeper genre-bonus texts: missing data.** Sources checked:
   - `client/src/data/keeperTexts.js`: `GENRE_DOMAINS` holds only each genre's passive, mastery upgrade and capstone, with no genre-bonus text.
   - `archive/Claude PM Review Docs/KEEPER_REVIEW.md` says only "write 8".
@@ -220,7 +307,7 @@ Each is reversible and flagged for Zach's veto at the gate.
 
 ## Anything needing Zach's decision
 
-1. **Warlock Eldritch Invocations: the list itself.** The brief asks for a level-up picker, storage and a sheet display for invocations. Nothing in the repo lists the invocations. I searched `client/src/data`, `server/data`, the services, `archive/` and `docs/`. To build the picker I need, from the 2024 Player's Handbook:
+1. **Answered 2026-11-25:** Zach sent the list, and item 2 is built. The one open point is the Slaad Tadpole wording; see "For Zach" in the item 2 section. The original question: **Warlock Eldritch Invocations: the list itself.** The brief asks for a level-up picker, storage and a sheet display for invocations. Nothing in the repo lists the invocations. I searched `client/src/data`, `server/data`, the services, `archive/` and `docs/`. To build the picker I need, from the 2024 Player's Handbook:
    - every invocation's name;
    - its prerequisite (warlock level, Pact boon, or another invocation);
    - a one-line effect;

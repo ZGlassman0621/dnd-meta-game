@@ -12,6 +12,7 @@ import { formatFactionStandingFragment } from './factionService.js';
 import { safeParse } from '../utils/safeParse.js';
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { renderFeatEffectsForPrompt } from '../data/featRegistry.js';
+import { parseInvocations, formatInvocationsForPrompt } from './warlockInvocationService.js';
 import { formatFeatStateLines, hasFeatIn } from './featMechanicsService.js'; // feat-addition-14
 import { buildSubclassPromptSection } from './subclassService.js';
 import { buildAgendaPromptBlock } from './npcComplexityService.js';
@@ -142,6 +143,13 @@ function formatCharacterInfo(character, label = 'PLAYER CHARACTER') {
       featsSection += `\n  FEAT STATE AND USE (engine-enforced):\n  ${[...stateLines, ...how].join('\n  ')}`;
     }
   }
+
+  // Warlock Eldritch Invocations (class-audit item 2, migration 117):
+  // what each held invocation does, so the DM honors it in play. The
+  // engine does not yet apply their mechanics (e.g. Agonizing Blast's
+  // damage); the DM narrates them from this line.
+  const invocationLine = formatInvocationsForPrompt(parseInvocations(character.invocations));
+  if (invocationLine) featsSection += `\n- Eldritch Invocations: ${invocationLine}`;
 
   // Build spellcasting section
   let spellSection = '';

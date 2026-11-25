@@ -99,6 +99,109 @@ function ArtificerPlanPicker({ characterId, level, due, picks, setPicks, catalog
   )
 }
 
+// class-audit item 2: Eldritch Invocations on a warlock level. Options and
+// eligibility come from GET /api/character/invocations/:id?level=N (the new
+// Warlock level); the server validates again at submit. An option whose
+// only missing prerequisite is a Pact or invocation picked in this same
+// level-up unlocks (the "learn it at the same time" rule). A repeatable
+// invocation (Agonizing Blast, Lessons of the First Ones, …) names its
+// cantrip or Origin feat. One optional replacement per warlock level.
+const PACT_KEY = { blade: 'pact_of_the_blade', chain: 'pact_of_the_chain', tome: 'pact_of_the_tome' }
+function invocationSelectable(option, level, picks) {
+  if (option.eligible) return true
+  if (level < option.minLevel || option.choiceKind) return false
+  const req = option.requires || {}
+  const picked = (k) => picks.some(p => p.key === k)
+  if (req.pact) return picked(PACT_KEY[req.pact])
+  if (req.invocation) return picked(req.invocation)
+  return false
+}
+function InvocationPicker({ characterId, level, due, canReplace, picks, setPicks, replacement, setReplacement, catalog, setCatalog }) {
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/character/invocations/${characterId}?level=${level}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled) setCatalog(d) })
+      .catch(() => { if (!cancelled) setCatalog(null) })
+    return () => { cancelled = true }
+  }, [characterId, level, setCatalog])
+  const options = catalog?.options || []
+  const pickOf = (key) => picks.find(p => p.key === key)
+  const toggle = (o) => {
+    if (pickOf(o.key)) setPicks(picks.filter(p => p.key !== o.key))
+    else if (picks.length < due) setPicks([...picks, { key: o.key, choice: o.choiceKind ? (o.choices?.[0] || '') : null }])
+  }
+  const setChoice = (key, choice) => setPicks(picks.map(p => (p.key === key ? { ...p, choice } : p)))
+  const fromOptions = catalog?.held || []
+  const toOptions = options.filter(o => o.eligible)
+  return (
+    <section className="choice-section">
+      <h3>Eldritch Invocations</h3>
+      {due > 0 && (
+        <p>Warlock level {level} knows {catalog?.known ?? '?'} invocation{catalog?.known === 1 ? '' : 's'}. Learn {due} now ({picks.length} of {due} chosen).</p>
+      )}
+      {!catalog && <p style={{ color: '#888' }}>Loading invocations…</p>}
+      {catalog && due > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+          {options.map(o => {
+            const picked = !!pickOf(o.key)
+            const selectable = invocationSelectable(o, level, picks)
+            return (
+              <div key={o.key} style={{ opacity: selectable || picked ? 1 : 0.5 }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: selectable ? 'pointer' : 'default' }}>
+                  <input type="checkbox" style={{ width: 'auto', flex: '0 0 auto', margin: '0.2rem 0 0' }} checked={picked}
+                    disabled={!picked && (!selectable || picks.length >= due)} onChange={() => toggle(o)} />
+                  <span>
+                    <strong>{o.name}</strong>
+                    <span style={{ color: '#aaa' }}> — {o.effect}</span>
+                    {!selectable && !picked && o.reason && <span style={{ display: 'block', fontSize: '0.8rem', color: '#888' }}>{o.reason}</span>}
+                  </span>
+                </label>
+                {picked && o.choiceKind && (
+                  <select value={pickOf(o.key)?.choice || ''} onChange={e => setChoice(o.key, e.target.value)}
+                    style={{ marginLeft: 26, marginTop: 4 }}>
+                    {(o.choices || []).map(c => <option key={c} value={c}>{o.choiceNames?.[c] || c}</option>)}
+                  </select>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {catalog && canReplace && fromOptions.length > 0 && (
+        <div style={{ marginTop: '0.8rem' }}>
+          <p style={{ marginBottom: 4 }}>Optionally, replace one invocation you know with another you qualify for:</p>
+          <select value={replacement?.fromIndex ?? ''} onChange={e => setReplacement(e.target.value === '' ? null : { fromIndex: Number(e.target.value), to: replacement?.to || '' , toChoice: replacement?.toChoice || '' })}>
+            <option value="">Keep all my invocations</option>
+            {fromOptions.map((h, i) => <option key={`${h.key}-${i}`} value={i}>{h.name}{h.choiceName ? ` (${h.choiceName})` : ''}</option>)}
+          </select>
+          {replacement && (
+            <>
+              <span> → </span>
+              <select value={replacement.to} onChange={e => {
+                const o = toOptions.find(x => x.key === e.target.value)
+                setReplacement({ ...replacement, to: e.target.value, toChoice: o?.choiceKind ? (o.choices?.[0] || '') : '' })
+              }}>
+                <option value="">Choose the new invocation…</option>
+                {toOptions.map(o => <option key={o.key} value={o.key}>{o.name}</option>)}
+              </select>
+              {(() => {
+                const o = toOptions.find(x => x.key === replacement.to)
+                if (!o?.choiceKind) return null
+                return (
+                  <select value={replacement.toChoice} onChange={e => setReplacement({ ...replacement, toChoice: e.target.value })} style={{ marginLeft: 6 }}>
+                    {(o.choices || []).map(c => <option key={c} value={c}>{o.choiceNames?.[c] || c}</option>)}
+                  </select>
+                )
+              })()}
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function LevelUpPage({ character, onLevelUp, onBack }) {
   const [levelUpInfo, setLevelUpInfo] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -124,6 +227,11 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
   // grants plans — { plan, detail } each; the catalog comes from the server.
   const [planPicks, setPlanPicks] = useState([])
   const [planCatalog, setPlanCatalog] = useState(null)
+  // class-audit item 2: warlock invocation picks ({ key, choice }), the
+  // optional replacement ({ fromIndex, to, toChoice }) and the catalog.
+  const [invocationPicks, setInvocationPicks] = useState([])
+  const [invocationReplacement, setInvocationReplacement] = useState(null)
+  const [invocationCatalog, setInvocationCatalog] = useState(null)
   const [selectedSubclass, setSelectedSubclass] = useState('')
 
   // Spell selection state (for spells step)
@@ -508,6 +616,21 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
       // class-audit gap 5: the new infusion plans.
       if (activeChoices.newPlans > 0 && planPicks.length > 0) {
         body.newPlans = planPicks.map(p => ({ plan: p.plan, ...(p.detail ? { detail: p.detail } : {}) }))
+      }
+
+      // class-audit item 2: warlock invocations (new picks + one optional swap).
+      const isWarlockLevel = String(selectedClassOption.class || '').toLowerCase() === 'warlock'
+      if (isWarlockLevel && invocationPicks.length > 0) {
+        body.newInvocations = invocationPicks.map(p => ({ key: p.key, ...(p.choice ? { choice: p.choice } : {}) }))
+      }
+      if (isWarlockLevel && invocationReplacement && invocationReplacement.to) {
+        const from = invocationCatalog?.held?.[invocationReplacement.fromIndex]
+        if (from) {
+          body.replaceInvocation = {
+            from: { key: from.key, ...(from.choice ? { choice: from.choice } : {}) },
+            to: { key: invocationReplacement.to, ...(invocationReplacement.toChoice ? { choice: invocationReplacement.toChoice } : {}) },
+          }
+        }
       }
 
       // Progression (Phase 5): include ancestry feat pick when an L3/L7/L13/L18 tier crossed
@@ -923,6 +1046,22 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
 
               <p className="current-hp">Current HP: {character.current_hp}/{character.max_hp}</p>
             </section>
+
+            {/* class-audit item 2: Warlock Eldritch Invocations */}
+            {String(selectedClassOption.class || '').toLowerCase() === 'warlock' && (activeChoices.newInvocations > 0 || activeChoices.canReplaceInvocation) && (
+              <InvocationPicker
+                characterId={character.id}
+                level={selectedClassOption.newLevel}
+                due={activeChoices.newInvocations || 0}
+                canReplace={!!activeChoices.canReplaceInvocation}
+                picks={invocationPicks}
+                setPicks={setInvocationPicks}
+                replacement={invocationReplacement}
+                setReplacement={setInvocationReplacement}
+                catalog={invocationCatalog}
+                setCatalog={setInvocationCatalog}
+              />
+            )}
 
             {/* class-audit gap 5: Artificer infusion plans */}
             {activeChoices.newPlans > 0 && (
@@ -1681,6 +1820,30 @@ function LevelUpPage({ character, onLevelUp, onBack }) {
                         <span className="review-label">Chosen</span>
                         <span className="review-value">{selectedSubclass}</span>
                       </div>
+                    </div>
+                  )}
+
+                  {/* class-audit item 2: the invocations being learned / swapped */}
+                  {(invocationPicks.length > 0 || invocationReplacement?.to) && (
+                    <div className="review-card">
+                      <h3>Eldritch Invocations</h3>
+                      {invocationPicks.length > 0 && (
+                        <div className="review-row">
+                          <span className="review-label">Learning</span>
+                          <span className="review-value">{invocationPicks.map(p => {
+                            const o = invocationCatalog?.options?.find(x => x.key === p.key)
+                            return `${o?.name || p.key}${p.choice ? ` (${o?.choiceNames?.[p.choice] || p.choice})` : ''}`
+                          }).join(', ')}</span>
+                        </div>
+                      )}
+                      {invocationReplacement?.to && (
+                        <div className="review-row">
+                          <span className="review-label">Replacing</span>
+                          <span className="review-value">
+                            {invocationCatalog?.held?.[invocationReplacement.fromIndex]?.name} → {invocationCatalog?.options?.find(x => x.key === invocationReplacement.to)?.name}{invocationReplacement.toChoice ? ` (${invocationReplacement.toChoice})` : ''}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
 

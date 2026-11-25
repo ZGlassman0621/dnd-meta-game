@@ -5,6 +5,7 @@ import deitiesData from '../../data/deities.json'
 import { deferredNoteFor, isDeferredSpecies, resolveOriginSetting } from './speciesAdapter.js'
 import { subclassOriginSuffix } from './subclassOrigin.js'
 import { spellDescriptionText, spellFactsLine } from './spellBlurb.js'
+import { WARLOCK_INVOCATIONS } from '../../data/warlockInvocations.js'
 
 /**
  * Creator-next Stage 2 — Class & Calling (2026-11-04, overnight build).
@@ -55,9 +56,10 @@ import { spellDescriptionText, spellFactsLine } from './spellBlurb.js'
  *   collects, from client/src/data/deities.json (55 entries) —
  *   the Faerûnian pantheon + None, or the origin setting's own
  *   pantheon when deities.json carries one (Exandria, Greyhawk).
- * - Pact picker (warlock): the three 2024 Pact invocations
- *   (Blade/Chain/Tome — Talisman is 2014-only), transcribed in
- *   the warlock reconciliation note; stored as state.pactBoon.
+ * - Level-1 invocation picker (warlock): the five invocations with no
+ *   prerequisite — Armor of Shadows, Eldritch Mind and the three Pacts
+ *   (Talisman is 2014-only) — from the catalog copy; stored as
+ *   state.pactBoon (the display name), saved as level_one_invocation.
  * - Fighting style: the option list comes from GET
  *   /api/fighting-styles — the registry's 10 styles served verbatim
  *   (server/data/featRegistry.js via listFightingStyleFeats). There
@@ -99,7 +101,7 @@ import { spellDescriptionText, spellFactsLine } from './spellBlurb.js'
  * State keys (draft state in the shell): classId, subclassName,
  * fightingStyle, subclassChoices { choiceKey: value | [values] },
  * faith (cleric/paladin god — the same field Stage 5 collects),
- * pactBoon (warlock pact — the L1 invocation pick).
+ * pactBoon (the warlock's level-1 invocation — a Pact or another).
  * Granted cantrips are derived at render, never stored, so they
  * cannot drift from their sources.
  */
@@ -107,18 +109,17 @@ import { spellDescriptionText, spellFactsLine } from './spellBlurb.js'
 const SWORDS_STYLES = ['Dueling', 'Two-Weapon Fighting']
 
 /**
- * The three 2024 Pact invocations (PHB pp. 155–157, transcribed in
- * the warlock reconciliation note). Pact of the Talisman is
- * 2014-only and is NOT offered. A warlock gains one invocation at
- * level 1 and the Pact IS an invocation, so picking it at creation
- * matches the book. The five-invocation picker (Armor of Shadows,
- * Eldritch Mind + the 3 Pacts) is a follow-up, not this job.
+ * The level-1 Eldritch Invocation (class-audit item 2, 2026-11-25). A
+ * 2024 warlock knows 1 invocation at level 1, and the Pacts ARE
+ * invocations. The options are every invocation with no prerequisite
+ * (Armor of Shadows, Eldritch Mind, Pact of the Blade / Chain / Tome),
+ * read from the catalog copy (client/src/data/warlockInvocations.js —
+ * SRD 5.2.1 wording). Pact of the Talisman is 2014-only and is not in
+ * the catalog. Later invocations are picked at level-up and on the sheet.
  */
-const PACT_BOONS = [
-  { name: 'Pact of the Blade', description: 'Conjure or bond a pact weapon with a Bonus Action — a Simple or Martial Melee weapon that uses your Charisma for attack and damage rolls.' },
-  { name: 'Pact of the Chain', description: 'Learn Find Familiar and cast it without a slot — your familiar can take a special form: Imp, Pseudodragon, Quasit, Skeleton, Slaad Tadpole, Sphinx of Wonder, Sprite, or Venomous Snake.' },
-  { name: 'Pact of the Tome', description: 'Conjure a Book of Shadows holding 3 cantrips and 2 level-1 Ritual spells from any class list — they stay prepared while the book is on your person, and the book is your spellcasting focus.' },
-]
+const L1_INVOCATIONS = WARLOCK_INVOCATIONS
+  .filter(i => i.minLevel === 1 && Object.keys(i.requires || {}).length === 0)
+  .map(i => ({ name: i.name, description: i.effect }))
 
 /**
  * Stage 2 god picker: the origin setting's own pantheon when
@@ -234,7 +235,10 @@ export default function Stage2ClassCalling({
   const selectedGod = godOptions.includes(state.faith)
     ? Object.values(deitiesData).find(d => d.name === state.faith) || null
     : null
-  const selectedPact = PACT_BOONS.find(p => p.name === state.pactBoon) || null
+  const selectedPact = L1_INVOCATIONS.find(p => p.name === state.pactBoon) || null
+  // The level-1 pick is offered while the warlock is level 1; a
+  // higher-level warlock's invocations are managed on the sheet.
+  const warlockLevel = classId === 'warlock' ? classLevelFor('warlock', characterLevel, classLevels) : 0
 
   const registrySubs = useMemo(() => {
     if (subclassesByClass && classId) return subclassesByClass[classId] || []
@@ -573,15 +577,20 @@ export default function Stage2ClassCalling({
         </>
       )}
 
-      {classId === 'warlock' && (
+      {classId === 'warlock' && warlockLevel > 1 && (
+        <div className="help" style={{ marginTop: 10 }}>
+          Eldritch Invocations: this warlock is past level 1 — change invocations on the character sheet or at level-up.
+        </div>
+      )}
+      {classId === 'warlock' && warlockLevel <= 1 && (
         <>
           <label style={labelStyle} htmlFor="stage2-pact-boon">
-            Pact Boon (Eldritch Invocation)
-            <Tip text="Your pact boon — the one Eldritch Invocation you gain at level 1. It shapes what your warlock can do from the start: a weapon, a familiar, or a book of borrowed magic. It locks at creation like the rest of this stage, and later invocations build on it." />
+            Eldritch Invocation
+            <Tip text="The one Eldritch Invocation a warlock knows at level 1. A Pact (a weapon, a familiar, or a book of borrowed magic) is one choice; Armor of Shadows and Eldritch Mind are the others. Some later invocations need a particular Pact. You learn more as you level." />
           </label>
           <select id="stage2-pact-boon" style={selectStyle} value={state.pactBoon || ''} onChange={e => update({ pactBoon: e.target.value })}>
-            <option value="">Choose a pact boon…</option>
-            {PACT_BOONS.map(p => (<option key={p.name} value={p.name}>{p.name}</option>))}
+            <option value="">Choose an invocation…</option>
+            {L1_INVOCATIONS.map(p => (<option key={p.name} value={p.name}>{p.name}</option>))}
           </select>
           {selectedPact && (
             <div className="help" style={{ fontStyle: 'normal', marginTop: 10 }}>

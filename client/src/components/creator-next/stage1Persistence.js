@@ -1,6 +1,7 @@
 import { findSpeciesEntry, resolveOriginSetting } from './speciesAdapter.js'
 import { concreteLanguages, languageChoiceCount } from '../../data/references.js'
 import { mixedAncestrySaveRecord } from './mixedAncestry.js'
+import { WARLOCK_INVOCATIONS } from '../../data/warlockInvocations.js'
 
 // Warlock pact: the Stage 2 picker holds the display name ('Pact of
 // the Blade'); the server column (migration 113) stores the key.
@@ -13,6 +14,19 @@ export function pactKeyFromName(name) {
 export function pactNameFromKey(key) {
   const k = typeof key === 'string' ? key.trim().toLowerCase() : ''
   return PACT_KEYS.includes(k) ? `Pact of the ${k.charAt(0).toUpperCase()}${k.slice(1)}` : null
+}
+
+// Warlock level-1 invocation (class-audit item 2, migration 117): the
+// Stage 2 picker holds the display name of the one invocation a level-1
+// warlock knows (state.pactBoon — a Pact or Armor of Shadows / Eldritch
+// Mind); the server stores the key in characters.invocations.
+const L1_INVOCATIONS = WARLOCK_INVOCATIONS.filter(i => i.minLevel === 1 && Object.keys(i.requires || {}).length === 0)
+export function levelOneInvocationKeyFromName(name) {
+  if (!name || typeof name !== 'string') return null
+  return L1_INVOCATIONS.find(i => i.name === name.trim())?.key || null
+}
+export function invocationNameFromKey(key) {
+  return WARLOCK_INVOCATIONS.find(i => i.key === key)?.name || null
 }
 
 /**
@@ -125,9 +139,15 @@ export function buildStage1ProgressBody(state, themes = null) {
   // Creation-solidification (2026-11-12, fix-as-you-find): this used to
   // send `pact_boon` with the display name — a key the server never
   // reads — so the pick was never persisted and never resumed.
+  // Class-audit item 2 (migration 117): the pick is the level-1
+  // invocation; it rides `level_one_invocation` (the server writes the
+  // invocations list and derives the pact from it). `pact` is still sent
+  // for a Pact pick, for callers that read it.
   {
     const pactKey = pactKeyFromName(state.pactBoon)
     if (pactKey) body.pact = pactKey
+    const invKey = levelOneInvocationKeyFromName(state.pactBoon)
+    if (invKey) body.level_one_invocation = invKey
   }
   // Creation-solidification item 5 (migration 114): optional free text
   // about the subclass; no stage sets it since Zach's 2026-11-12
@@ -561,9 +581,20 @@ export function rehydrateStateFromServerRow(row, progression, speciesEntries = n
     // absent, never defaulted. Faith likewise: it is saved as a
     // plain string column but was never rehydrated, so a god picked
     // on Stage 2 vanished on a mirror-less resume.
-    if (row.pact) {
-      const pactName = pactNameFromKey(row.pact)
-      if (pactName) patch.pactBoon = pactName
+    // The level-1 invocation (migration 117): restored only while the row
+    // holds exactly one (a higher-level warlock's list is the sheet's to
+    // manage); a pre-117 row with only a pact restores from it.
+    {
+      let storedInv = row.invocations
+      if (typeof storedInv === 'string') { try { storedInv = JSON.parse(storedInv) } catch { storedInv = null } }
+      const invList = Array.isArray(storedInv) ? storedInv : []
+      if (invList.length === 1) {
+        const name = invocationNameFromKey(invList[0]?.key ?? invList[0])
+        if (name) patch.pactBoon = name
+      } else if (invList.length === 0 && row.pact) {
+        const pactName = pactNameFromKey(row.pact)
+        if (pactName) patch.pactBoon = pactName
+      }
     }
     if (row.subclass_origin_explanation) patch.subclassOriginExplanation = row.subclass_origin_explanation
     if (row.faith) patch.faith = row.faith
