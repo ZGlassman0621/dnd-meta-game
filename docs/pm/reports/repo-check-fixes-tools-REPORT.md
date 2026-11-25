@@ -172,4 +172,7 @@ The builder checked this live, with the same result. Pick **Mason's Tools** and 
 
 ## Verification evidence
 
-COMMIT_PLACEHOLDER
+- Commit `0ab8f0c`, branch `phase-4-hybrid-combat`, PC repo `E:\DnD Meta Game\dnd-meta-game`, pushed to `origin`.
+- SHA-256 per file: the Files changed table.
+- Tests: the Test results section.
+- Live check at :5173: the How to verify section (Calligrapher's Supplies under Clan's Craft).
