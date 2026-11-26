@@ -22,11 +22,47 @@ There is no :5173 pass in this job.
    - the player cannot Counterspell an enemy's spell;
    - the player cannot choose to take an opportunity attack.
 
-   The engine resolves all three correctly when they are declared, but there is no moment in play when the player is asked. This is the largest open item, and it is a design question, not a defect. I did not build it (see Not done, item 1, and Questions for the PM).
+   The engine resolves all three correctly when they are declared, but there is no moment in play when the player is asked. **Muse decided this on 2026-11-25 ("pause and ask"), and it is now built in this job.** See PM decisions built, below.
 
 ## Verdict
 
-BUILT + GREEN (PARTIAL against the goal: the player-reaction window in item 3 above is open and needs a design decision).
+BUILT + GREEN, including both PM decisions of 2026-11-25. The unwired class-feature reactions remain a known gap for a follow-up job, as decided.
+
+## PM decisions built (Muse, 2026-11-25)
+
+**Decision 1, in Muse's words:** "Pause and ask: when a reaction trigger fires for the player character, pause the enemy turn and ask the player to use it or pass, only when the reaction is actually available (reaction unused, spell known and slot available). The DM no longer spends the player's reaction unasked."
+
+What the player experiences now:
+- **An enemy's attack hits you, and you have Shield ready** (you know Shield, a slot is left, your reaction is free, you are conscious and able to act, and Shield isn't already up).
+  - The enemy turn stops *before the damage*, and you see: `⚡ Reaction: Goblin Brute's attack hits you (13 vs AC 12). Cast Shield with a level-1 slot? With +5 AC the attack misses. Reply "Shield" or "pass".` If +5 can't turn the hit (a critical hit, or a total of AC + 5 or more), the prompt says so.
+  - **Shield:** the slot and your reaction are spent, +5 AC applies until your next turn, and the same attack is re-judged against the raised AC.
+  - **Pass:** the hit lands as rolled.
+  - Either way, the enemy turn then resumes. The paused enemy does not act again.
+- **An enemy casts a spell, and you have Counterspell ready** (known, a level-3+ slot left, reaction free).
+  - The spell stops before it resolves (the enemy's slot and action are already committed, since the casting is under way). You see: `⚡ Reaction: the Archmage is casting Lightning Bolt. Cast Counterspell with a level-3 slot? Reply "counter" or "pass".`
+  - **Counter:** your slot and reaction are spent and the enemy makes its Constitution save against your DC (which you never see). If it fails, its spell has no effect and its slot is not expended. If it succeeds, the spell goes off.
+  - **Pass:** the spell resolves.
+- **The DM writes one of your reactions during an enemy's turn.** That covers your opportunity attack, a readied attack, Dodge, Disengage, Hide or Help firing, a readied spell released, a damage-answer spell, Bend Luck, and Flash of Genius.
+  - The engine removes it from the enemy's turn and **asks you** instead ("Goblin is leaving your reach: take an opportunity attack? Use your reaction? Reply "yes" or "pass"."). It runs that exact action only on "yes".
+  - If the DM writes your Shield or Counterspell on an enemy turn, it is dropped. The engine asks you itself when the real trigger happens.
+  - Whenever something is dropped, the DM is told never to spend your reaction for you.
+- **One question at a time.**
+  - Anything else the paused enemy wrote after the paused action (a second multiattack swing, a second cast) waits and replays after you answer.
+  - A long message isn't read as an answer (for example a question like "What happens if I let it hit?"). The question stays open, the DM is told it's unanswered, and you are asked again.
+  - While a question is open, or while an accepted opportunity attack waits on your d20, the enemy turns don't run on.
+
+Technical shape:
+- New: `server/services/reactionOfferService.js`.
+- The enemy attack splits into judge, hold and land: `landEnemyAttack` and `resumeHeldEnemyAttack` in `enemyCombatService.js`.
+- The enemy cast hold and the "queue behind the question" step are in `combatMarkerService.js`.
+- The loop's `shouldPause` hook is in `combatLoopService.js`.
+- In the route (`dmSession.js`):
+  - the answer is resolved before the DM narrates, and its result is handed to the DM as a binding fact;
+  - player reactions are filtered out of enemy-turn replies;
+  - the loop resumes past the combatant whose turn already ran;
+  - the question rides `rollPrompts`.
+
+**Decision 2, in Muse's words:** "The 104 subclass reactions and the base-class/feat reactions stay DM-narrated in this job, with one fence: the DM must not narrate a number change the engine didn't apply." Built as one terse DM prompt line: *"Class-feature reactions with no marker (Uncanny Dodge, Cutting Words, Sentinel, Protection, …) you narrate in words only — never state a number change (damage reduced, AC raised, extra damage, HP) the engine did not apply."* The same line tells the DM the engine asks the player about their own reactions. This is a prompt fence only: no engine check catches a model that ignores it. That is stated as a known gap.
 
 ## Files changed
 
@@ -56,6 +92,20 @@ There are no migrations. The version went from 1.0.219 to **1.0.220** in both pa
 | `tests/reactions-turn-e2e.test.js` | new | 7868 B | `053a77c86330a984b5cafb15e90798ce33b948abae927b973aa4949c47d8618d` |
 
 The brief was placed at `docs/pm/mechanical-reactions/BRIEF.md`, the path Zach named; the brief's own text suggests `reactions-mechanical/`. Its contents are byte-identical to the file Zach handed over.
+
+**Second build commit `babd4e3` (PM decisions 2026-11-25).** These hashes supersede the table above for the files listed. Same job, so the version stays at 1.0.220.
+
+| File | New / edited | Size | SHA-256 |
+|---|---|---|---|
+| `server/routes/dmSession.js` | edited | 240961 B | `dad471dbe2c33b2f6d96458ff374f0d84020424b56db146b74dcd095b458affe` |
+| `server/services/combatLoopService.js` | edited | 25872 B | `893ccb426bb5d657f6028a0d00cee769e88d9099495d8931111d60920fc8892c` |
+| `server/services/combatMarkerService.js` | edited | 103782 B | `41fc742e8ba5418bc17747b4b6c612cb21cddf81f79d7432d5a60129cacfab20` |
+| `server/services/dmPromptBuilder.js` | edited | 198722 B | `5daf0c6f73fa2e3c169ca2f5e27bf52c02b99261ae5dc74a1aef03a3a6d36b68` |
+| `server/services/enemyCombatService.js` | edited | 23397 B | `7556ba297c5244ae414b57f81ff9fb68d04c944118d09735e9b39b29c9212190` |
+| `server/services/reactionOfferService.js` | new | 19725 B | `c900ec29628ab7060c47d209ae125f658ffc6d420d25d70a57e5dfd8c96c6013` |
+| `tests/live/reactions-live.mjs` | edited | 14429 B | `668712869ae2245a6381fc8753e5719cbc0472ded1cafa19192e537842259aa2` |
+| `tests/mechanical-reactions.test.js` | edited | 36144 B | `307d1777e9dfaf8818b0c48bdfd6a26ec546c4aa43089e6d7cf7fcc8f5e213fb` |
+| `tests/reactions-turn-e2e.test.js` | edited | 10964 B | `b3cfcad1edf39e2296f85f024dc5029d72fbb545dde05c16072ba00ca9c2a619` |
 
 ## What was built (in play)
 
@@ -136,7 +186,13 @@ Paths are from the live bytes after this job's edits (branch `phase-4-hybrid-com
 
 ## Test results
 
-**Full `npm test` on the PC (builder's run, final code at `8e464e0`): 266/266 files green, 20,460 assertions passed, 0 failed.**
+**Final: full `npm test` on the PC (builder's run, code at `babd4e3`, with both PM decisions built): 266/266 files green, 20,496 assertions passed, 0 failed.**
+- On Windows, 2 files were counted `pass*` (native exit crash after all assertions passed): `mechanics-hooks-spellcast` and `migration-schema-contract`.
+- Touched suites: `mechanical-reactions` 120/120 (17 groups; the count moves by a few between runs because the natural-1 branches are modelled, not assumed), `reactions-turn-e2e` 22/22 (4 route tests, including the full pause, answer and resume cycle), `combat-loop-fix` 82/82, `hybrid-combat-dice` 58/58, `turn-e2e` 51/51, `turn-write-ordering` 7/7, `item-6-spells` 147/147, and `display-casting` and `marker-strip` green.
+
+The earlier run, before the PM decisions:
+
+**Full `npm test` on the PC (builder's run, code at `8e464e0`): 266/266 files green, 20,460 assertions passed, 0 failed.**
 - On Windows, the runner counted 4 files as `pass*` (libSQL's native exit crash AFTER all their assertions passed, handled by `run-tests.js`): `dungeon-generation`, `mechanics-hooks-crit`, `npc-banks`, `subclass-scanned3`.
 - It retried 2 files once after a native crash mid-run, and both passed on the retry: `spellbook-routes` and `story-starters`.
 - These are the known Windows runner behaviours, not failures.
@@ -176,7 +232,19 @@ One red run happened along the way, and it was fixed rather than worked around. 
 | 4 | Same as run 1 | The model wrote no usable Magic Missile cast (refused: "no actions left this turn"), so no counter |
 | 5, 6 (final) | **Engine-run, +5 applied** | **Engine-run, prose matches** |
 
-Only Shield and Counterspell were live-probed. Opportunity attacks, Ready, the damage-answer spells, Bend Luck and Flash of Genius are **test-proved only**.
+**C. Pause and ask (decision 1), live on gemma4:12b.** The player did not pre-declare anything; the goblin's action each round was the model's choice.
+- Round 1: "d20 1 + 9 = 10 vs AC 12 — MISS" (a natural 1, so no question).
+- Round 2: the goblin hit (13 vs AC 12). The engine paused before damage and asked: `⚡ Reaction: Goblin Brute's attack hits you (13 vs AC 12). Cast Shield with a level-1 slot? With +5 AC the attack misses. Reply "Shield" or "pass".`
+- The player answered "Shield":
+  - "⚙ Shield: +5 AC until the start of your next turn (level-1 slot and your reaction spent)."
+  - The paused attack landed as "d20 4 + 9 = 13 vs **AC 17** — MISS".
+  - The player's HP was unchanged (30 → 30).
+  - 1st-level slots used went to 1.
+  - The turn came back to the player without the goblin acting twice.
+
+One display bug showed up in that run, and it is fixed: the question was printed twice in the narrative. It is now added only through `rollPrompts`, and the route test checks it appears exactly once.
+
+**What was live-probed:** Shield (declared, and asked-and-answered) and Counterspell (enemy against player). The player's Counterspell question, the opportunity-attack question, Ready, the damage-answer spells, Bend Luck and Flash of Genius are **test-proved only**.
 
 ## Cost and usage
 
@@ -184,13 +252,13 @@ I can't measure this session's cost from inside Claude Code on this plan, so the
 
 ## Not done / still open
 
-1. **There is no moment for the player to react on an enemy's turn.** See Understanding, item 3. The engine resolves the player's Shield, Counterspell and opportunity attacks correctly when they are declared, but the enemy-turn loop never stops to ask the player. In practice:
-   - a player's Shield can only be raised ahead of time on their own turn;
-   - a player's Counterspell can only answer an enemy spell written in the same model reply;
-   - the DM can write `[OPPORTUNITY_ATTACK: Attacker="Player" …]` or a player Shield during an enemy turn, which spends the player's reaction without the player choosing it.
-
-   Fixing this needs a "reaction window": the engine pauses mid-enemy-turn and asks the player. That is a gameplay design choice, not a defect fix, so it was not built. It is question 1 for the PM.
-2. **104 subclass reaction features, plus base-class and feat reactions, are unwired.** Examples are Uncanny Dodge, Deflect Attacks, Cutting Words, Warding Flare, Sentinel, Protection and Interception. They live in the DM's prompt text only, and their data files say so (`engine: 'DM-prompt only …'`). Per the brief they are not built and not newly taught. Leaving their prompt text in place means the DM still narrates them, which conflicts with item 4. That is question 2 for the PM.
+1. **The player-reaction window is built (decision 1), with these edges left open:**
+   - An enemy's **display cast** (`ENEMY_DISPLAY`) does not offer Counterspell to the player. Only `ENEMY_CAST` does.
+   - An enemy's **reaction spell** (for example its own Shield) is not offered for Counterspell (see item 5).
+   - A player's **damage-answer spell** (Absorb Elements, Hellish Rebuke, Backlash) is not offered automatically when the player is hit. The player can still declare it on their next message, or say yes when the DM writes it on an enemy turn.
+   - **Opportunity attacks** are offered only when the DM writes the marker. The engine does not detect "leaving reach" from movement by itself.
+   - "Spell known" means the spell is in the character's known or prepared spells (`known_spells` / `prepared_spells`).
+2. **Known gap for a follow-up job (decision 2): 104 subclass reaction features, plus base-class and feat reactions, stay DM-narrated.** Examples are Uncanny Dodge, Deflect Attacks, Cutting Words, Warding Flare, Sentinel, Protection, Interception, Spirit Shield, Riposte and Arcane Deflection. The full set comes from `server/data/subclasses/*.js` (each entry's `engine:` line says "DM-prompt only" / "DM-adjudicated"), plus `featRegistry.js:77-78` and `classFeatureService.js:177`. The fence is a prompt line only. A future wiring job would give each one a marker, a reaction-budget spend and (for the defensive ones) a hold like Shield's.
 3. **The Scholar's Flash of Genius (homebrew) has no live marker.** A handler is written, but `registerScholarMarkers` is never called and the marker has no schema (`scholarService.js:315-350`). It is reported unwired, not built.
 4. **Silvery Barbs, Feather Fall, Temporal Shunt, Gift of Gab and Soul Cage.** The engine spends the slot and the reaction, but each spell's effect is narrated (`spellCastService.js:1645`, "not wired"). They were left as they are, since building those effects is new feature work.
 5. **A party Counterspell cannot answer an enemy's reaction spell** (for example an enemy Shield). The book allows it (Counterspell answers any spell being cast). The party counter is checked only on non-reaction enemy casts (`combatMarkerService.js` step (e)). This is a rare corner and is left as a known edge.
@@ -209,19 +277,17 @@ I can't measure this session's cost from inside Claude Code on this plan, so the
 5. **A party counter whose caster has no spell save DC does not fire and spends nothing.** Before, it tried to roll the enemy's save against no DC. Enemy counters with no DC still stay armed, unchanged, as the brief asked.
 6. **Counters armed before this build carry no payment info.** They fire free (they were already paid at arm time). Reversal cost: none; this only matters for sessions saved mid-round.
 7. **A reaction-only spell implies `Reaction="true"`.** That covers Shield, Counterspell, Absorb Elements, Hellish Rebuke, Backlash, Silvery Barbs, Feather Fall, Temporal Shunt, Gift of Gab and Soul Cage, on both the party and enemy cast paths. Before, a missing flag was refused. A non-reaction spell flagged as a reaction is still refused. Reversal cost: one line per cast path.
+9. **Offer rules (decision 1), all reversible in `reactionOfferService.js`:**
+   - "Known" means the spell is in known or prepared spells.
+   - Shield is offered on any hit, including a critical hit or a total too high for +5 to matter. The prompt says when +5 cannot turn the hit, since that is still the book trigger and Shield lasts the round. Reversal: one condition.
+   - A reply of more than 8 words is never read as an answer.
+   - A DM-written player Shield or Counterspell on an enemy turn is dropped rather than asked, because the engine asks at the real trigger.
+   - The question shows the enemy's attack total and the player's AC (as the roll-math panel already does), never a DC.
 8. **The engine opens a player-declared Shield, Absorb Elements, Hellish Rebuke or Backlash when the DM narrated it with no marker.** It matches only "cast <spell>" in the player's own words, so "I raise my shield" never trips it. The level comes from "Nth-level" in the action text, or defaults to 1. This follows the existing attack fallback (combat-loop P1). Counterspell is never opened this way, because it needs an enemy cast in the same reply. Reversal cost: remove one block in `dmSession.js`.
 
 ## Questions for the PM (Muse)
 
-Each one is a design call for Muse to make or pass to Zach. None of them blocks the gate.
-
-1. **Should the engine pause an enemy's turn to ask the player about a reaction, and when?** What was checked: the enemy-turn loop (`combatLoopService.js:416-460`) runs every enemy's turn in one go and returns to the player only on the player's own turn. What is unclear is when the engine should stop and ask, for example "the goblin's attack hits you (AC 12); you have Shield prepared and your reaction is free: cast Shield? (yes/no)". There are three candidate moments:
-   - before an attack's hit is final (Shield);
-   - when an enemy starts casting (Counterspell);
-   - when an enemy leaves the player's reach (opportunity attack).
-
-   The trigger list, the wording and whether to ask only when the player can actually pay are all open. Until this is decided, the DM must not spend the player's reaction on its own. Should the engine refuse a player reaction written during an enemy's turn, or allow it?
-2. **The unwired class-feature reactions** (104 subclass features, plus Uncanny Dodge, Deflect Attacks, Sentinel, Protection and the like). Their DM prompt text lets the DM narrate them without the engine, which conflicts with "no narration-only reaction". The brief also says not to build them or remove their teaching here. Should they stay narrated until a later wiring job, or should their text tell the DM they are not yet available?
+Both questions from the first report were answered on 2026-11-25 and are built (see PM decisions built). No new questions.
 
 ## Needs Zach's decision
 
@@ -229,9 +295,9 @@ Only the gate. There is no spend beyond the cap, and nothing that only Zach can 
 
 ## How to verify
 
-**Evidence:** code commit `8e464e0` on branch `phase-4-hybrid-combat`, in the PC repo at `E:\DnD Meta Game\dnd-meta-game`, pushed to GitHub. This report is in the commit that follows it.
+**Evidence:** code commits `8e464e0` (reactions) and `babd4e3` (PM decisions: pause and ask, number-change fence) on branch `phase-4-hybrid-combat`, in the PC repo at `E:\DnD Meta Game\dnd-meta-game`, pushed to GitHub. This report is in the commit that follows it.
 
-**Gate:** run `npm test` from the repo root. Green means 266/266 files and 0 failed assertions, with `mechanical-reactions.test.js` at 84/84 and `reactions-turn-e2e.test.js`, `item-6-spells.test.js` (147/147), `display-casting.test.js`, `turn-e2e.test.js` (51/51) and `turn-write-ordering.test.js` (7/7) all green. A `pass*` or "retried once" note on Windows is the known runner behaviour.
+**Gate:** run `npm test` from the repo root. Green means 266/266 files and 0 failed assertions, with `mechanical-reactions.test.js` fully green (about 120 assertions) and `reactions-turn-e2e.test.js`, `item-6-spells.test.js` (147/147), `display-casting.test.js`, `turn-e2e.test.js` (51/51) and `turn-write-ordering.test.js` (7/7) all green. A `pass*` or "retried once" note on Windows is the known runner behaviour.
 
 **Live probe (optional, needs Ollama running gemma4:12b):** `node tests/live/reactions-live.mjs`. It writes `.test-tmp/reactions-live-results.json`. Expect:
 - Shield: `slot1_after` = 1, and the goblin's attack `rollMath` reads "vs AC 17".
@@ -249,4 +315,11 @@ The model varies from run to run (see Live probe).
    - Report a low number: you see "⚙ Your spell is countered: it has no effect. Your action is spent, but the spell slot is not."
    - Your slot count is unchanged and the enemy's HP is unchanged.
    - No DC appears anywhere in your text.
-3. **Your Counterspell against an enemy.** This only works when the DM writes your counter and the enemy's cast in the same reply (see question 1). If it fires: your 3rd-level slot and reaction are spent once. If the enemy fails its save, its spell has no effect and its slot count is unchanged.
+3. **Asked when hit (decision 1).** Play a wizard who knows Shield, with a 1st-level slot left and the reaction unused. Do NOT declare Shield; let an enemy attack you.
+   - On a hit you see `⚡ Reaction: … attack hits you (N vs AC X). Cast Shield …? Reply "Shield" or "pass".`, and no damage has landed yet.
+   - Reply "Shield": a ⚙ Shield line appears, the same attack is re-judged against AC X + 5 in the roll-math panel, and the enemy turn finishes without that enemy acting twice.
+   - Reply "pass" on another hit: the damage lands as rolled and no slot is spent.
+4. **Asked when an enemy casts (decision 1).** Play a wizard who knows Counterspell, with a 3rd-level slot left. When an enemy casts, you see `⚡ Reaction: … is casting …. Cast Counterspell …? Reply "counter" or "pass".`
+   - Reply "counter": your 3rd-level slot and reaction are spent. Either "⚙ … countered and has no effect" appears (the enemy's slot count is unchanged), or the spell goes off.
+   - No DC is ever shown.
+5. **The DM no longer spends your reaction.** If the DM narrates you taking an opportunity attack on an enemy's turn, you are asked "take an opportunity attack? … yes or pass" instead, and nothing is spent until you say yes.
