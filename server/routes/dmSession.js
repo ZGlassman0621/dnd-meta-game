@@ -173,7 +173,7 @@ import { decayMoods } from '../services/companionBackstoryService.js';
 import { syncDeathsFromCanonFacts } from '../services/npcLifecycleService.js';
 import { getActiveNpcEffects } from '../services/worldEventNpcService.js';
 import { getAwayCompanions } from '../services/companionActivityService.js';
-import { endSession } from '../services/sessionEndService.js';
+import { endSession, retryHeldXpAwards, awardCompanionSessionXP } from '../services/sessionEndService.js';
 import { processAbsenceEffects } from '../services/npcAgingService.js';
 import { shouldCompress, compressMessageHistory, estimateTokens, calculateChronicleBudget, sliceTailByTokens, MAX_NOTES_TOKENS, MAX_MEMORIES_TOKENS } from '../utils/contextManager.js';
 import { handleServerError, conflict } from '../utils/errorHandler.js';
@@ -573,6 +573,28 @@ router.post('/start', async (req, res) => {
     const campaignGate = await campaignForCharacter(character.id);
     if (campaignGate.campaignId == null) {
       return res.status(409).json(campaignRequiredBody(character.id));
+    }
+
+    // Held XP (return-loop-xp-fixes, G-2): a session whose XP score failed or
+    // was deferred at session end is scored again now, from the session data
+    // stored at end, and awarded once through the canonical session-end path.
+    // retryHeldXpAwards never throws; a failed retry leaves the award held for
+    // the next start and never blocks this one.
+    const heldXp = await retryHeldXpAwards(character.id, {
+      llmCallFor: (heldSession) => async (prompt) => {
+        const heldMessages = safeParse(heldSession?.messages, []);
+        const heldSystem = (Array.isArray(heldMessages) ? heldMessages : []).find(m => m.role === 'system')?.content || '';
+        return await loggedChat(
+          { call_purpose: 'session_end_xp_scoring_retry', prompt_builder: 'dmSession_route',
+            session_id: heldSession?.id ?? null },
+          heldSystem,
+          [{ role: 'user', content: prompt }],
+          3, 'extraction'
+        );
+      }
+    }).catch((e) => { console.warn('[session-start] held-XP retry skipped:', e.message); return []; });
+    if (heldXp.some(r => r.status === 'complete')) {
+      Object.assign(character, await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]));
     }
 
     // Get active companions for this character
@@ -4539,100 +4561,92 @@ router.post('/:sessionId/claim', requireSessionCampaign, async (req, res) => {
       return res.status(400).json({ error: 'Rewards already claimed' });
     }
 
-    const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
-    const rewards = safeParse(session.rewards, {});
-
-    // Apply rewards to character
-    const updates = {
-      experience: character.experience + (rewards.xp || 0),
-      gold_cp: character.gold_cp + (rewards.gold?.cp || 0),
-      gold_sp: character.gold_sp + (rewards.gold?.sp || 0),
-      gold_gp: character.gold_gp + (rewards.gold?.gp || 0),
-      // Phase 3.2 — floor removed. This clamps to [0, max_hp], not [1, max_hp]:
-      // the old Math.max(1, ...) was not an edge-case guard, it was the reason
-      // the player character could never reach 0 HP. session.hp_change is 0 for
-      // sessions run after Phase 3.2, so in practice this now preserves the HP
-      // that per-turn markers already wrote.
-      current_hp: Math.max(0, Math.min(character.max_hp, character.current_hp + (session.hp_change || 0)))
-    };
-
-    // Add loot to inventory
-    let inventory = safeParse(character.inventory, []);
-    if (rewards.loot) {
-      inventory.push({ name: rewards.loot, quantity: 1 });
+    // Take the claim atomically, so two concurrent claims cannot both pay out.
+    const taken = await dbRun('UPDATE dm_sessions SET rewards_claimed = 1 WHERE id = ? AND rewards_claimed = 0', [sessionId]);
+    if (taken.changes !== 1) {
+      return res.status(400).json({ error: 'Rewards already claimed' });
     }
 
-    // Update location if specified
-    const newLocation = session.new_location || character.current_location;
-    const newQuest = session.new_quest || character.current_quest;
+    let paid = false;
+    try {
+      const character = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
+      const rewards = safeParse(session.rewards, {});
 
-    // Update character
-    await dbRun(`
-      UPDATE characters
-      SET experience = ?, gold_cp = ?, gold_sp = ?, gold_gp = ?,
-          current_hp = ?, inventory = ?, current_location = ?, current_quest = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `, [
-      updates.experience,
-      updates.gold_cp,
-      updates.gold_sp,
-      updates.gold_gp,
-      updates.current_hp,
-      JSON.stringify(inventory),
-      newLocation,
-      newQuest,
-      session.character_id
-    ]);
+      // Apply rewards to character.
+      // The player character's session XP is NOT added here (return-loop-xp-fixes,
+      // G-1): session end already awarded it through awardSessionXP, which
+      // writes experience, level and level-up choices together (level at
+      // session end, locked 2026-10-19). rewards.xp is the record of that award,
+      // kept for the claim screen and session history. Gold, loot and HP below
+      // are awarded only here — session end stores no gold or loot of its own.
+      const updates = {
+        gold_cp: character.gold_cp + (rewards.gold?.cp || 0),
+        gold_sp: character.gold_sp + (rewards.gold?.sp || 0),
+        gold_gp: character.gold_gp + (rewards.gold?.gp || 0),
+        // Phase 3.2 — floor removed. This clamps to [0, max_hp], not [1, max_hp]:
+        // the old Math.max(1, ...) was not an edge-case guard, it was the reason
+        // the player character could never reach 0 HP. session.hp_change is 0 for
+        // sessions run after Phase 3.2, so in practice this now preserves the HP
+        // that per-turn markers already wrote.
+        current_hp: Math.max(0, Math.min(character.max_hp, character.current_hp + (session.hp_change || 0)))
+      };
 
-    // Award XP to active companions (full XP - party shares equally, not split)
-    const companionXP = rewards.xp || 0;
-    const companionXPResults = [];
-    if (companionXP > 0) {
-      const companions = await dbAll(`
-        SELECT c.id, c.companion_level, c.companion_experience, c.companion_class, n.name
-        FROM companions c
-        JOIN npcs n ON c.npc_id = n.id
-        WHERE c.recruited_by_character_id = ? AND c.status = 'active' AND c.progression_type = 'class_based'
-      `, [session.character_id]);
-
-      for (const companion of companions) {
-        const oldXP = companion.companion_experience || 0;
-        const newXP = oldXP + companionXP;
-        const currentLevel = companion.companion_level;
-        const nextLevelXP = currentLevel < 20 ? XP_THRESHOLDS[currentLevel + 1] : null;
-        const canLevelUp = nextLevelXP !== null && newXP >= nextLevelXP;
-
-        await dbRun(`
-          UPDATE companions SET companion_experience = ? WHERE id = ?
-        `, [newXP, companion.id]);
-
-        companionXPResults.push({
-          id: companion.id,
-          name: companion.name,
-          class: companion.companion_class,
-          level: currentLevel,
-          xpGained: companionXP,
-          totalXP: newXP,
-          canLevelUp,
-          xpToNextLevel: nextLevelXP ? nextLevelXP - newXP : null
-        });
+      // Add loot to inventory
+      let inventory = safeParse(character.inventory, []);
+      if (rewards.loot) {
+        inventory.push({ name: rewards.loot, quantity: 1 });
       }
+
+      // Update location if specified
+      const newLocation = session.new_location || character.current_location;
+      const newQuest = session.new_quest || character.current_quest;
+
+      // Update character
+      await dbRun(`
+        UPDATE characters
+        SET gold_cp = ?, gold_sp = ?, gold_gp = ?,
+            current_hp = ?, inventory = ?, current_location = ?, current_quest = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [
+        updates.gold_cp,
+        updates.gold_sp,
+        updates.gold_gp,
+        updates.current_hp,
+        JSON.stringify(inventory),
+        newLocation,
+        newQuest,
+        session.character_id
+      ]);
+      paid = true;
+
+      // Award XP to active class-based companions (full XP — the party shares
+      // equally, not split). This is the companions' only session award; the
+      // `companionXpAwarded` marker on the session's rewards makes it once-only
+      // against the held-XP retry at the next session start (return-loop-xp-fixes).
+      const companionXP = rewards.companionXpAwarded ? 0 : (rewards.xp || 0);
+      const companionXPResults = await awardCompanionSessionXP(session.character_id, companionXP);
+      if (companionXP > 0) {
+        rewards.companionXpAwarded = companionXP;
+        await dbRun('UPDATE dm_sessions SET rewards = ? WHERE id = ?', [JSON.stringify(rewards), sessionId]);
+      }
+
+      const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
+
+      res.json({
+        message: 'Session rewards claimed!',
+        character: updatedCharacter,
+        rewards,
+        companionXP: companionXP > 0 ? companionXP : undefined,
+        companionXPResults: companionXPResults.length > 0 ? companionXPResults : undefined,
+        hpChange: session.hp_change
+      });
+    } catch (applyError) {
+      // Release the claim for another try only if nothing was paid out yet —
+      // once the character row is written, a second claim would pay it twice.
+      if (!paid) await dbRun('UPDATE dm_sessions SET rewards_claimed = 0 WHERE id = ?', [sessionId]).catch(() => {});
+      throw applyError;
     }
-
-    // Mark rewards as claimed
-    await dbRun('UPDATE dm_sessions SET rewards_claimed = 1 WHERE id = ?', [sessionId]);
-
-    const updatedCharacter = await dbGet('SELECT * FROM characters WHERE id = ?', [session.character_id]);
-
-    res.json({
-      message: 'Session rewards claimed!',
-      character: updatedCharacter,
-      rewards,
-      companionXP: companionXP > 0 ? companionXP : undefined,
-      companionXPResults: companionXPResults.length > 0 ? companionXPResults : undefined,
-      hpChange: session.hp_change
-    });
   } catch (error) {
     handleServerError(res, error, 'claim session rewards');
   }
