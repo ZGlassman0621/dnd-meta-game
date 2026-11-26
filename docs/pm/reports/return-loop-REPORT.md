@@ -39,7 +39,7 @@ Where the product does not do what the design says, the job reports the gap and 
 
 ## Verdict
 
-**BUILT + RED (red with cause).** Full `npm test` on the PC: Files **266/267 green**, assertions **20,577 passed, 9 failed**. The only red file is the new `return-loop` suite. Its 9 failing assertions are exactly the 7 product gaps G-1 to G-7, each tagged with its gap and its step. None is a test fault. Brief item 4 says gaps are reported, not fixed, and item 5 forbids papering the suite green. So the suite stays red until the follow-up fix jobs land. Everything else in the loop passes.
+**BUILT + RED (red with cause).** Full `npm test` on the PC: Files **266/267 green**, assertions **20,577 passed, 9 failed**. The only red file is the new `return-loop` suite. Its 9 failing assertions are exactly the 7 product gaps G-1 to G-7, each tagged with its gap and its step. None is a test fault. Brief item 4 says gaps are reported, not fixed, and item 5 forbids papering the suite green. So the suite stays red until the follow-up fix jobs land. Muse confirmed this on 2026-11-25: keep them as real failures. All 9 are listed by name under "How to verify". Everything else in the loop passes.
 
 ## Per-item verdicts
 
@@ -218,7 +218,7 @@ I can't measure this session's cost from inside Claude Code on this plan, so the
 
 ## Decisions made (reversible, for veto)
 
-1. **Gap assertions are real, failing assertions, so the full run is red.** The brief allows "red-with-cause" and forbids weakening an assertion, so I did not mark them as expected failures. The cost is that every later job's `npm test` shows `return-loop` red until the gaps are fixed. *Alternative:* convert the 9 gap assertions into an "open gaps" list that prints but doesn't fail the run, with each fix job flipping its own gap back to a hard assertion. *Reversal cost:* small, one helper in one file, but it is a judgment Muse or Zach should make, because it trades a red gate for a softer signal.
+1. **Gap assertions stay real, failing assertions, so the full run is red. This is now settled by the PM (Muse, 2026-11-25):** "keep the 9 return-loop gap checks as real failures. Do not convert them to non-failing known gaps." It is no longer a builder call open for veto. Every later job's `npm test` shows `return-loop` red with exactly the 9 checks listed under "How to verify", until fix jobs close them.
 2. **The loop includes "claim rewards"** because the client always claims before you can play again (`/start` refuses an unclaimed session, `dmSession.js:537-547`). *Reversal:* none needed. It mirrors play.
 3. **The world clock fixture is a campaign one year in** (absolute day 465 = day 100 of 1492), which is what makes G-3 visible. Both scales are kept in sync, as `scheduleService` requires. *Reversal:* change one constant. On a first-year clock, the G-3 assertions would pass by coincidence.
 4. **G-7 and G-6 are source checks, not behavior checks.** `tickEvolution` writes nothing by design, and the opt-in gap is a missing call in the client. *Reversal:* when a fix job wires them, it should replace each source check with a behavior check.
@@ -227,11 +227,30 @@ I can't measure this session's cost from inside Claude Code on this plan, so the
 
 ## Needs Zach's decision
 
-None that the PM can't take. Decision 1 above (whether the gate stays red until the gap fixes land) is flagged for Muse's call, and Zach's veto at the gate.
+None. Muse settled decision 1 on 2026-11-25: the gate stays red with exactly the 9 gap checks until fix jobs land.
 
 ## How to verify
 
-**Gate:** run `npm test` from `E:\DnD Meta Game\dnd-meta-game` on the PC. Expect Files 266/267, Assertions 20,577 passed, 9 failed. The only red file should be `return-loop.test.js`, with exactly these 9 failing lines, each starting with its step tag and `GAP G-n`: G-3 (twice), G-7, G-1, G-4, G-5, G-6 (twice) and G-2. Any other red line is a real failure. To see the suite alone, run `npm test -- return-loop`.
+**Gate:** run `npm test` from `E:\DnD Meta Game\dnd-meta-game` on the PC. Expect Files 266/267, Assertions 20,577 passed, 9 failed. The only red file should be `return-loop.test.js`, with exactly the 9 failing checks in the table below. Any other red line is a real failure. To see the suite alone, run `npm test -- return-loop`.
+
+The 9 expected failures, by name. Each line starts with its step tag and gap ID. The text in brackets after the name shows the values seen on the builder's run.
+
+| # | Step | Gap | Failing check (exact name) |
+|---|---|---|---|
+| 1 | `[tick]` | G-3 | `GAP G-3: the commission is stamped ready on the day-of-year scale its deadline uses, day 103` |
+| 2 | `[tick]` | G-3 | `GAP G-3: the commission not due until day 150 is still being made` |
+| 3 | `[tick]` | G-7 | `GAP G-7: a world-clock advance at session end evaluates scene evolution` |
+| 4 | `[return]` | G-1 | `GAP G-1: the session's XP is awarded once — claiming does not add it again` |
+| 5 | `[protect]` | G-4 | `GAP G-4: the player's downtime assignment for TEST_RL_D Mira is scheduled` |
+| 6 | `[protect]` | G-5 | `GAP G-5: full downtime jumps the clock by its span, 5 days` |
+| 7 | `[protect]` | G-6 | `GAP G-6: the client's end-session request can carry the player's downtime choice` |
+| 8 | `[protect]` | G-6 | `GAP G-6: the steward's downtime question is put to the player at session end` |
+| 9 | `[protect]` | G-2 | `GAP G-2: the held XP award is retried at the next session start` |
+
+A later job's run should be red with exactly these 9, and no others. The exceptions:
+- **A new failure** is a real failure, and that job must report it.
+- **One of these 9 turning green** means a fix job closed that gap. That job should say so, and the expected count drops.
+- **These checks are never edited to pass** (PM decision, 2026-11-25).
 
 **Final test at :5173 (the one end-of-build pass, not this job's).** With `npm run dev`, on a character in a campaign:
 1. Play a short session in which time passes in the story (travel, or a rest). Note the date shown, the character's XP and level, HP, and gold.
