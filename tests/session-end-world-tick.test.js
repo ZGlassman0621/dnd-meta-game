@@ -85,13 +85,31 @@ const CHRONICLE_JSON = JSON.stringify({
   npc_deaths: []
 })
 
-/** Script the five calls session end makes, in order. */
+/** The session-end XP scorer's reply (sessionEndService → xpService). */
+const SCORER_JSON = JSON.stringify({
+  combat: { opportunity: true, score: 6 },
+  exploration: { opportunity: true, score: 6 },
+  quests: { opportunity: true, score: 6 },
+  discovery: { opportunity: false, score: null },
+  social: { opportunity: true, score: 6 }
+})
+
+/**
+ * Script the six calls session end makes, in order.
+ *
+ * Return-loop job (2026-11-25): this used to script five, written before the
+ * session-end orchestrator added the XP scorer as call 2. Every reply after
+ * the analysis landed one call early — the scorer got the notes text (XP
+ * stage failed), the memory extractor got the chronicle JSON (saved as
+ * "memories"), and the chronicle call went unscripted and failed.
+ */
 function scriptSessionEnd(llm) {
   llm.reply(ANALYSIS)                 // 1. rewards analysis
-  llm.reply('NPCS MET:\n- None of note')  // 2. campaign notes extraction
-  llm.reply('[]')                     // 3. NPC extraction
-  llm.reply('NO_NEW_MEMORIES')        // 4. character memory extraction
-  llm.reply(CHRONICLE_JSON)           // 5. chronicle extraction
+  llm.reply(SCORER_JSON)              // 2. XP scorer (session-end orchestrator)
+  llm.reply('NPCS MET:\n- None of note')  // 3. campaign notes extraction
+  llm.reply('[]')                     // 4. NPC extraction
+  llm.reply('NO_NEW_MEMORIES')        // 5. character memory extraction
+  llm.reply(CHRONICLE_JSON)           // 6. chronicle extraction
 }
 
 /**
@@ -166,6 +184,13 @@ async function run() {
 
     const after = await dbGet('SELECT game_day FROM characters WHERE id = ?', [f1.characterId])
     assertEqual(Number(after.game_day), 103, 'the character clock advanced by exactly daysElapsed')
+
+    const chron1 = await dbGet('SELECT summary FROM story_chronicles WHERE session_id = ?', [f1.sessionId])
+    assertEqual(chron1?.summary, 'The party cleared the ridge.', 'the session chronicle was written from its own reply')
+    const xpRun1 = await dbGet("SELECT status FROM session_end_runs WHERE session_id = ? AND stage = 'xp'", [String(f1.sessionId)])
+    assertEqual(xpRun1?.status, 'complete', 'the XP scorer got its own reply and the XP stage completed')
+    const mem1 = await dbGet('SELECT character_memories FROM characters WHERE id = ?', [f1.characterId])
+    assert(!String(mem1?.character_memories || '').includes('canon_facts'), 'no chronicle JSON was saved as character memories')
 
     assert(!!res.body.worldTick, 'the response reports that the world ticked')
     assertEqual(res.body.worldTick.daysElapsed, EXPECTED_DAYS, 'the tick ran for the same span as the adventure')
