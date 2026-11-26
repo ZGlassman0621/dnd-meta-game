@@ -139,8 +139,15 @@ export async function scoreSessionWithLLM(sessionData, llmCall) {
 // ---------------------------------------------------------------------------
 // awardSessionXP(characterId, scores, db) — apply XP, check level-up
 // ---------------------------------------------------------------------------
+//
+// Level-up choices CARRY (PM decision, 2026-11-26): an award never overwrites
+// a waiting, unresolved choice. New choices are appended in order after the
+// waiting ones, with no duplicates; an award that gains no level leaves the
+// waiting list exactly as it was. `pendingChoices` in the return value is the
+// full waiting list after this award; `newChoices` is what this award added.
+// ---------------------------------------------------------------------------
 export async function awardSessionXP(characterId, scores, db) {
-  const char = await db.get('SELECT id, level, experience FROM characters WHERE id = ?', [characterId]);
+  const char = await db.get('SELECT id, level, experience, level_up_pending_choices FROM characters WHERE id = ?', [characterId]);
   if (!char) throw new Error(`Character not found: ${characterId}`);
   const level = char.level ?? 1;
   const result = calculateSessionRewards(scores, level);
@@ -154,9 +161,61 @@ export async function awardSessionXP(characterId, scores, db) {
     newLevel++;
     leveledUp = true;
   }
-  const pendingChoices = leveledUp ? queueLevelUpChoices(level, newLevel) : [];
-  await db.run(`UPDATE characters SET experience = ?, level = ?, experience_to_next_level = ?, level_up_pending_choices = ? WHERE id = ?`, [newXpTotal, newLevel, xpToNext(newLevel), pendingChoices.length ? JSON.stringify(pendingChoices) : null, characterId]);
-  return { xpAwarded: result.xp, leveledUp, newLevel, previousLevel: level, pendingChoices, breakdown: result };
+  const waiting = parsePendingChoices(char.level_up_pending_choices);
+  const newChoices = leveledUp ? queueLevelUpChoices(level, newLevel) : [];
+  const pendingChoices = mergePendingChoices(waiting, newChoices);
+  if (leveledUp) {
+    await db.run(`UPDATE characters SET experience = ?, level = ?, experience_to_next_level = ?, level_up_pending_choices = ? WHERE id = ?`, [newXpTotal, newLevel, xpToNext(newLevel), serializePendingChoices(pendingChoices), characterId]);
+  } else {
+    // No new level: the waiting choices column is not written at all.
+    await db.run(`UPDATE characters SET experience = ?, level = ?, experience_to_next_level = ? WHERE id = ?`, [newXpTotal, newLevel, xpToNext(newLevel), characterId]);
+  }
+  return { xpAwarded: result.xp, leveledUp, newLevel, previousLevel: level, pendingChoices, newChoices, breakdown: result };
+}
+
+// ---------------------------------------------------------------------------
+// Waiting level-up choices (characters.level_up_pending_choices, JSON array of
+// { level, type, prompt }). A choice is identified by its level + type.
+// ---------------------------------------------------------------------------
+const choiceKey = (c) => `${c?.level}:${c?.type}`;
+
+/** Parse the stored column; anything unreadable is treated as no list. */
+export function parsePendingChoices(text) {
+  if (!text) return [];
+  try {
+    const list = JSON.parse(text);
+    return Array.isArray(list) ? list.filter(c => c && typeof c === 'object') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The stored form: JSON, or null for an empty list. */
+export function serializePendingChoices(list) {
+  return Array.isArray(list) && list.length ? JSON.stringify(list) : null;
+}
+
+/** Waiting choices first, untouched and in their order; then each added
+ *  choice in its order, skipping any already waiting (or already added). */
+export function mergePendingChoices(waiting, added) {
+  const out = [...(waiting || [])];
+  const seen = new Set(out.map(choiceKey));
+  for (const c of added || []) {
+    const k = choiceKey(c);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(c);
+  }
+  return out;
+}
+
+/** Remove the one choice that was made (first match on level + type); every
+ *  other waiting choice stays, in order. */
+export function removePendingChoice(waiting, { level, type }) {
+  const list = [...(waiting || [])];
+  const i = list.findIndex(c => c.level === level && c.type === type);
+  if (i >= 0) list.splice(i, 1);
+  return list;
 }
 
 function queueLevelUpChoices(oldLevel, newLevel) {

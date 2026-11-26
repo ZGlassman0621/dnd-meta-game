@@ -12,6 +12,7 @@ import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { transferCanonToCampaign } from '../services/campaignCanonTransferService.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 import { safeParse } from '../utils/safeParse.js';
+import { parsePendingChoices, removePendingChoice, serializePendingChoices } from '../services/xpService.js';
 import {
   PROFICIENCY_BONUS,
   HIT_DICE,
@@ -8100,6 +8101,18 @@ router.post('/level-up/:id', async (req, res) => {
       }
     }
 
+    // Waiting level-up choices (PM decision, 2026-11-26): making a choice
+    // removes only that one. An ASI or feat taken at this level settles the
+    // waiting asi_or_feat choice for this level; every other waiting choice
+    // stays, in order.
+    const asiMade = hasASI(targetClassName, newClassLevel) && !!asiChoice &&
+      ((asiChoice.type === 'asi' && !!asiChoice.increases) || (asiChoice.type === 'feat' && !!asiChoice.feat));
+    const waitingChoices = parsePendingChoices(character.level_up_pending_choices);
+    const remainingChoices = asiMade
+      ? removePendingChoice(waitingChoices, { level: newTotalLevel, type: 'asi_or_feat' })
+      : waitingChoices;
+    const choicesChanged = remainingChoices.length !== waitingChoices.length;
+
     // Compute final character fields
     const newXPToNextLevel = getXPToNextLevel(newTotalLevel);
     const hitDiceBreakdown = getHitDiceBreakdown(classLevels);
@@ -8164,6 +8177,13 @@ router.post('/level-up/:id', async (req, res) => {
           req.params.id
         ]
       });
+
+      if (choicesChanged) {
+        await tx.execute({
+          sql: 'UPDATE characters SET level_up_pending_choices = ? WHERE id = ?',
+          args: [serializePendingChoices(remainingChoices), req.params.id]
+        });
+      }
 
       // Phase 5: progression unlocks (theme tier + ancestry feat)
       if (progressionDecisions.theme_tier_unlock) {
