@@ -176,6 +176,45 @@ const START_LOC = { name: 'Ashford ruins', description: 'A collapsed watchtower 
   results.counterspell = { step1, step2, raw: await lastRaw(sessionId) };
 }
 
+// ── C. Pause and ask (PM decision 2026-11-25) ──────────────────────────────
+// The player does NOT pre-declare Shield. The goblin's turn (model-chosen
+// action) hits; the engine must pause and ask; the player answers "Shield".
+{
+  console.log('\n=== C. Pause and ask ===');
+  const pcId = await seedWizard('TEST_LIVE Ask Wizard');
+  const start = await post('/api/dm-session/start', { characterId: pcId, startingLocation: START_LOC, campaignLength: 'one-shot' });
+  if (start.status !== 200) { console.error('start failed', start.status, start.body); process.exit(5); }
+  const sessionId = start.body.sessionId;
+  const [gob] = await es.createEncounterEnemies(sessionId, 1, [{ name: 'Goblin Brute', maxHp: 30, armorClass: 13, attackBonus: 9, damageDice: '1d8+2', dexMod: 2 }]);
+  const pcKey = await tl.ledgerKeyForPlayer(pcId);
+  await ct.initializeTurnOrder(sessionId, 1, [
+    { name: 'TEST_LIVE Ask Wizard', type: 'player', key: pcKey },
+    { name: 'Goblin Brute', type: 'enemy', key: `combat:${sessionId}:1:${gob.id}` },
+  ]);
+  const steps = [];
+  let r = await post(`/api/dm-session/${sessionId}/message`, { action: 'I step back into the rubble and hold my ground, watching the goblin.' });
+  steps.push({ action: 'hold', status: r.status, rollPrompts: r.body?.rollPrompts || [], rollMath: r.body?.rollMath || [], narrative: String(r.body?.narrative || '').slice(-900) });
+  // The goblin may not attack, or may miss: give it up to two more rounds.
+  for (let i = 0; i < 2 && !(steps.at(-1).rollPrompts || []).some((p) => /Cast Shield/.test(p)); i++) {
+    r = await post(`/api/dm-session/${sessionId}/message`, { action: 'I keep my distance and watch the goblin.' });
+    steps.push({ action: 'wait', status: r.status, rollPrompts: r.body?.rollPrompts || [], rollMath: r.body?.rollMath || [], narrative: String(r.body?.narrative || '').slice(-900) });
+  }
+  const asked = (steps.at(-1).rollPrompts || []).some((p) => /Cast Shield/.test(p));
+  const hpBefore = (await dbGet('SELECT current_hp FROM characters WHERE id = ?', [pcId]))?.current_hp;
+  if (asked) {
+    r = await post(`/api/dm-session/${sessionId}/message`, { action: 'Shield' });
+    steps.push({ action: 'Shield', status: r.status, rollPrompts: r.body?.rollPrompts || [], rollMath: r.body?.rollMath || [], narrative: String(r.body?.narrative || '').slice(0, 1500) });
+  }
+  results.askAndAnswer = {
+    asked, steps,
+    slot1_used: (await slotsUsed(pcId))['1'] || 0,
+    hp_before_answer: hpBefore,
+    hp_after: (await dbGet('SELECT current_hp FROM characters WHERE id = ?', [pcId]))?.current_hp,
+    turn_now: (await ct.getTurnState(sessionId, 1))?.currentTurn?.name || null,
+  };
+  console.log(JSON.stringify({ asked, slot1_used: results.askAndAnswer.slot1_used, hp: [hpBefore, results.askAndAnswer.hp_after], turn_now: results.askAndAnswer.turn_now, math: steps.map((s) => s.rollMath), prompts: steps.map((s) => s.rollPrompts) }, null, 2));
+}
+
 results.finished = new Date().toISOString();
 fs.writeFileSync(path.join(SCRATCH, 'reactions-live-results.json'), JSON.stringify(results, null, 2));
 console.log('\nwrote .test-tmp/reactions-live-results.json');

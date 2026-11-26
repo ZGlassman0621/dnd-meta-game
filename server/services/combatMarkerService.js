@@ -490,9 +490,19 @@ async function resolvePartyTarget(context, encounterSeq, targetName) {
  * Server rolls to-hit vs target AC via rng.js, rolls damage on hit,
  * applies through the HP pipeline. Returns the result for AI narration.
  */
+// mechanical-reactions (PM decision 2026-11-25): once a marker in this
+// batch paused for the player's reaction, the same NPC's later attacks and
+// casts wait behind it and replay after the player answers.
+async function queuedBehindReaction(context, key, parsed) {
+  if (!context?.reactionHeld) return false;
+  const { queueBehindOffer, rebuildMarker } = await import('./reactionOfferService.js');
+  return queueBehindOffer(context.sessionId, rebuildMarker(key, parsed));
+}
+
 registerMarkerHandler('ENEMY_ATTACK', async (parsed, context) => {
   if (!context?.sessionId || !context?.characterId) return null;
   try {
+    if (await queuedBehindReaction(context, 'ENEMY_ATTACK', parsed)) return { type: 'enemy_attack', success: true, queued: true, enemyName: parsed?.Enemy };
     const enemyName = parsed?.Enemy;
     const targetName = parsed?.Target || 'Player';
     if (!enemyName) return null;
@@ -531,6 +541,7 @@ registerMarkerHandler('ENEMY_ATTACK', async (parsed, context) => {
       const target = await resolvePartyTarget(context, encounterSeq, targetName);
       if (!target) return { type: 'enemy_attack', success: false, reason: `unknown target: ${targetName}`, reactionConsumed: true };
       const attack = await resolveEnemyAttack(context.sessionId, encounterSeq, enemyName, target, { reaction: true });
+      if (attack?.held) context.reactionHeld = true;
       return { type: 'enemy_attack', success: true, readyFired: true, reactionConsumed: true, attack };
     }
     const target = await resolvePartyTarget(context, encounterSeq, targetName);
@@ -545,6 +556,7 @@ registerMarkerHandler('ENEMY_ATTACK', async (parsed, context) => {
       bonus: actionTruthy(parsed?.Bonus),
     };
     const result = await resolveEnemyAttack(context.sessionId, encounterSeq, enemyName, target, economyOpts);
+    if (result?.held) context.reactionHeld = true;
     return result;
   } catch (e) {
     console.error('[combatMarkerService] ENEMY_ATTACK handler failed:', e.message);
@@ -644,6 +656,7 @@ registerMarkerHandler('ENEMY_SLOTS', async (parsed, context) => {
 registerMarkerHandler('ENEMY_CAST', async (parsed, context) => {
   if (!context?.sessionId) return null;
   try {
+    if (await queuedBehindReaction(context, 'ENEMY_CAST', parsed)) return { type: 'enemy_cast', success: true, queued: true, enemy: parsed?.Enemy };
     const enemyName = parsed?.Enemy;
     const spell = parsed?.Spell;
     if (!enemyName || !spell) return { type: 'enemy_cast', success: false, reason: 'ENEMY_CAST needs Enemy= and Spell=' };
@@ -725,6 +738,23 @@ registerMarkerHandler('ENEMY_CAST', async (parsed, context) => {
     }
     // (e) Counterspell interception (non-reaction casts only): the
     // counter never launders an illegal cast — economy already ran.
+    // mechanical-reactions (PM decision 2026-11-25): with no counter armed
+    // in this batch, the engine asks the PLAYER — when Counterspell is
+    // actually available (known, level-3+ slot, reaction free) — before
+    // the spell resolves. The enemy's slot and action are already spent.
+    if (!reaction && context.characterId && !(context.armedCounterspells || []).length) {
+      const { maybeOfferCounterspell } = await import('./reactionOfferService.js');
+      const offer = await maybeOfferCounterspell(context.sessionId, encounterSeq, context.characterId, {
+        enemyName: enemy.name, enemyKey: key, spell: cast.spell, castLevel: cast.level,
+        resolveOpts: { targets, dc, atkBonus: parsed?.AtkBonus != null ? Number(parsed.AtkBonus) : null,
+          casterLevel: parsed?.CasterLevel != null ? Number(parsed.CasterLevel) : null,
+          reaction: false, choice: parsed?.Choice || null, sessionCharacterId: context.characterId ?? null },
+      }).catch(() => null);
+      if (offer) {
+        context.reactionHeld = true;
+        return { type: 'enemy_cast', success: true, held: true, enemy: enemy.name, spell: cast.spell, level: cast.level, slotsRemaining: cast.slotsRemaining, reactionOffer: offer.prompt };
+      }
+    }
     if (!reaction) {
       const counter = ess.takePartyCounter(context, enemy.name);
       const fired = counter ? await ess.firePartyCounter(context, counter) : { fired: false };
@@ -823,6 +853,7 @@ registerMarkerHandler('OPPORTUNITY_ATTACK', async (parsed, context) => {
       const partyTarget = await resolvePartyTarget(context, encounterSeq, target);
       if (!partyTarget) return { type: 'opportunity_attack', success: false, reason: `unknown target: ${target}`, attacker, target, reactionConsumed: true };
       const attack = await resolveEnemyAttack(context.sessionId, encounterSeq, attacker, partyTarget, { reaction: true });
+      if (attack?.held) context.reactionHeld = true;
       return { type: 'opportunity_attack', success: true, attacker, target, reactionConsumed: true, attack };
     }
     const enemyTarget = await findActiveEnemy(context.sessionId, encounterSeq, target);

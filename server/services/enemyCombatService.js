@@ -264,6 +264,28 @@ export async function resolveEnemyAttack(sessionId, encounterSeq, enemyName, tar
   const critThreshold = enemyCritThreshold(enemy);
   const isCrit = attackRoll === 20 || attackRoll >= critThreshold, isFumble = attackRoll === 1;
   const hit = isCrit || (!isFumble && totalToHit >= targetAc);
+  const judged = { attackRoll, attackRolls, attackMode, sapped, usedAttackBonus, atkPenalty, totalToHit, targetAc, hit, isCrit, isFumble, usedDamageDice,
+    economy: { actionName: economy.actionName ?? null, multiattackRemaining: economy.multiattackRemaining ?? null, legendaryRemaining: economy.legendaryRemaining ?? null, bonusSpent: !!economy.bonusSpent } };
+  // mechanical-reactions (PM decision 2026-11-25): a hit on the player
+  // pauses BEFORE damage when the player can answer it with Shield
+  // (known, slot left, reaction free). The engine asks; the player
+  // answers "Shield" or "pass"; resumeHeldEnemyAttack lands it.
+  if (hit && target.type === 'player' && !opts.noReactionOffer) {
+    try {
+      const { maybeOfferShield } = await import('./reactionOfferService.js');
+      const offer = await maybeOfferShield(sessionId, encounterSeq, { enemyName: enemy.name, target: { type: target.type, id: target.id, name: target.name, armorClass: target.armorClass, cover: target.cover ?? null }, judged });
+      if (offer) {
+        return { type: 'enemy_attack', success: true, held: true, enemyName: enemy.name, targetName: target.name || 'target', targetType: target.type, reactionOffer: offer.prompt };
+      }
+    } catch (e) { console.warn('[enemyCombat] reaction offer failed (non-fatal):', e.message); }
+  }
+  return landEnemyAttack(sessionId, encounterSeq, enemy, target, judged);
+}
+
+/** Roll damage and apply a judged enemy attack (split out so a hit on
+ *  the player can pause for a reaction before it lands). */
+async function landEnemyAttack(sessionId, encounterSeq, enemy, target, judged) {
+  const { attackRoll, attackRolls, attackMode, sapped, usedAttackBonus, atkPenalty, totalToHit, targetAc, hit, isCrit, isFumble, usedDamageDice, economy } = judged;
   let damage = 0, damageRolls = [];
   if (hit) {
     const dice = parseDamageDice(usedDamageDice) || { count: 1, sides: 6, modifier: 0 };
@@ -321,6 +343,20 @@ export async function resolveEnemyAttack(sessionId, encounterSeq, enemyName, tar
     ...(economy.multiattackRemaining != null ? { multiattackRemaining: economy.multiattackRemaining } : {}),
     ...(economy.legendaryRemaining != null ? { legendaryRemaining: economy.legendaryRemaining } : {}),
     ...(economy.bonusSpent ? { bonusSpent: true } : {}) };
+}
+
+/**
+ * mechanical-reactions: land an enemy attack that paused for the
+ * player's reaction. extraAc is +5 when the player cast Shield; the
+ * hit is re-judged against the raised AC (a critical hit still hits).
+ */
+export async function resumeHeldEnemyAttack(sessionId, encounterSeq, held, extraAc = 0) {
+  const enemy = await findActiveEnemy(sessionId, encounterSeq, held.enemyName);
+  if (!enemy) return { type: 'enemy_attack', success: false, reason: `${held.enemyName} is no longer in the fight` };
+  const j = held.judged;
+  const targetAc = j.targetAc + (Number(extraAc) || 0);
+  const hit = j.isCrit || (!j.isFumble && j.totalToHit >= targetAc);
+  return landEnemyAttack(sessionId, encounterSeq, enemy, held.target, { ...j, targetAc, hit });
 }
 
 /**

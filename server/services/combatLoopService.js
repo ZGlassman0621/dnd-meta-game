@@ -406,6 +406,8 @@ export function partyAttackRefusalText(r) {
  *
  *   playerTurnDone — advance past the player first (their action resolved).
  *   callDm(directive, systemPrompt) -> Promise<string> (the DM's raw reply)
+ *   shouldPause() -> Promise<bool>: true stops the loop where it is (a
+ *     reaction offer to the player is waiting).
  *   dispatch(rawText) -> Promise<{ handlerResults }> (the normal pipeline,
  *     already wrapped with combatDispatchText by the caller)
  *
@@ -413,7 +415,7 @@ export function partyAttackRefusalText(r) {
  * Never throws: a failed DM call stops the loop where it is, so the
  * player can carry on (the next player turn retries).
  */
-export async function runNpcTurns({ sessionId, encounterSeq, playerTurnDone, playerName, baseSystemPrompt, callDm, dispatch, alreadyActed = [] }) {
+export async function runNpcTurns({ sessionId, encounterSeq, playerTurnDone, playerName, baseSystemPrompt, callDm, dispatch, alreadyActed = [], shouldPause = null }) {
   // NPCs whose ordinary attack already resolved in this message's main
   // reply (the DM narrated the NPC's turn itself): their turn is taken.
   const acted = new Set((alreadyActed || []).map((n) => String(n).toLowerCase()));
@@ -446,6 +448,12 @@ export async function runNpcTurns({ sessionId, encounterSeq, playerTurnDone, pla
       let handlerResults = [];
       try { handlerResults = (await dispatch(raw))?.handlerResults || []; } catch (e) { console.error('[combatLoop] NPC dispatch failed:', e.message); }
       turns.push({ combatant: entry, raw, handlerResults });
+      // mechanical-reactions (PM decision 2026-11-25): a reaction offer to
+      // the player pauses the loop mid-turn — no advance; the next message
+      // answers it and the loop resumes past this combatant.
+      if (shouldPause && await shouldPause()) {
+        return { turns, advanced, state, ended: false, stoppedOn: 'reaction-offer' };
+      }
       // An accepted COMBAT_END or a settlement ends the fight; a COMBAT_END
       // refused while enemies stand does not (combat resolution).
       if (handlerResults.some((hr) => (hr?.schemaKey === 'COMBAT_END' && !hr.result?.refused)

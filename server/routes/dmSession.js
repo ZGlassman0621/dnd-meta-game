@@ -160,6 +160,7 @@ import { safeParse } from '../utils/safeParse.js';
 import { campaignForCharacter, campaignRequiredBody, requireSessionCampaign } from '../utils/campaignGate.js';
 import { validateDmMarkers } from '../services/markerSchemas.js';
 import { verifyDmResponse, verifyDeclaredReactionCast } from '../services/ruleVerifiers.js';
+import { getOffer as getReactionOffer, parseOfferAnswer, resolveOffer as resolveReactionOffer, offerPrompt, extractPlayerReactions, takeResumeActed } from '../services/reactionOfferService.js';
 import { nextCorrectionEntries, renderCorrectionText } from '../services/markerCorrectionRetry.js';
 import { processResponseMarkers } from '../services/markerPipeline.js';
 import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
@@ -1330,6 +1331,15 @@ async function isPlayersTurn(sessionId) {
  *  narrated without a SPELL_CAST marker. Dispatched through the real
  *  pipeline (same shape as synthesizePlayerAttack), so every engine rule
  *  (reaction budget, slot, incapacitation) still applies. */
+/** mechanical-reactions: dispatch engine-held marker text (a reaction the
+ *  player accepted, the markers queued behind it, an NPC turn's markers)
+ *  through the real pipeline — outside the message handler, so the turn's
+ *  single main dispatch stays structurally single (turn-write-ordering). */
+async function dispatchEngineMarkers(sessionId, characterId, text, narrative = text, playerAction = null) {
+  if (!String(text || '').trim()) return { handlerResults: [], failures: [] };
+  return processResponseMarkers(text, { characterId, sessionId, narrative, ...(playerAction ? { playerAction } : {}) });
+}
+
 async function synthesizePlayerReaction(sessionId, characterId, action, spell) {
   const lvlM = String(action).match(/\b([1-9])(?:st|nd|rd|th)[- ]level\b/i);
   const marker = `[SPELL_CAST: Spell="${spell}" Level=${lvlM ? Number(lvlM[1]) : 1} Reaction="true"]`;
@@ -1369,6 +1379,13 @@ function combatResultLines(handlerResults, playerName = null) {
   const lines = []; const notes = []; const math = [];
   for (const hr of handlerResults || []) {
     if (!hr?.ok || !hr.result) continue;
+    if (hr.schemaKey === 'REACTION_NOTE') { notes.push(hr.result.note); continue; }
+    if (hr.result.held) {
+      // mechanical-reactions: paused for the player's reaction choice.
+      notes.push('[SYSTEM NOTE - DO NOT RESPOND TO THIS]: That action is PAUSED: the player is being asked whether to use a reaction. Do not narrate its outcome; the engine resolves it after the player answers.');
+      continue;
+    }
+    if (hr.result.queued) continue;
     if (hr.schemaKey === 'HP_CHANGE' && (hr.result.refusedSelfDamage || hr.result.refusedInCombat)) {
       notes.push(`[SYSTEM NOTE - DO NOT RESPOND TO THIS]: ${hr.result.reason}`);
     } else if (hr.schemaKey === 'ENEMY_ATTACK') {
@@ -1585,6 +1602,43 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       }
       // Facts reach the model only on the action text it reads this turn.
       actionForLlm = `${actionForLlm}\n\n${engineFacts[engineFacts.length - 1]}`;
+    }
+    // mechanical-reactions (PM decision 2026-11-25): a reaction offer is
+    // waiting — this message is the player's answer ("Shield" / "counter" /
+    // "yes" / "pass"). The engine resolves it before the DM narrates, and
+    // the paused enemy turn resumes after. Anything that is not an answer
+    // leaves the offer open (it is asked again below).
+    let reactionResolved = null;
+    try {
+      const pendingOffer = await getReactionOffer(sidN);
+      if (pendingOffer) {
+        const answer = parseOfferAnswer(action, pendingOffer);
+        if (answer) {
+          reactionResolved = await resolveReactionOffer(sidN, answer);
+          if (reactionResolved?.replay) {
+            const rp = await dispatchEngineMarkers(sidN, session.character_id, reactionResolved.replay, reactionResolved.replay, action);
+            reactionResolved.results.push(...(rp.handlerResults || []));
+          }
+          const rxName = (await dbGet('SELECT name, nickname FROM characters WHERE id = ?', [session.character_id]).catch(() => null)) || {};
+          const rl = combatResultLines(reactionResolved?.results || [], rxName.nickname || rxName.name || 'Player');
+          const refusals = (reactionResolved?.results || [])
+            .filter((h) => h?.ok && h.result && h.result.success === false && !['ENEMY_ATTACK', 'ATTACK'].includes(h.schemaKey))
+            .map((h) => `⚙ That reaction did not go through: ${h.result.reason}.`);
+          engineLines.push(...(reactionResolved?.lines || []), ...rl.lines, ...refusals);
+          rollMath.push(...rl.math);
+          const rxFacts = [...(reactionResolved?.facts || []), ...rl.notes];
+          if (rxFacts.length) {
+            engineFacts.push(...rxFacts);
+            actionForLlm = `${actionForLlm}\n\n${rxFacts.join('\n')}`;
+          }
+        } else {
+          const f = `[REACTION PENDING — system fact: the player has not yet answered whether to use their reaction (${offerPrompt(pendingOffer).replace(/^⚡ Reaction: /, '')}). Do not resolve it or narrate its outcome; the engine asks again.]`;
+          engineFacts.push(f);
+          actionForLlm = `${actionForLlm}\n\n${f}`;
+        }
+      }
+    } catch (err) {
+      console.warn('[reactions] offer resolution failed (non-fatal):', err.message);
     }
     if (rollOutcome?.contest) {
       const c = rollOutcome.contest;
@@ -2270,7 +2324,8 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     // is not opened here: it only works against a cast in the same batch.
     let openedReactions = [];
     try {
-      const declared = verifyDeclaredReactionCast(action, result.narrative || '');
+      // An answer to a reaction offer was already resolved by the engine.
+      const declared = reactionResolved ? { ok: true, violations: [] } : verifyDeclaredReactionCast(action, result.narrative || '');
       const OPENABLE = ['Shield', 'Absorb Elements', 'Hellish Rebuke', 'Backlash'];
       for (const v of declared.violations.filter((x) => OPENABLE.includes(x.spell))) {
         const { marker, handlerResults, result: res } = await synthesizePlayerReaction(sidN, session.character_id, action, v.spell);
@@ -2338,7 +2393,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       const { violations: ruleViolations } = verifyDmResponse(result.narrative || '');
       // mechanical-reactions: a reaction spell the player declared but the
       // DM narrated with no marker never ran — say so, and correct the DM.
-      const declaredReaction = verifyDeclaredReactionCast(action, result.narrative || '');
+      const declaredReaction = reactionResolved ? { ok: true, violations: [] } : verifyDeclaredReactionCast(action, result.narrative || '');
       if (!declaredReaction.ok) {
         ruleViolations.push(...declaredReaction.violations);
         for (const v of declaredReaction.violations) {
@@ -2738,7 +2793,13 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       if (engineLines.length) cleanNarrative += `\n\n${engineLines.join('\n')}`;
 
       const loopSeq = combatEnd ? null : await getCurrentEncounterSeq(sessionId);
-      if (loopSeq && await getTurnState(sidN, loopSeq).catch(() => null)) {
+      // mechanical-reactions: the loop waits while the player is being asked
+      // about a reaction, and while an accepted reaction waits on their dice
+      // (an opportunity attack's d20) on someone else's turn.
+      const loopStateNow = loopSeq ? await getTurnState(sidN, loopSeq).catch(() => null) : null;
+      const holdLoop = !!(await getReactionOffer(sidN))
+        || (!!reactionResolved && !!loopStateNow && !isPlayerEntry(loopStateNow.currentTurn) && (await pendingPlayerRolls(sidN)).length > 0);
+      if (loopSeq && loopStateNow && !holdLoop) {
         // Settling a concentration save (a reaction to damage) or a bonus-action
         // heal (Second Wind) leaves the player's turn open: their action is still to come.
         const playerTurnDone = !initiativeRes && !concentrationRes && !healRes && (await pendingPlayerRolls(sidN)).length === 0;
@@ -2749,9 +2810,12 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
           sessionId: sidN, encounterSeq: loopSeq, playerTurnDone,
           playerName: pcName,
           baseSystemPrompt: npcBase,
-          alreadyActed: (pipelineResult.handlerResults || [])
+          alreadyActed: [...(pipelineResult.handlerResults || [])
             .filter((hr) => hr?.ok && hr.schemaKey === 'ENEMY_ATTACK' && hr.result?.type === 'enemy_attack' && hr.result.success !== false && hr.result.attackRoll != null)
             .map((hr) => hr.result.enemyName),
+            // A turn that paused for a reaction already ran: skip it on resume.
+            ...(await takeResumeActed(sidN))],
+          shouldPause: async () => !!(await getReactionOffer(sidN)),
           callDm: async (directive, sysPrompt) => {
             const w = await wrapLlmCallWithId(
               {
@@ -2766,9 +2830,14 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
             npcHistory.push({ role: 'user', content: directive }, { role: 'assistant', content: reply });
             return reply;
           },
-          dispatch: (raw) => processResponseMarkers(combatDispatchText(raw, { combatActive: true }).text, {
-            characterId: session.character_id, sessionId: sidN, narrative: raw,
-          }),
+          // mechanical-reactions: a player reaction the DM wrote in an NPC's
+          // reply never runs unasked — it becomes the question to the player.
+          dispatch: async (raw) => {
+            const ex = await extractPlayerReactions(sidN, loopSeq, session.character_id, combatDispatchText(raw, { combatActive: true }).text, pcName);
+            const pr = await dispatchEngineMarkers(sidN, session.character_id, ex.text, raw);
+            for (const note of ex.notes) pr.handlerResults.push({ schemaKey: 'REACTION_NOTE', ok: true, result: { note } });
+            return pr;
+          },
         });
         const lastAssistant = [...result.messages].reverse().find((m) => m.role === 'assistant');
         for (const t of loop.turns) {
@@ -2800,6 +2869,13 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
         if (combatEnd) {
           await dbRun('DELETE FROM combat_turn_state WHERE session_id = ? AND encounter_seq = ?', [sessionId, loopSeq]).catch(() => {});
         }
+      }
+      // mechanical-reactions: a waiting reaction question is the player's
+      // next prompt (it rides rollPrompts like any roll the engine asks for).
+      const waitingOffer = await getReactionOffer(sidN);
+      if (waitingOffer) {
+        // rollPrompts reach the narrative once, below (with every other ask).
+        rollPrompts.push(offerPrompt(waitingOffer));
       }
     } catch (err) {
       console.error('[combatLoop] NPC turns failed (non-fatal):', err.message);

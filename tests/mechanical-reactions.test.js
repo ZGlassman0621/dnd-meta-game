@@ -430,5 +430,129 @@ group('13. A declared reaction spell the DM narrated without a marker is flagged
   ok(/COUNTERSPELL — system fact/.test(route) && /pendingEffectOutcome\?\.slot === 'pendingCounteredCast'/.test(route), 'a countered cast is a binding engine fact on the roll turn');
 }
 
+// ---------------------------------------------------------------------------
+// PM decision 2026-11-25: pause and ask the player about THEIR reactions.
+const ro = await import(svc('server/services/reactionOfferService.js'));
+const brute = (name) => ({ name, maxHp: 60, armorClass: 5, attackBonus: 30, damageDice: '1d6', dexMod: 1 });
+async function shieldPc(over = {}) {
+  return addPc({ armor_class: 12, known_spells: JSON.stringify(['Shield', 'Counterspell', 'Magic Missile']), ...over });
+}
+async function pcHp(id) { return (await dbGet('SELECT current_hp FROM characters WHERE id = ?', [id]))?.current_hp; }
+
+group('14. Shield offer: a hit on the player pauses before damage; accept re-judges at +5');
+{
+  for (const answer of ['accept', 'pass']) {
+    const pc = await shieldPc();
+    const sessionId = await addSession(pc.id);
+    const [g] = await es.createEncounterEnemies(sessionId, 1, [brute('Brute')]);
+    await order(sessionId, [
+      { name: 'Brute', type: 'enemy', key: enemyKey(sessionId, g) },
+      { name: 'Tester', type: 'player', key: await pcKey(pc) },
+    ]);
+    const hp0 = await pcHp(pc.id);
+    const r = await markerResult('[ENEMY_ATTACK: Enemy="Brute" Target="Player"]', pc.id, sessionId, 'ENEMY_ATTACK');
+    if (!r.held) {
+      ok(r.hit === false && r.isFumble === true, 'only a natural 1 misses at +30 — no hit, no offer');
+      continue;
+    }
+    ok(/Cast Shield/.test(r.reactionOffer || ''), 'the hit pauses with a Shield question');
+    ok((await pcHp(pc.id)) === hp0, 'no damage while the player decides');
+    ok(await reactionFree(sessionId, 'Tester') && (await pcUsed(pc.id, 1)) === 0, 'nothing spent before the answer');
+    const out = await ro.resolveOffer(sessionId, answer);
+    const landed = out.results[0].result;
+    if (answer === 'accept') {
+      ok((await pcUsed(pc.id, 1)) === 1 && !(await reactionFree(sessionId, 'Tester')), 'accept: one 1st-level slot and the reaction spent');
+      ok(landed.targetAc === 17, 'accept: the attack is re-judged against AC 12 + 5');
+      ok(landed.hit === (landed.isCrit || landed.totalToHit >= 17), 'accept: hit only if the total still reaches 17 (or a crit)');
+    } else {
+      ok((await pcUsed(pc.id, 1)) === 0 && (await reactionFree(sessionId, 'Tester')), 'pass: no slot, no reaction spent');
+      ok(landed.hit === true && (await pcHp(pc.id)) === Math.max(0, hp0 - landed.damage), 'pass: the hit lands with its damage');
+    }
+    ok(!(await ro.getOffer(sessionId)), 'the offer is cleared');
+  }
+  // No offer when Shield is unknown or the reaction is used.
+  const pc = await addPc({ armor_class: 12 });
+  const sessionId = await addSession(pc.id);
+  const [g] = await es.createEncounterEnemies(sessionId, 1, [brute('Brute')]);
+  await order(sessionId, [{ name: 'Brute', type: 'enemy', key: enemyKey(sessionId, g) }, { name: 'Tester', type: 'player', key: await pcKey(pc) }]);
+  const r = await markerResult('[ENEMY_ATTACK: Enemy="Brute" Target="Player"]', pc.id, sessionId, 'ENEMY_ATTACK');
+  ok(!r.held && !(await ro.getOffer(sessionId)), 'Shield not known: no question, the attack resolves');
+  const pc2 = await shieldPc();
+  const s2 = await addSession(pc2.id);
+  const [g2] = await es.createEncounterEnemies(s2, 1, [brute('Brute')]);
+  await order(s2, [{ name: 'Brute', type: 'enemy', key: enemyKey(s2, g2) }, { name: 'Tester', type: 'player', key: await pcKey(pc2) }]);
+  await rs.useReaction(s2, 1, 'Tester');
+  const r2 = await markerResult('[ENEMY_ATTACK: Enemy="Brute" Target="Player"]', pc2.id, s2, 'ENEMY_ATTACK');
+  ok(!r2.held, 'reaction already used: no question');
+}
+
+group('15. Counterspell offer: an enemy cast pauses before it resolves');
+{
+  for (const answer of ['accept', 'pass']) {
+    const pc = await shieldPc();
+    const sessionId = await addSession(pc.id);
+    const [mage] = await es.createEncounterEnemies(sessionId, 1, [arch()]);
+    await order(sessionId, [{ name: 'Archmage', type: 'enemy', key: enemyKey(sessionId, mage) }, { name: 'Tester', type: 'player', key: await pcKey(pc) }]);
+    const r = await markerResult('[ENEMY_CAST: Enemy="Archmage" Spell="Lightning Bolt" Level=3 Target="Player"]', pc.id, sessionId, 'ENEMY_CAST');
+    ok(r && r.held === true && /Cast Counterspell/.test(r.reactionOffer || ''), 'the cast pauses with a Counterspell question');
+    ok(!(await cfg(sessionId)).pendingEnemySpellEffect, 'the spell has not resolved yet');
+    ok(Number((await enemySlots(mage.id))['3']) === 2, 'the enemy slot is spent (the casting is under way)');
+    const out = await ro.resolveOffer(sessionId, answer);
+    if (answer === 'accept') {
+      ok((await pcUsed(pc.id, 3)) === 1 && !(await reactionFree(sessionId, 'Tester')), 'accept: the level-3 slot and the reaction spent');
+      const countered = /is countered/.test(out.lines.join(' '));
+      if (countered) {
+        ok(Number((await enemySlots(mage.id))['3']) === 3, 'countered: the enemy slot is not expended');
+        ok(!(await cfg(sessionId)).pendingEnemySpellEffect, 'countered: no effect');
+      } else {
+        ok((await cfg(sessionId)).pendingEnemySpellEffect?.spell === 'Lightning Bolt', 'save made: the spell resolves (player save asked)');
+      }
+    } else {
+      ok((await pcUsed(pc.id, 3)) === 0 && (await reactionFree(sessionId, 'Tester')), 'pass: nothing spent');
+      ok((await cfg(sessionId)).pendingEnemySpellEffect?.spell === 'Lightning Bolt', 'pass: the spell resolves');
+    }
+  }
+}
+
+group('16. Markers after a paused one queue and replay; DM-written player reactions become questions');
+{
+  const pc = await shieldPc();
+  const sessionId = await addSession(pc.id);
+  const [g] = await es.createEncounterEnemies(sessionId, 1, [brute('Brute')]);
+  await order(sessionId, [{ name: 'Brute', type: 'enemy', key: enemyKey(sessionId, g) }, { name: 'Tester', type: 'player', key: await pcKey(pc) }]);
+  const res = await pipeline.processResponseMarkers('[ENEMY_ATTACK: Enemy="Brute" Target="Player"] [ENEMY_ATTACK: Enemy="Brute" Target="Player" Multiattack="true"]', { characterId: pc.id, sessionId });
+  const [a1, a2] = res.handlerResults.filter((h) => h.schemaKey === 'ENEMY_ATTACK').map((h) => h.result);
+  if (a1.held) {
+    ok(a2 && a2.queued === true, 'the second swing waits behind the question');
+    const out = await ro.resolveOffer(sessionId, 'pass');
+    ok(/ENEMY_ATTACK/.test(out.replay) && /Multiattack="true"/.test(out.replay), 'the queued swing replays after the answer');
+  } else {
+    ok(true, 'first swing was a natural 1 (no question) — queue not exercised this run');
+  }
+  // The DM writes the player's opportunity attack on the goblin's turn.
+  const pc2 = await addPc();
+  const s2 = await addSession(pc2.id);
+  const [g2] = await es.createEncounterEnemies(s2, 1, [gob('GobA')]);
+  await order(s2, [{ name: 'GobA', type: 'enemy', key: enemyKey(s2, g2) }, { name: 'Tester', type: 'player', key: await pcKey(pc2) }]);
+  const ex = await ro.extractPlayerReactions(s2, 1, pc2.id, 'GobA bolts. [OPPORTUNITY_ATTACK: Attacker="Player" Target="GobA"] [SPELL_CAST: Spell="Shield" Level=1]', 'Tester');
+  ok(!/OPPORTUNITY_ATTACK|SPELL_CAST/.test(ex.text), 'player reactions are removed from the NPC turn text');
+  ok(ex.offered && /opportunity attack/.test(ex.offered.prompt), 'the opportunity attack becomes a question');
+  ok(ex.notes.some((n) => /Shield/.test(n) && /Never spend the player's reaction/.test(n)), 'the DM-written Shield is dropped with a note');
+  ok(await reactionFree(s2, 'Tester'), 'nothing spent until the player answers');
+  const out = await ro.resolveOffer(s2, 'accept');
+  ok(/OPPORTUNITY_ATTACK: Attacker="Player" Target="GobA"/.test(out.replay), 'yes replays the exact marker');
+  // Answers.
+  ok(ro.parseOfferAnswer('Shield!', { kind: 'shield' }) === 'accept' && ro.parseOfferAnswer('pass', { kind: 'shield' }) === 'pass', 'Shield / pass parse');
+  ok(ro.parseOfferAnswer("no, let it hit", {}) === 'pass' && ro.parseOfferAnswer('yes', {}) === 'accept', 'no / yes parse');
+  ok(ro.parseOfferAnswer('What would happen if I let the goblin hit me and then ran for the door?', {}) === null, 'a long message is not an answer (the question stays open)');
+}
+
+group('17. The prompt fences unwired class-feature reactions');
+{
+  const src = fs.readFileSync(path.join(REPO, 'server/services/dmPromptBuilder.js'), 'utf8');
+  ok(/never write the player's reaction on an NPC's turn/.test(src), 'prompt: the engine asks the player about their reactions');
+  ok(/never state a number change \(damage reduced, AC raised, extra damage, HP\) the engine did not apply/.test(src), 'prompt: no number change the engine did not apply');
+}
+
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

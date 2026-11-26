@@ -104,6 +104,45 @@ async function run() {
       assert(Number(used['1'] || 0) === 0, 'the countered spell slot is not expended')
       assert((await dbGet('SELECT current_hp FROM combat_enemies WHERE id = ?', [mage.id]))?.current_hp === 99, 'the countered spell did no damage')
     }
+    console.log('\n=== 4. Pause and ask: an enemy hit waits for the player\'s Shield answer, then the turn resumes ===\n')
+    {
+      const f = await seedTurnFixture(dbRun, { prefix: 'TEST_RX_4', hp: 40, maxHp: 40 })
+      fixtures.push(f)
+      await dbRun('UPDATE characters SET class = ?, level = 5, armor_class = 12, spell_slots = ?, spell_slots_used = ?, known_spells = ? WHERE id = ?',
+        ['Wizard', JSON.stringify({ 1: 4 }), '{}', JSON.stringify(['Shield']), f.characterId])
+      const name = 'TEST_RX_4 Hero'
+      const [brute] = await es.createEncounterEnemies(f.sessionId, 1, [{ name: 'Brute', maxHp: 30, armorClass: 13, attackBonus: 30, damageDice: '1d6', dexMod: 2 }])
+      await ct.initializeTurnOrder(f.sessionId, 1, [
+        { name, type: 'player', key: await tl.ledgerKeyForPlayer(f.characterId) },
+        { name: 'Brute', type: 'enemy', key: `combat:${f.sessionId}:1:${brute.id}` },
+      ])
+      llm.reply('You steady your stance and wait.')
+      llm.reply('The brute swings a heavy club at you. [ENEMY_ATTACK: Enemy="Brute" Target="Player"]')
+      const hp0 = (await dbGet('SELECT current_hp FROM characters WHERE id = ?', [f.characterId])).current_hp
+      const r1 = await server.post(`/api/dm-session/${f.sessionId}/message`, { action: 'I hold my ground and watch the brute.' })
+      assert(r1.status === 200, 'first turn succeeds')
+      const offered = (r1.body?.rollPrompts || []).some((p) => /Cast Shield/.test(p))
+      if (!offered) {
+        assert(/MISS/.test(String(r1.body?.narrative || '')), 'no question only on a natural 1 (a miss)')
+      } else {
+        assert((String(r1.body?.narrative || '').match(/⚡ Reaction/g) || []).length === 1, 'the player sees the Shield question exactly once')
+        assert((await dbGet('SELECT current_hp FROM characters WHERE id = ?', [f.characterId])).current_hp === hp0, 'no damage while the player decides')
+        // The answer turn: ONE model call (the narration). The brute's turn
+        // already ran, so the loop resumes past it straight to the player —
+        // a second scripted call would be unscripted and fail strict mode.
+        llm.reply('The club cracks against a shimmering pane of force.')
+        const r2 = await server.post(`/api/dm-session/${f.sessionId}/message`, { action: 'Shield' })
+        assert(r2.status === 200, `answer turn succeeds (status ${r2.status})`)
+        const text = String(r2.body?.narrative || '')
+        assert(/⚙ Shield: \+5 AC/.test(text), 'the player sees Shield resolve')
+        assert(/vs AC 17/.test(JSON.stringify(r2.body?.rollMath || [])), 'the paused attack lands against AC 17')
+        const used = safeParse((await dbGet('SELECT spell_slots_used FROM characters WHERE id = ?', [f.characterId]))?.spell_slots_used, {})
+        assert(Number(used['1'] || 0) === 1, 'one slot spent')
+        const st = await ct.getTurnState(f.sessionId, 1)
+        assert(st?.currentTurn?.name === name, 'the turn is back with the player (the brute did not act twice)')
+        assert(llm.pending === 0, 'exactly the scripted calls were made')
+      }
+    }
   } finally {
     for (const f of fixtures) { try { await cleanupTurnFixture(dbRun, f) } catch { /* best-effort */ } }
     await server.close()
