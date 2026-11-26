@@ -758,7 +758,7 @@ group('9. Counterspell: same-message party, armed enemy, PC deferral');
     const ec = res.handlerResults.filter((hr) => hr.schemaKey === 'ENEMY_CAST')[0].result;
     ok(ec.targets && ec.targets[0].pending === true, 'counter aimed elsewhere does not intercept');
   }
-  // Enemy counter vs companion: slot spent either way, counter consumed.
+  // Enemy counter vs companion: slot unspent when countered, counter consumed.
   {
     const pc = await addPc();
     const sessionId = await addSession(pc.id);
@@ -771,7 +771,9 @@ group('9. Counterspell: same-message party, armed enemy, PC deferral');
     await ess.armEnemyCounter(sessionId, 1, { enemyName: 'Archmage', dc: 17, targetName: null });
     const r = await markerResult('[SPELL_CAST: Caster="Wren" Spell="Cure Wounds" Level=1 Target="Tester"]', pc.id, sessionId, 'SPELL_CAST');
     ok(r && (r.countered === true || r.success === true), 'companion cast either fizzles or completes under the counter');
-    ok((await compSlots(wren.id))['1'] === 1, 'companion slot spent on fizzle and on completion alike');
+    // mechanical-reactions (2024 PHB Counterspell): a countered spell's
+    // slot isn't expended; a spell that gets through spends it.
+    ok(((await compSlots(wren.id))['1'] || 0) === (r.countered === true ? 0 : 1), 'companion slot: unspent when countered, spent when the cast completes');
     ok((await ess.takeEnemyCounter(sessionId, 1, 'Wren')) === null, 'enemy counter consumed by the cast');
   }
   // Enemy counter vs PC: deferral, then fizzle or completion on the reported save.
@@ -791,7 +793,7 @@ group('9. Counterspell: same-message party, armed enemy, PC deferral');
     ok(c.pendingCounteredCast && c.pendingCounteredCast.spell === 'Magic Missile', 'countered cast stashed for the reported save');
     const fizzle = await ess.applyPendingSaveEffect(sessionId, c.pendingRoll.effectKey, { total: 2, dc: 17 });
     ok(fizzle && fizzle.countered === true, 'failed Con save fizzles the cast');
-    ok((await pcSlots(pc.id))['1'] === 1, 'fizzled cast spends no second slot');
+    ok(((await pcSlots(pc.id))['1'] || 0) === 0, 'countered cast: the slot reserved at declaration is refunded (2024 PHB Counterspell)');
     ok(!(await cfg(sessionId)).pendingCounteredCast, 'countered slot clears after the fizzle');
   }
   {
@@ -858,8 +860,10 @@ group('10. Multi-target: independent saves, upcast count, reaction-only gate');
       { name: 'GobA', type: 'enemy', key: enemyKey(sessionId, g) },
     ]);
     const r = await markerResult('[SPELL_CAST: Spell="Shield" Level=1]', pc.id, sessionId, 'SPELL_CAST');
-    ok(r && r.success === false && /reaction/.test(r.reason || ''), 'reaction-only spell without Reaction refused');
-    ok(((await pcSlots(pc.id))['1'] || 0) === 0, 'refused reaction-only cast spends no slot');
+    // mechanical-reactions: a reaction-only spell implies Reaction="true"
+    // (live probe: the model omits the flag; refusing left prose-only Shield).
+    ok(r && r.success === true && r.shieldSet === true, 'reaction-only spell without the Reaction flag casts as a reaction');
+    ok(((await pcSlots(pc.id))['1'] || 0) === 1, 'implied-reaction Shield spends its slot once');
   }
   // Party multi-target Magic Missile cannot split through the single reported total.
   {

@@ -634,6 +634,17 @@ export async function markEnemyLeveledCast(sessionId, encounterSeq, enemyKey, { 
 // Reaction usage validation + enemy cast prerequisites (handler gates)
 // ---------------------------------------------------------------------------
 
+/**
+ * mechanical-reactions (live probe 2026-11-25): gemma4:12b writes
+ * [SPELL_CAST: Spell="Shield" Level=1] without Reaction="true", and the
+ * refusal left the prose saying Shield went up while the engine ran
+ * nothing. A reaction-only spell can only ever be a reaction, so the
+ * flag is implied for it — the cast paths treat it as a reaction.
+ */
+export function isReactionOnlySpell(spellName) {
+  return REACTION_ONLY_SPELLS.includes(String(spellName || '').toLowerCase().trim());
+}
+
 /** Both directions: reaction spells need Reaction, others forbid it. */
 export function validateReactionUsage(spellName, reactionFlag) {
   const key = String(spellName || '').toLowerCase().trim();
@@ -698,10 +709,10 @@ async function enemyCastingMod(enemyRow, dc = null, atk = null) {
 // ---------------------------------------------------------------------------
 
 /** Party counterspell: arm on the message context (same batch only). */
-export function armPartyCounter(context, { counterspeller, dc, targetName = null }) {
+export function armPartyCounter(context, { counterspeller, dc, targetName = null, ...payment }) {
   if (!context || typeof context !== 'object') return false;
   if (!Array.isArray(context.armedCounterspells)) context.armedCounterspells = [];
-  context.armedCounterspells.push({ counterspeller, dc, targetName: targetName ? String(targetName).toLowerCase() : null });
+  context.armedCounterspells.push({ ...payment, counterspeller, dc, targetName: targetName ? String(targetName).toLowerCase() : null });
   return true;
 }
 
@@ -715,8 +726,74 @@ export function takePartyCounter(context, enemyName) {
   return list.splice(idx, 1)[0];
 }
 
-/** Enemy counterspell: arm persistently until the end of the round. */
-export async function armEnemyCounter(sessionId, encounterSeq, { enemyName, dc, targetName = null }) {
+/**
+ * mechanical-reactions item 2: a party counter pays when it FIRES. The
+ * arm (SPELL_CAST Counterspell Reaction="true") checks the slot and the
+ * reaction and stores how to pay; the first enemy cast it answers
+ * spends the counterspeller's slot and reaction here. A counter that
+ * answers nothing (no enemy cast follows in the batch) spends nothing.
+ * A counterspeller who can no longer pay, or has no DC, does not fire.
+ * Legacy counters (armed before this build, no `deferred`) were paid
+ * at arm time and fire free.
+ */
+export async function firePartyCounter(context, counter) {
+  if (!counter) return { fired: false };
+  if (!counter.deferred) return { fired: true, legacy: true };
+  if (counter.dc == null) return { fired: false, reason: 'the counterspeller has no spell save DC' };
+  const sessionId = context?.sessionId || null;
+  const encounterSeq = counter.encounterSeq ?? null;
+  const rc = await checkReaction(sessionId, encounterSeq, counter.reactionName);
+  if (!rc.allowed) {
+    await pushDmNotice(sessionId, `${counter.counterspeller}'s Counterspell did not fire: ${rc.reason}.`);
+    return { fired: false, reason: rc.reason };
+  }
+  const { spendSpellSlot } = await import('./spellCastService.js');
+  const spent = await spendSpellSlot(context.characterId, counter.casterRaw, counter.isPc, counter.compId, counter.level);
+  if (!spent.ok) {
+    await pushDmNotice(sessionId, `${counter.counterspeller}'s Counterspell did not fire: no level-${counter.level} spell slot left.`);
+    return { fired: false, reason: spent.reason };
+  }
+  await spendReaction(sessionId, encounterSeq, counter.reactionName);
+  return { fired: true, slotConsumed: spent.consumed, slotsRemaining: spent.slotsRemaining ?? null };
+}
+
+/**
+ * mechanical-reactions item 2: an enemy counter pays when it FIRES —
+ * the enemy's slot and reaction are spent here, on the party cast it
+ * answers. An armed counter that expires unused spent nothing. An enemy
+ * that is dead, incapacitated, out of reactions or out of slots by
+ * then does not fire. Legacy counters (no `deferred`) fire free.
+ */
+export async function fireEnemyCounter(sessionId, encounterSeq, counter) {
+  if (!counter) return { fired: false };
+  if (!counter.deferred) return { fired: true, legacy: true };
+  if (counter.enemyId != null && !(await reactorAlive({ kind: 'enemy', id: counter.enemyId }))) {
+    await pushDmNotice(sessionId, `${counter.enemyName}'s held Counterspell did not fire: ${counter.enemyName} can no longer react.`);
+    return { fired: false, reason: 'counterspeller cannot react' };
+  }
+  const rc = await checkReaction(sessionId, encounterSeq, counter.enemyName);
+  if (!rc.allowed) {
+    await pushDmNotice(sessionId, `${counter.enemyName}'s held Counterspell did not fire: ${rc.reason}.`);
+    return { fired: false, reason: rc.reason };
+  }
+  const lvl = Math.trunc(Number(counter.level) || 0);
+  if (lvl > 0 && counter.enemyId != null) {
+    const { getEnemySlots, setEnemySlots } = await import('./enemyEconomyService.js');
+    const slots = await getEnemySlots(counter.enemyId);
+    if ((Number(slots[String(lvl)]) || 0) <= 0) {
+      await pushDmNotice(sessionId, `${counter.enemyName}'s held Counterspell did not fire: no level-${lvl} spell slot left.`);
+      return { fired: false, reason: 'no slot' };
+    }
+    await setEnemySlots(counter.enemyId, { ...slots, [String(lvl)]: Number(slots[String(lvl)]) - 1 });
+  }
+  await spendReaction(sessionId, encounterSeq, counter.enemyName);
+  return { fired: true };
+}
+
+/** Enemy counterspell: arm persistently until the end of the round.
+ *  Extra fields (deferred, level, enemyId) ride along so a re-arm keeps
+ *  the fire-time payment (pass the whole taken counter back). */
+export async function armEnemyCounter(sessionId, encounterSeq, { enemyName, dc, targetName = null, round: _oldRound, ...rest }) {
   const cfg = await readCfg(sessionId);
   const list = Array.isArray(cfg.armedEnemyCounters) ? cfg.armedEnemyCounters : [];
   let round = null;
@@ -724,7 +801,7 @@ export async function armEnemyCounter(sessionId, encounterSeq, { enemyName, dc, 
     const st = await getTurnState(sessionId, encounterSeq);
     round = st?.round ?? null;
   } catch { /* no order → no round expiry */ }
-  list.push({ enemyName, dc, targetName: targetName ? String(targetName).toLowerCase() : null, round });
+  list.push({ ...rest, enemyName, dc, targetName: targetName ? String(targetName).toLowerCase() : null, round });
   cfg.armedEnemyCounters = list;
   await writeCfg(sessionId, cfg);
   return true;
@@ -974,7 +1051,7 @@ export async function resolveEnemyCast(sessionId, encounterSeq, enemyRow, enemyK
   if (opts.reaction) {
     if (key === 'counterspell') {
       const dc = await enemySpellDc(enemyRow, opts.dc ?? null);
-      await armEnemyCounter(sessionId, encounterSeq, { enemyName: enemyRow.name, dc, targetName: (opts.targets || [])[0] || null });
+      await armEnemyCounter(sessionId, encounterSeq, { enemyName: enemyRow.name, dc, targetName: (opts.targets || [])[0] || null, deferred: true, level: Math.trunc(Number(level) || 0), enemyId: enemyRow.id });
       return { type: 'enemy_cast', success: true, spell: spellName, reaction: 'counterspell', counterArmed: true, dc };
     }
     if (key === 'shield') {
@@ -1381,9 +1458,29 @@ export async function applyPendingSaveEffect(sessionId, effectKey, rollOutcome) 
   }
   // pendingCounteredCast
   if (!success) {
-    await pushDmNotice(sessionId, `${effect.casterName}'s ${effect.spell} was countered — no effect, slot stays spent.`);
+    // mechanical-reactions item 2 (2024 PHB Counterspell): the spell
+    // dissipates and the action is wasted, but "if that spell was cast
+    // with a spell slot, the slot isn't expended". A normal cast
+    // reserved the slot at declaration — give it back. A readied hold
+    // (effect.hold) never spent one.
+    let slotRefunded = false;
+    if (!effect.hold && Number(effect.level) > 0) {
+      const { restoreSpellSlot } = await import('./spellCastService.js');
+      const isPc = effect.casterKind !== 'companion';
+      const r = await restoreSpellSlot(isPc ? effect.casterId : (effect.characterId ?? null), isPc ? null : effect.casterName, isPc, isPc ? null : effect.casterId, effect.level).catch(() => null);
+      slotRefunded = !!r?.restored;
+    }
+    await pushDmNotice(sessionId, `${effect.casterName}'s ${effect.spell} was countered — no effect, the action is wasted, and the spell slot is not expended.`);
     await clear();
-    return { slot, countered: true };
+    return { slot, countered: true, slotRefunded };
+  }
+  if (effect.hold) {
+    // The counter failed against a readied spell: the hold happens now
+    // (slot spent, concentration taken, ready stored).
+    const { completeReadiedHold } = await import('./combatMarkerService.js');
+    const completed = await completeReadiedHold(sessionId, effect);
+    await clear();
+    return { slot, countered: false, completed };
   }
   const { castSpell, castCompanionSpell } = await import('./spellCastService.js');
   let completed = null;

@@ -286,8 +286,16 @@ export async function applyPendingDisplay(sessionId, effectKey, rollOutcome) {
   if (effect.stage === 'counter') {
     const success = rollOutcome?.outcome === 'success' || rollOutcome?.outcome === 'critical_success' || rollOutcome?.takenDie === 20;
     if (!success) {
-      await ess.pushDmNotice(sessionId, `${effect.casterName}'s ${effect.spell} display was countered — no effect, slot stays spent.`);
-      return { success: true, countered: true, spell: effect.spell };
+      // mechanical-reactions item 2 (2024 PHB Counterspell): the action
+      // is wasted, but the slot reserved at declaration isn't expended.
+      let slotRefunded = false;
+      if (Number(effect.level) > 0) {
+        const { restoreSpellSlot } = await import('./spellCastService.js');
+        const r = await restoreSpellSlot(effect.characterId, null, true, null, effect.level).catch(() => null);
+        slotRefunded = !!r?.restored;
+      }
+      await ess.pushDmNotice(sessionId, `${effect.casterName}'s ${effect.spell} display was countered — no effect, the action is wasted, and the spell slot is not expended.`);
+      return { success: true, countered: true, spell: effect.spell, slotRefunded };
     }
     const placed = await ess.postPendingSave(sessionId, effect.characterId, effect.placementName, effect.placementDc, 'pendingDisplay',
       { ...effect, stage: 'placement' }, effect.placementKind);
@@ -389,12 +397,17 @@ registerMarkerHandler('DISPLAY', async (parsed, context) => {
     if (context.sessionId && encounterSeq) {
       const counter = await ess.takeEnemyCounter(context.sessionId, encounterSeq, casterName);
       if (counter) {
-        const rearm = async () => ess.armEnemyCounter(context.sessionId, encounterSeq, { enemyName: counter.enemyName, dc: counter.dc, targetName: counter.targetName });
+        const rearm = async () => ess.armEnemyCounter(context.sessionId, encounterSeq, { ...counter });
+        // mechanical-reactions item 2: peek the caster's slot first, then
+        // the enemy counter pays its slot + reaction as it fires.
+        const counterPeek = counter.dc == null ? null : await peekSpellSlot(context.characterId, casterRaw, isPc, compId, level);
+        if (counterPeek && !counterPeek.ok) { await rearm(); return { type: 'display', success: false, reason: counterPeek.reason }; }
+        const fired = counter.dc == null ? { fired: false } : await ess.fireEnemyCounter(context.sessionId, encounterSeq, counter);
         if (counter.dc == null) {
           await rearm();
+        } else if (!fired.fired) {
+          // Could not pay: the counter does not fire, the display goes on.
         } else if (isPc) {
-          const peek = await peekSpellSlot(context.characterId, casterRaw, isPc, compId, level);
-          if (!peek.ok) { await rearm(); return { type: 'display', success: false, reason: peek.reason }; }
           const spent = await spendSpellSlot(context.characterId, casterRaw, isPc, compId, level);
           await tls.spendSpellEconomy(context.sessionId, encounterSeq, casterKey, { castTime: 'action', level, spellName: spell });
           await ess.postPendingSave(context.sessionId, context.characterId, 'Constitution', counter.dc, 'pendingDisplay',
@@ -404,11 +417,9 @@ registerMarkerHandler('DISPLAY', async (parsed, context) => {
         } else {
           const save = await ess.rollCompanionSave(context.sessionId, context.characterId, casterName, 'con', counter.dc, spell);
           if (!save.success) {
-            const peek = await peekSpellSlot(context.characterId, casterRaw, isPc, compId, level);
-            if (!peek.ok) { await rearm(); return { type: 'display', success: false, reason: peek.reason }; }
-            const spent = await spendSpellSlot(context.characterId, casterRaw, isPc, compId, level);
+            // 2024 PHB Counterspell: the action is wasted, the slot isn't expended.
             await tls.spendSpellEconomy(context.sessionId, encounterSeq, casterKey, { castTime: 'action', level, spellName: spell });
-            return { type: 'display', spell, level, slotConsumed: spent.consumed, success: true, countered: true, counterspeller: counter.enemyName };
+            return { type: 'display', spell, level, slotConsumed: false, success: true, countered: true, counterspeller: counter.enemyName };
           }
           // Save made: counter consumed, display proceeds below.
         }
@@ -484,10 +495,15 @@ registerMarkerHandler('ENEMY_DISPLAY', async (parsed, context) => {
     await ess.markEnemyLeveledCast(context.sessionId, encounterSeq, key, { castTime: 'action', level });
     // Party counter (mirrors ENEMY_CAST step (e)).
     const counter = ess.takePartyCounter(context, enemy.name);
-    if (counter) {
+    const fired = counter ? await ess.firePartyCounter(context, counter) : { fired: false };
+    if (fired.fired) {
       const save = await ess.rollEnemySave(context.sessionId, encounterSeq, enemy, 'con', counter.dc, spell);
       if (!save.success) {
-        return { type: 'enemy_display', success: true, countered: true, counterspeller: counter.counterspeller, enemy: enemy.name, spell, level, slotsRemaining: cast.slotsRemaining };
+        // mechanical-reactions item 2 (2024 PHB Counterspell): the
+        // countered display's slot isn't expended.
+        const { restoreEnemySlot } = await import('./enemyEconomyService.js');
+        const refunded = await restoreEnemySlot(enemy.id, cast.level);
+        return { type: 'enemy_display', success: true, countered: true, counterspeller: counter.counterspeller, enemy: enemy.name, spell, level, slotRefunded: refunded.restored, slotsRemaining: refunded.restored ? refunded.slotsRemaining : cast.slotsRemaining };
       }
     }
     // System placement roll now.

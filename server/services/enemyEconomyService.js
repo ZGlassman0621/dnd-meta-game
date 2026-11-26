@@ -320,7 +320,7 @@ async function bestiarySpellDc(enemyName) {
  * checks the reaction budget).
  */
 export async function castEnemySpell(sessionId, encounterSeq, enemyKey, enemyRowId, enemyName, spell, level = 0, opts = {}) {
-  const { bonus = false, legendary = false, legendaryCost = 1, dc = null, reaction = false } = opts;
+  const { bonus = false, legendary = false, legendaryCost = 1, dc = null, reaction = false, deferSlot = false } = opts;
   if (legendary && bonus) {
     return { error: 'an enemy spell cannot be both legendary and a bonus action' };
   }
@@ -378,7 +378,9 @@ export async function castEnemySpell(sessionId, encounterSeq, enemyKey, enemyRow
       }
     }
   }
-  if (lvl > 0) {
+  // mechanical-reactions item 2: an armed Counterspell (deferSlot)
+  // checks the slot above but pays it when it fires.
+  if (lvl > 0 && !deferSlot) {
     const next = { ...slots, [String(lvl)]: (slots[String(lvl)] ?? 0) - 1 };
     await setEnemySlots(enemyRowId, next);
     slots = next;
@@ -387,7 +389,22 @@ export async function castEnemySpell(sessionId, encounterSeq, enemyKey, enemyRow
   return { spell, level: lvl, slotsRemaining: lvl > 0 ? slots[String(lvl)] : null, dc: spellDc };
 }
 
+/**
+ * mechanical-reactions item 2 (2024 PHB Counterspell): a countered
+ * spell's slot isn't expended — give back the one castEnemySpell spent.
+ * Cantrips are a no-op. Returns { restored, slotsRemaining }.
+ */
+export async function restoreEnemySlot(enemyRowId, level) {
+  const lvl = Math.trunc(Number(level) || 0);
+  if (lvl <= 0) return { restored: false, slotsRemaining: null };
+  const slots = await getEnemySlots(enemyRowId);
+  const next = { ...slots, [String(lvl)]: (Number(slots[String(lvl)]) || 0) + 1 };
+  await setEnemySlots(enemyRowId, next);
+  return { restored: true, slotsRemaining: next[String(lvl)] };
+}
+
 export default {
+  restoreEnemySlot,
   enemyKeyFor, checkEnemyBonus, spendEnemyBonus, checkEnemyAction,
   declareMultiattack, resetLegendaryForTurn, spendLegendary,
   declareLairAction, getEnemySlots, setEnemySlots, parseSlotsSpec,

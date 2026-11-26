@@ -423,6 +423,11 @@ registerMarkerHandler('BEND_LUCK', async (parsed, context) => {
     if (await hasIncapacitatingCondition(target.kind, target.id)) {
       return { type: 'bend_luck', success: false, reason: `${target.name} is incapacitated and cannot take reactions` };
     }
+    // mechanical-reactions item 3: Bend Luck IS a Reaction (PHB 2024,
+    // Wild Magic Sorcerer 6) — in a fight it needs the sorcerer's
+    // reaction and spends it exactly once, on success.
+    const { withReactionBudget } = await import('./reactionService.js');
+    return await withReactionBudget(context.sessionId, target, async () => {
     const spent = await spendPoolUnits(target.kind, target.id, 'sorcery', 1);
     if (!spent.success) return { type: 'bend_luck', success: false, reason: spent.reason };
     const die = bendLuckDie();
@@ -443,6 +448,7 @@ registerMarkerHandler('BEND_LUCK', async (parsed, context) => {
       note: where ? `Bend Luck: ${direction === 'bonus' ? '+' : '−'}${rolled.total} applied to ${where}.` : `Bend Luck rolled ${direction === 'bonus' ? '+' : '−'}${rolled.total}, but no recent d20 Test was found to apply it to.`,
       systemNote: `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: Bend Luck — ${target.name} spends a sorcery point: ${direction === 'bonus' ? '+' : '−'}${rolled.total} (d4) ${where ? `applied to ${where}` : 'rolled, but there was no recent d20 Test to apply it to'}. Narrate the result accordingly.`,
     };
+    }, { type: 'bend_luck', target: target.name });
   } catch (e) {
     console.error('[subclassMarkerService] BEND_LUCK handler failed:', e.message);
     return null;

@@ -1598,7 +1598,8 @@ async function castPartySpell(context, parsed, spell, level) {
   }
   const ess = await import('./enemySpellService.js');
   const info = lookupSpell(spell);
-  const reaction = parsed?.Reaction === true || parsed?.Reaction === 'true';
+  // A reaction-only spell (Shield, Counterspell, …) implies Reaction="true".
+  const reaction = parsed?.Reaction === true || parsed?.Reaction === 'true' || ess.isReactionOnlySpell(spell);
   // (2) Reaction validity (catalog spells only; non-catalog tracks).
   const v = ess.validateReactionUsage(spell, reaction);
   if (!v.allowed) return { type: 'spell_cast', success: false, reason: v.reason, remedy: v.remedy };
@@ -1609,12 +1610,17 @@ async function castPartySpell(context, parsed, spell, level) {
     if (!rc.allowed) return { type: 'spell_cast', success: false, reason: rc.reason, remedy: rc.remedy };
     const key = String(spell).toLowerCase();
     if (key === 'counterspell') {
-      const spent = await spendSpellSlot(context.characterId, casterRaw, isPc, compId, level);
-      if (!spent.ok) return slotFail(spent);
+      // mechanical-reactions item 2: arming checks the slot and the
+      // reaction (above) but spends neither — both are spent when the
+      // counter fires on the enemy cast it answers (firePartyCounter).
+      const peek = await peekSpellSlot(context.characterId, casterRaw, isPc, compId, level);
+      if (!peek.ok) return slotFail(peek);
       const prof = ess.partySpellProfile(casterKind, isPc ? charRow : compRow);
-      ess.armPartyCounter(context, { counterspeller: casterName, dc: prof?.saveDc ?? null, targetName: parsed?.Target || null });
-      await ess.spendReaction(sessionId, encounterSeq, reactionName);
-      return { type: 'spell_cast', spell, level, slotConsumed: spent.consumed, success: true, counterArmed: true, dc: prof?.saveDc ?? null, ...slotOk(spent) };
+      ess.armPartyCounter(context, {
+        counterspeller: casterName, dc: prof?.saveDc ?? null, targetName: parsed?.Target || null,
+        deferred: true, level, casterRaw, isPc, compId, reactionName, encounterSeq,
+      });
+      return { type: 'spell_cast', spell, level, slotConsumed: false, success: true, counterArmed: true, dc: prof?.saveDc ?? null, note: 'the slot and reaction are spent when the counter fires on an enemy cast in this same message' };
     }
     if (key === 'shield') {
       const spent = await spendSpellSlot(context.characterId, casterRaw, isPc, compId, level);
@@ -1709,34 +1715,42 @@ async function castPartySpell(context, parsed, spell, level) {
   if (sessionId && encounterSeq) {
     const counter = await ess.takeEnemyCounter(sessionId, encounterSeq, casterName);
     if (counter) {
-      const rearm = async () => ess.armEnemyCounter(sessionId, encounterSeq, { enemyName: counter.enemyName, dc: counter.dc, targetName: counter.targetName });
+      const rearm = async () => ess.armEnemyCounter(sessionId, encounterSeq, { ...counter });
       if (counter.dc == null) {
         await rearm();
-      } else if (isPc) {
+      } else {
+        // Caster slot peek first, so a slot refusal never eats the
+        // armed counter (and never makes the counterspeller pay).
         const peek = await peekSpellSlot(context.characterId, casterRaw, isPc, compId, level);
         if (!peek.ok) {
           await rearm();
           return slotFail(peek);
         }
-        const spent = await spendSpellSlot(context.characterId, casterRaw, isPc, compId, level);
-        await tls.spendSpellEconomy(sessionId, encounterSeq, casterKey, { castTime, level, spellName: spell });
-        const effect = { spell, level, casterKind: 'player', casterId: context.characterId, casterName, targets: deduped.length ? deduped : (parsed?.Target ? [parsed.Target] : []), castTime, choice: parsed?.Choice || null };
-        await ess.postPendingSave(sessionId, context.characterId, 'Constitution', counter.dc, 'pendingCounteredCast', effect);
-        await ess.pushDmNotice(sessionId, `Ask ${casterName} for a Constitution save vs counterspell DC ${counter.dc} — ${spell} completes on a success, fizzles on a failure.`);
-        return { type: 'spell_cast', spell, level, slotConsumed: spent.consumed, success: true, countered: 'pending', counterspeller: counter.enemyName, ...slotOk(spent) };
-      } else {
-        const save = await ess.rollCompanionSave(sessionId, context.characterId, casterName, 'con', counter.dc, spell);
-        if (!save.success) {
-          const peek = await peekSpellSlot(context.characterId, casterRaw, isPc, compId, level);
-          if (!peek.ok) {
-            await rearm();
-            return slotFail(peek);
-          }
+        // mechanical-reactions item 2: the counter's own slot and the
+        // counterspeller's reaction are spent now, when it fires — not
+        // when it was armed. A counterspeller who can no longer pay
+        // (reaction used, slot gone) does not fire; the cast goes on.
+        const fired = await ess.fireEnemyCounter(sessionId, encounterSeq, counter);
+        if (fired.fired && isPc) {
+          // The slot is reserved at declaration: a made save completes
+          // the cast without a second spend, a failed save refunds it.
           const spent = await spendSpellSlot(context.characterId, casterRaw, isPc, compId, level);
           await tls.spendSpellEconomy(sessionId, encounterSeq, casterKey, { castTime, level, spellName: spell });
-          return { type: 'spell_cast', spell, level, slotConsumed: spent.consumed, success: true, countered: true, counterspeller: counter.enemyName, ...slotOk(spent) };
+          const effect = { spell, level, casterKind: 'player', casterId: context.characterId, casterName, targets: deduped.length ? deduped : (parsed?.Target ? [parsed.Target] : []), castTime, choice: parsed?.Choice || null };
+          await ess.postPendingSave(sessionId, context.characterId, 'Constitution', counter.dc, 'pendingCounteredCast', effect);
+          await ess.pushDmNotice(sessionId, `Ask ${casterName} for a Constitution save vs counterspell DC ${counter.dc} — ${spell} completes on a success; on a failure it has no effect and its slot is not expended.`);
+          return { type: 'spell_cast', spell, level, slotConsumed: spent.consumed, success: true, countered: 'pending', counterspeller: counter.enemyName, ...slotOk(spent) };
         }
-        // Save made: counter consumed, cast proceeds below.
+        if (fired.fired) {
+          const save = await ess.rollCompanionSave(sessionId, context.characterId, casterName, 'con', counter.dc, spell);
+          if (!save.success) {
+            // mechanical-reactions item 2 (2024 PHB Counterspell): the
+            // action is wasted, but the slot isn't expended.
+            await tls.spendSpellEconomy(sessionId, encounterSeq, casterKey, { castTime, level, spellName: spell });
+            return { type: 'spell_cast', spell, level, slotConsumed: false, success: true, countered: true, counterspeller: counter.enemyName, slotsMax: peek.slotsMax ?? null, slotsUsed: peek.slotsUsed ?? null, slotsRemaining: peek.slotsRemaining ?? null };
+          }
+          // Save made: counter spent, cast proceeds below.
+        }
       }
     }
   }

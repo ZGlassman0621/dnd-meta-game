@@ -653,7 +653,9 @@ registerMarkerHandler('ENEMY_CAST', async (parsed, context) => {
     if (!enemy) return { type: 'enemy_cast', success: false, reason: `unknown enemy: ${enemyName}` };
     const key = combatFallbackId(context.sessionId, encounterSeq, enemy.id);
     const level = parsed?.Level != null ? Number(parsed.Level) : 0;
-    const reaction = actionTruthy(parsed?.Reaction);
+    // A reaction-only spell (Shield, Counterspell, …) implies Reaction="true".
+    const { isReactionOnlySpell } = await import('./enemySpellService.js');
+    const reaction = actionTruthy(parsed?.Reaction) || isReactionOnlySpell(spell);
     const dc = parsed?.Dc != null ? Number(parsed.Dc) : null;
     const targets = [];
     if (parsed?.Target) targets.push(String(parsed.Target));
@@ -707,10 +709,14 @@ registerMarkerHandler('ENEMY_CAST', async (parsed, context) => {
       if (!ruled.allowed) return { type: 'enemy_cast', success: false, reason: ruled.reason, remedy: ruled.remedy };
     }
     // (d) Economy + slot (slot availability before economy spend).
-    const { castEnemySpell } = await import('./enemyEconomyService.js');
+    // mechanical-reactions item 2: an enemy Counterspell is ARMED here
+    // (slot availability checked, nothing spent) and pays its slot and
+    // reaction when it fires on the party cast it answers.
+    const armingCounter = reaction && String(spell).toLowerCase().trim() === 'counterspell';
+    const { castEnemySpell, restoreEnemySlot } = await import('./enemyEconomyService.js');
     const cast = await castEnemySpell(context.sessionId, encounterSeq, key, enemy.id, enemy.name, spell, level,
       { bonus: actionTruthy(parsed?.Bonus), legendary: actionTruthy(parsed?.Legendary),
-        legendaryCost: parsed?.Cost != null ? Number(parsed.Cost) : 1, dc, reaction });
+        legendaryCost: parsed?.Cost != null ? Number(parsed.Cost) : 1, dc, reaction, deferSlot: armingCounter });
     if (cast.error) return { type: 'enemy_cast', success: false, reason: cast.error };
     if (!reaction) {
       const { lookupSpell } = await import('../data/spellCatalog.js');
@@ -721,10 +727,14 @@ registerMarkerHandler('ENEMY_CAST', async (parsed, context) => {
     // counter never launders an illegal cast — economy already ran.
     if (!reaction) {
       const counter = ess.takePartyCounter(context, enemy.name);
-      if (counter) {
+      const fired = counter ? await ess.firePartyCounter(context, counter) : { fired: false };
+      if (fired.fired) {
         const save = await ess.rollEnemySave(context.sessionId, encounterSeq, enemy, 'con', counter.dc, spell);
         if (!save.success) {
-          return { type: 'enemy_cast', success: true, countered: true, counterspeller: counter.counterspeller, enemy: enemy.name, spell: cast.spell, level: cast.level, slotsRemaining: cast.slotsRemaining };
+          // 2024 PHB Counterspell: the action is wasted, but the slot
+          // isn't expended — give back the slot castEnemySpell spent.
+          const refunded = await restoreEnemySlot(enemy.id, cast.level);
+          return { type: 'enemy_cast', success: true, countered: true, counterspeller: counter.counterspeller, enemy: enemy.name, spell: cast.spell, level: cast.level, slotRefunded: refunded.restored, slotsRemaining: refunded.restored ? refunded.slotsRemaining : cast.slotsRemaining };
         }
       }
     }
@@ -734,8 +744,9 @@ registerMarkerHandler('ENEMY_CAST', async (parsed, context) => {
       casterLevel: parsed?.CasterLevel != null ? Number(parsed.CasterLevel) : null,
       reaction, choice: parsed?.Choice || null, sessionCharacterId: context.characterId ?? null,
     });
-    // (g) Reaction spent only after successful resolution.
-    if (reaction && resolved?.success !== false) {
+    // (g) Reaction spent only after successful resolution — except an
+    // armed Counterspell, whose reaction is spent when it fires.
+    if (reaction && !armingCounter && resolved?.success !== false) {
       await ess.spendReaction(context.sessionId, encounterSeq, enemy.name);
     }
     return { ...resolved, enemy: enemy.name, spell: cast.spell, level: cast.level, slotsRemaining: cast.slotsRemaining, dc: cast.dc };
@@ -1439,6 +1450,56 @@ async function fireReadiedAction(context, encounterSeq, actor) {
   return null;
 }
 
+/**
+ * mechanical-reactions item 2: an armed enemy Counterspell against a
+ * readied spell. Returns a handler result when the counter fired (the
+ * hold is countered, pending, or — save made — completed), or null when
+ * no counter applies and the normal hold should run. The caster's slot
+ * is spent only when the hold actually happens (a countered spell's
+ * slot isn't expended, 2024 PHB Counterspell); the Ready action is
+ * wasted either way.
+ */
+async function counterReadiedHold(context, encounterSeq, target, spellRaw, parsed, { action, trigger }) {
+  const ess = await import('./enemySpellService.js');
+  const counter = await ess.takeEnemyCounter(context.sessionId, encounterSeq, target.name);
+  if (!counter) return null;
+  const rearm = async () => ess.armEnemyCounter(context.sessionId, encounterSeq, { ...counter });
+  if (counter.dc == null) { await rearm(); return null; }
+  const { lookupSpell } = await import('../data/spellCatalog.js');
+  const level = parsed?.Level != null ? Math.trunc(Number(parsed.Level)) : (lookupSpell(spellRaw)?.level ?? 0);
+  const isPc = target.kind === 'player';
+  const { peekSpellSlot } = await import('./spellCastService.js');
+  const peek = await peekSpellSlot(context.characterId, isPc ? null : target.name, isPc, isPc ? null : target.id, level);
+  if (!peek.ok) { await rearm(); return { type: 'ready', success: false, reason: peek.reason }; }
+  const fired = await ess.fireEnemyCounter(context.sessionId, encounterSeq, counter);
+  if (!fired.fired) return null;
+  const effect = {
+    hold: true, spell: spellRaw, level, characterId: context.characterId, encounterSeq,
+    casterKind: isPc ? 'player' : 'companion', casterId: isPc ? context.characterId : target.id,
+    casterName: target.name, targetKey: target.key, action, trigger,
+  };
+  if (isPc) {
+    await ess.postPendingSave(context.sessionId, context.characterId, 'Constitution', counter.dc, 'pendingCounteredCast', effect);
+    await ess.pushDmNotice(context.sessionId, `Ask ${target.name} for a Constitution save vs counterspell DC ${counter.dc} — the readied ${spellRaw} is held on a success; on a failure it has no effect and its slot is not expended.`);
+    return { type: 'ready', success: true, target: target.name, action, trigger, heldSpell: spellRaw, countered: 'pending', counterspeller: counter.enemyName, slotConsumed: false };
+  }
+  const save = await ess.rollCompanionSave(context.sessionId, context.characterId, target.name, 'con', counter.dc, spellRaw);
+  if (!save.success) {
+    return { type: 'ready', success: true, target: target.name, action, trigger, heldSpell: spellRaw, countered: true, counterspeller: counter.enemyName, slotConsumed: false };
+  }
+  return completeReadiedHold(context.sessionId, effect);
+}
+
+/** Hold a readied spell (slot, concentration, stored ready). Used by a
+ *  counter that failed against the hold. */
+export async function completeReadiedHold(sessionId, effect) {
+  const { holdSpellSlot } = await import('./spellCastService.js');
+  const held = await holdSpellSlot({ characterId: effect.characterId, casterName: effect.casterKind === 'player' ? null : effect.casterName, spellName: effect.spell, level: effect.level });
+  if (!held.success) return { type: 'ready', success: false, reason: held.reason };
+  await setField(sessionId, effect.encounterSeq, effect.targetKey, 'ready', { action: effect.action, trigger: effect.trigger, until: await untilFor(sessionId, effect.encounterSeq, effect.targetKey), heldSpell: { spell: held.spell, level: held.level } });
+  return { type: 'ready', success: true, target: effect.casterName, action: effect.action, trigger: effect.trigger, heldSpell: held.spell, heldLevel: held.level, slotConsumed: held.slotConsumed, ...(held.replacedConcentration ? { replacedConcentration: held.replacedConcentration } : {}) };
+}
+
 registerMarkerHandler('READY', async (parsed, context) => {
   if (!context?.sessionId) return null;
   try {
@@ -1461,6 +1522,11 @@ registerMarkerHandler('READY', async (parsed, context) => {
       // party members can hold one. The slot is spent now and the
       // spell is held with concentration until released or lost.
       if (target.kind === 'enemy') return { type: 'ready', success: false, reason: 'enemy spellcasting has no engine path yet — enemies cannot ready spells' };
+      // mechanical-reactions item 2: readying a spell CASTS it (2024
+      // PHB Ready: "you cast it as normal but hold its energy"), so an
+      // armed enemy Counterspell answers it here, like any party cast.
+      const counterResult = await counterReadiedHold(context, encounterSeq, target, spellRaw, parsed, { action, trigger });
+      if (counterResult) return counterResult;
       const { holdSpellSlot } = await import('./spellCastService.js');
       const held = await holdSpellSlot({ characterId: context.characterId, casterName: target.kind === 'player' ? null : target.name, spellName: spellRaw, level: parsed?.Level != null ? Number(parsed.Level) : null });
       if (!held.success) return { type: 'ready', success: false, reason: held.reason };

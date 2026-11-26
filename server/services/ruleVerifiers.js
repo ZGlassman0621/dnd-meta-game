@@ -317,6 +317,30 @@ export function verifyDmResponse(text) {
 }
 
 /**
+ * mechanical-reactions (live probe 2026-11-25): the player declared a
+ * reaction spell ("I cast Shield") and the DM narrated it with NO
+ * SPELL_CAST marker — so the engine never ran it (no slot, no reaction,
+ * no +5 AC) while the prose said it happened. A reaction is a mechanic,
+ * never narration: flag it so the player is told it did not take effect
+ * and the DM is corrected next turn. Player-action text + reply only;
+ * the spell must be named after a cast verb, so "my shield" never trips.
+ */
+const REACTION_SPELL_NAMES = ['Shield', 'Counterspell', 'Absorb Elements', 'Hellish Rebuke', 'Backlash', 'Silvery Barbs', 'Feather Fall'];
+export function verifyDeclaredReactionCast(action, narrative) {
+  if (!action || typeof action !== 'string') return { ok: true, violations: [] };
+  const violations = [];
+  const reply = String(narrative || '');
+  for (const spell of REACTION_SPELL_NAMES) {
+    const esc = spell.replace(/ /g, '\\s+');
+    const declared = new RegExp(`\\bcast(?:s|ing)?\\s+(?:a\\s+|the\\s+)?${esc}\\b`, 'i').test(action);
+    if (!declared) continue;
+    const marked = new RegExp(`\\[SPELL_CAST:[^\\]]*Spell\\s*=\\s*"?${esc}\\b`, 'i').test(reply);
+    if (!marked) violations.push({ rule: 'reaction_cast_without_marker', spell, description: `${spell} declared by the player, no SPELL_CAST marker` });
+  }
+  return violations.length === 0 ? { ok: true, violations: [] } : { ok: false, violations };
+}
+
+/**
  * Build a correction note for the next turn — parallels
  * `markerSchemas.js::buildCorrectionMessage` but for rule violations.
  * Returns null if no violations to report.
@@ -341,6 +365,9 @@ export function buildRuleCorrectionMessage(violations) {
     }
     if (v.rule === 'still_freeze_tic') {
       return `[SYSTEM] Your last response used the "stillness as reaction-beat" tic: ${v.description}. Snippet: "${v.snippet}". Rule 19a: this whole family — "X goes/is still," "X stills," "X freezes," "X's [hand/spoon/sewing] stops" — is banned. Replace with specific physical detail in the character's own body and context (what are their hands actually doing? where are their eyes going? what are they holding?). See Rule 19a for worked examples.`;
+    }
+    if (v.rule === 'reaction_cast_without_marker') {
+      return `[SYSTEM] The player cast ${v.spell} last turn, but you narrated it with no [SPELL_CAST: Spell="${v.spell}" Level=N Reaction="true"] marker, so the engine never ran it: no slot or reaction was spent and it gave no benefit. A reaction is a mechanic, never narration — whenever anyone casts a reaction spell, emit its SPELL_CAST marker with Reaction="true" and narrate only what the engine returns.`;
     }
     return `[SYSTEM] Rule violation (${v.rule}): ${JSON.stringify(v)}`;
   });

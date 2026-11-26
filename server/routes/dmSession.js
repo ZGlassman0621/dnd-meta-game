@@ -159,7 +159,7 @@ import { advanceDays as advanceClockDays, setClockDate, getClock } from '../serv
 import { safeParse } from '../utils/safeParse.js';
 import { campaignForCharacter, campaignRequiredBody, requireSessionCampaign } from '../utils/campaignGate.js';
 import { validateDmMarkers } from '../services/markerSchemas.js';
-import { verifyDmResponse } from '../services/ruleVerifiers.js';
+import { verifyDmResponse, verifyDeclaredReactionCast } from '../services/ruleVerifiers.js';
 import { nextCorrectionEntries, renderCorrectionText } from '../services/markerCorrectionRetry.js';
 import { processResponseMarkers } from '../services/markerPipeline.js';
 import { logTurn as playtestLogTurn, logSessionEnd as playtestLogSessionEnd } from '../utils/playtestLogger.js';
@@ -1326,6 +1326,18 @@ async function isPlayersTurn(sessionId) {
   return !!(st && isPlayerEntry(st.currentTurn));
 }
 
+/** mechanical-reactions: open one player-declared reaction spell the DM
+ *  narrated without a SPELL_CAST marker. Dispatched through the real
+ *  pipeline (same shape as synthesizePlayerAttack), so every engine rule
+ *  (reaction budget, slot, incapacitation) still applies. */
+async function synthesizePlayerReaction(sessionId, characterId, action, spell) {
+  const lvlM = String(action).match(/\b([1-9])(?:st|nd|rd|th)[- ]level\b/i);
+  const marker = `[SPELL_CAST: Spell="${spell}" Level=${lvlM ? Number(lvlM[1]) : 1} Reaction="true"]`;
+  const pr = await processResponseMarkers(marker, { characterId, sessionId, narrative: marker, playerAction: action });
+  const handlerResults = pr.handlerResults || [];
+  return { marker, handlerResults, result: handlerResults.find((h) => h.schemaKey === 'SPELL_CAST')?.result || null };
+}
+
 /** Open a player attack the DM left without an ATTACK marker: the named
  *  enemy (or the first active one). Dispatched through the real pipeline,
  *  so every engine rule (turn, economy, range) still applies. */
@@ -1460,6 +1472,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     // the outcome is injected as a system fact further below. Best-effort:
     // a failure here must never cost the player their turn.
     let rollOutcome = null;
+    let pendingEffectOutcome = null; // mechanical-reactions: a resolved countered cast, stated as an engine fact
     let perceptionBankNote = null;
     try {
       const pendingRoll = await getPendingRoll(parseInt(sessionId));
@@ -1517,6 +1530,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
                 // item 7, then item 6.
                 const { applyPendingDisplay } = await import('../services/displayService.js');
                 const displayHandled = await applyPendingDisplay(parseInt(sessionId), pendingEffectKey, rollOutcome);
+                if (displayHandled?.countered === true) pendingEffectOutcome = { slot: 'pendingCounteredCast', countered: true };
                 if (!displayHandled) {
                   // Combat item 8: a pending escape resolves here
                   // next; any other key falls through to item 7, then
@@ -1529,7 +1543,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
                     const dts = await import('../services/damageTableService.js');
                     const trapHandled = await dts.applyPendingTrapSave(parseInt(sessionId), pendingEffectKey, rollOutcome);
                     if (!trapHandled) {
-                      await ess.applyPendingSaveEffect(parseInt(sessionId), pendingEffectKey, rollOutcome);
+                      pendingEffectOutcome = await ess.applyPendingSaveEffect(parseInt(sessionId), pendingEffectKey, rollOutcome);
                     }
                   }
                 }
@@ -1557,6 +1571,21 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     const engineLines = [];
     const engineFacts = [];
     if (perceptionBankNote) engineLines.push(perceptionBankNote);
+    // mechanical-reactions (live probe 2026-11-25): a countered cast's
+    // outcome is a binding fact for THIS turn's narration — the notice
+    // block alone was ignored by the model, which narrated the countered
+    // darts hitting. The engine record decides; the DM narrates it.
+    if (pendingEffectOutcome?.slot === 'pendingCounteredCast') {
+      if (pendingEffectOutcome.countered) {
+        engineLines.push('⚙ Your spell is countered: it has no effect. Your action is spent, but the spell slot is not.');
+        engineFacts.push('[COUNTERSPELL — system fact: the player failed the Constitution save. Their spell was COUNTERED: it has NO effect at all (no damage, no condition, nothing lands). Their action is wasted; their spell slot is not expended. Narrate the spell unravelling, never hitting.]');
+      } else {
+        engineLines.push('⚙ You resist the counterspell: your spell goes off.');
+        engineFacts.push('[COUNTERSPELL — system fact: the player made the Constitution save. The counterspell failed and their spell takes effect as the engine resolved it.]');
+      }
+      // Facts reach the model only on the action text it reads this turn.
+      actionForLlm = `${actionForLlm}\n\n${engineFacts[engineFacts.length - 1]}`;
+    }
     if (rollOutcome?.contest) {
       const c = rollOutcome.contest;
       engineLines.push(c.won
@@ -2233,6 +2262,30 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     } catch (err) {
       console.warn('[combatLoop] fallback attack failed (non-fatal):', err.message);
     }
+    // mechanical-reactions (live probe 2026-11-25, same shape as P1 above):
+    // the player declared a self-contained reaction spell ("I cast Shield")
+    // and the DM narrated it with no SPELL_CAST marker. The player's own
+    // declaration opens it, so the engine runs it (slot, reaction, +5 AC /
+    // damage answer) or refuses it by name — never prose alone. Counterspell
+    // is not opened here: it only works against a cast in the same batch.
+    let openedReactions = [];
+    try {
+      const declared = verifyDeclaredReactionCast(action, result.narrative || '');
+      const OPENABLE = ['Shield', 'Absorb Elements', 'Hellish Rebuke', 'Backlash'];
+      for (const v of declared.violations.filter((x) => OPENABLE.includes(x.spell))) {
+        const { marker, handlerResults, result: res } = await synthesizePlayerReaction(sidN, session.character_id, action, v.spell);
+        pipelineResult.handlerResults.push(...handlerResults);
+        openedReactions.push({ spell: v.spell, result: res || null });
+        result.messages.push({
+          role: 'user',
+          content: res?.success
+            ? `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The player's ${v.spell} was opened by the engine (${marker}) and resolved. Next time emit the SPELL_CAST marker yourself — a reaction is a mechanic, never narration.`
+            : `[SYSTEM NOTE - DO NOT RESPOND TO THIS]: The player's ${v.spell} did NOT take effect: ${res?.reason || 'the engine refused it'}. Do not narrate it as working.`,
+        });
+      }
+    } catch (err) {
+      console.warn('[reactions] declared reaction open failed (non-fatal):', err.message);
+    }
 
     // Phase 3.1 — death saves. If the turn left the player at 0 HP, roll one
     // save now. The prompt instructs the DM to narrate the fall and stop; the
@@ -2283,6 +2336,24 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
       const validateResult = validateDmMarkers(result.narrative || '');
       const { failures, validByKey } = validateResult;
       const { violations: ruleViolations } = verifyDmResponse(result.narrative || '');
+      // mechanical-reactions: a reaction spell the player declared but the
+      // DM narrated with no marker never ran — say so, and correct the DM.
+      const declaredReaction = verifyDeclaredReactionCast(action, result.narrative || '');
+      if (!declaredReaction.ok) {
+        ruleViolations.push(...declaredReaction.violations);
+        for (const v of declaredReaction.violations) {
+          const opened = openedReactions.find((o) => o.spell === v.spell);
+          if (opened?.result?.success) {
+            engineLines.push(v.spell === 'Shield'
+              ? '⚙ Shield: +5 AC until the start of your next turn (spell slot and reaction spent).'
+              : `⚙ ${v.spell} resolved by the engine (spell slot and reaction spent).`);
+          } else if (opened) {
+            engineLines.push(`⚙ ${v.spell} did not take effect: ${opened.result?.reason || 'the engine refused it'}. No slot or reaction was spent.`);
+          } else {
+            engineLines.push(`⚙ ${v.spell} did not take effect: the engine has no cast of it, so no slot or reaction was spent and it gives no benefit. Declare it again if you still want it.`);
+          }
+        }
+      }
       const cfg = safeParse(session.session_config, {});
       const nextCfg = { ...cfg };
       const hadPriorCorrection = !!cfg.pendingMarkerCorrections;

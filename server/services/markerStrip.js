@@ -39,9 +39,21 @@ export function markerPattern() {
  * hand list's output, for all markers instead of 28. Non-strings pass
  * through untouched.
  */
-export function stripMarkers(text) {
-  if (typeof text !== 'string' || text === '') return text;
-  return text.replace(markerPattern(), '').trim();
+/**
+ * mechanical-reactions (live probe 2026-11-25): blocks the ENGINE writes
+ * into the DM's prompt — "[SPELL NOTICE — system facts for the DM. …]" and
+ * "[COUNTERSPELL — system fact: …]" (also CONCENTRATION, DEATH SAVE, …) —
+ * are DM-only and can carry a hidden DC. gemma4:12b echoed one verbatim
+ * into the player's text. Named shapes only (an em dash + "system fact"),
+ * never a bare-bracket catch-all, so [OOC: …] survives.
+ */
+export function engineBlockPattern() {
+  return /\[(?:SPELL NOTICE — system facts for the DM\.|[A-Z][A-Z ]{2,40} — system fact:)[^\]]*\]\s*/g;
 }
 
-export default { stripMarkers, markerPattern, STRIPPED_MARKER_NAMES };
+export function stripMarkers(text) {
+  if (typeof text !== 'string' || text === '') return text;
+  return text.replace(markerPattern(), '').replace(engineBlockPattern(), '').trim();
+}
+
+export default { stripMarkers, markerPattern, engineBlockPattern, STRIPPED_MARKER_NAMES };

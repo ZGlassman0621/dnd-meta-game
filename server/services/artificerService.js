@@ -715,14 +715,19 @@ registerMarkerHandler('ARTIFICER_UNATTUNE', async (parsed, context) =>
   withArtificer(parsed, context, 'artificer_unattune', (s) =>
     unattune(s, String(parsed?.Item || '').trim())));
 
+// mechanical-reactions item 3: Flash of Genius is a Reaction — in a
+// fight it needs the artificer's reaction and spends it exactly once,
+// only when the use is spent (the bonus flips the failure).
 registerMarkerHandler('ARTIFICER_FLASH', async (parsed, context) =>
-  withArtificer(parsed, context, 'artificer_flash', (s, a) => {
+  withArtificer(parsed, context, 'artificer_flash', async (s, a) => {
     const total = Number(parsed?.Total);
     const dc = Number(parsed?.DC);
     if (!Number.isFinite(total) || !Number.isFinite(dc)) {
       return { state: s, success: false, reason: 'ARTIFICER_FLASH needs Total= and DC=' };
     }
-    return applyFlashOfGenius(s, { total, dc, intMod: a.intMod });
+    const { withReactionBudget } = await import('./reactionService.js');
+    const res = await withReactionBudget(context.sessionId, a, async () => applyFlashOfGenius(s, { total, dc, intMod: a.intMod }));
+    return res.state ? res : { ...res, state: s };
   }));
 
 registerMarkerHandler('ARTIFICER_TINKER', async (parsed, context) =>

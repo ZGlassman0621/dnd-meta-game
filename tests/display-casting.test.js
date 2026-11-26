@@ -243,7 +243,7 @@ group('5. Intimidating display: Dc required, one roll, crit riders');
   ok(fumble && fumble.intimidation === 'critical_failure' && fumble.mishap, 'nat 1 intimidating display mishandles with a crit failure');
 }
 
-group('6. Armed enemy counter: CON save success continues, failure fizzles, slot stays spent');
+group('6. Armed enemy counter: CON save success continues, failure fizzles, slot not expended');
 {
   const pc = await addPc();
   const sessionId = await addSession(pc.id);
@@ -278,7 +278,7 @@ group('6. Armed enemy counter: CON save success continues, failure fizzles, slot
   const fizzled = await ds.applyPendingDisplay(sessionId2, c3.pendingDisplay.key, { outcome: 'failure', takenDie: 5, total: 7 });
   ok(fizzled && fizzled.countered === true, 'CON save failure fizzles the display');
   ok(!(await cfg(sessionId2)).pendingDisplay, 'fizzled display leaves no pending');
-  ok((await pcSlots(pc2.id))['3'] === 1, 'countered display keeps the slot spent');
+  ok(((await pcSlots(pc2.id))['3'] || 0) === 0, 'countered display: the slot is not expended (2024 PHB Counterspell)');
 }
 
 group('7. Companion display resolves immediately (system roll, no pending)');
@@ -323,7 +323,7 @@ group('8. Enemy display: slot spent, placement resolves, counter branch shape');
   const ed = res.handlerResults.filter((hr) => hr.schemaKey === 'ENEMY_DISPLAY')[0].result;
   ok(ed && ed.success === true, 'countered-or-not enemy display returns success');
   if (ed.countered === true) {
-    ok(ed.slotsRemaining === 1, 'countered enemy display still spent the slot');
+    ok(ed.slotsRemaining === 2 && ed.slotRefunded === true, 'countered enemy display: the slot is not expended (2024 PHB Counterspell)');
   } else {
     ok(ed.placed === true || ed.mishap || ed.surge, 'uncountered enemy display placement resolves');
   }
