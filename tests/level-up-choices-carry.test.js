@@ -9,9 +9,15 @@
  *              no new level → the waiting list is left exactly as it was;
  *              a new level → its choices are added after the waiting ones;
  *              a choice already waiting is not added twice.
- *   [levelup]  the real level-up route: taking the ASI/feat at a level
- *              removes that level's asi_or_feat choice and nothing else; a
- *              level-up with no ASI leaves the list as it was.
+ *   [queue]    the choices a new level brings follow the book's class-level
+ *              ability-increase rules, from the level-up screen's own hasASI
+ *              (PM decision 2, 2026-11-26): Fighter 6 and 14, Rogue 10, none
+ *              for a multiclass level that is not an ASI level of its class.
+ *   [levelup]  the real level-up route (PM decision 1, 2026-11-26): taking a
+ *              level-up makes that level's review choice; taking the ASI/feat
+ *              makes that level's ability choice; an ability choice the
+ *              levelled class does not grant goes; one it grants but was not
+ *              taken stays waiting; nothing else changes.
  *
  * Every test character is invented and TEST_-prefixed; all rows are removed.
  */
@@ -19,7 +25,7 @@
 import express from 'express'
 import { initDatabase, dbRun, dbGet } from '../server/database.js'
 import {
-  awardSessionXP, mergePendingChoices, removePendingChoice, parsePendingChoices, serializePendingChoices
+  awardSessionXP, mergePendingChoices, removePendingChoice, parsePendingChoices, serializePendingChoices, queueLevelUpChoices
 } from '../server/services/xpService.js'
 import { getXPToNextLevel } from '../server/config/levelProgression.js'
 
@@ -61,14 +67,45 @@ console.log('\n=== [merge] the list rules ===\n')
     '[merge] an empty list is stored as null')
 }
 
-async function makeChar(name, { level, experience, waiting }) {
+async function makeChar(name, { level, experience, waiting, cls = 'Fighter', classLevels = null }) {
   const r = await dbRun(
-    `INSERT INTO characters (name, class, race, level, current_hp, max_hp, current_location, experience, experience_to_next_level, level_up_pending_choices)
-     VALUES (?, 'Fighter', 'Human', ?, 30, 30, 'TEST_LC_Keep', ?, 0, ?)`,
-    [name, level, experience, waiting ? J(waiting) : null])
+    `INSERT INTO characters (name, class, race, level, current_hp, max_hp, current_location, experience, experience_to_next_level, level_up_pending_choices, class_levels)
+     VALUES (?, ?, 'Human', ?, 30, 30, 'TEST_LC_Keep', ?, 0, ?, ?)`,
+    [name, cls, level, experience, waiting ? J(waiting) : null, classLevels ? J(classLevels) : null])
   const id = Number(r.lastInsertRowid); ids.push(id); return id
 }
+
 const stored = async (id) => (await dbGet('SELECT level, experience, level_up_pending_choices FROM characters WHERE id = ?', [id]))
+
+console.log('\n=== [queue] new choices follow the class-level ASI rules ===\n')
+{
+  const q = (cls, classLevels, from, to) => keys(queueLevelUpChoices({ class: cls, class_levels: classLevels ? J(classLevels) : null }, from, to))
+  check(J(q('Fighter', null, 5, 6)) === J(['6:asi_or_feat', '6:level_up_review']), `[queue] Fighter 6 is an ASI level (${q('Fighter', null, 5, 6).join(', ')})`)
+  check(J(q('Fighter', null, 13, 14)) === J(['14:asi_or_feat', '14:level_up_review']), '[queue] Fighter 14 is an ASI level')
+  check(J(q('Rogue', null, 9, 10)) === J(['10:asi_or_feat', '10:level_up_review']), '[queue] Rogue 10 is an ASI level')
+  check(J(q('Wizard', null, 5, 6)) === J(['6:level_up_review']), '[queue] Wizard 6 is not an ASI level')
+  check(J(q('Wizard', null, 3, 4)) === J(['4:asi_or_feat', '4:level_up_review']), '[queue] Wizard 4 is an ASI level')
+  // Fighter 2 / Rogue 1 reaching total level 4: the new level goes to the
+  // Fighter (the route's default class) as Fighter 3 — not an ASI level.
+  const multi = q('Fighter', [{ class: 'Fighter', level: 2 }, { class: 'Rogue', level: 1 }], 3, 4)
+  check(J(multi) === J(['4:level_up_review']), `[queue] a multiclass level that is not an ASI level of its class queues no ASI (${multi.join(', ')})`)
+  // class_levels behind the level (session end raised it before a level-up):
+  // Fighter 3 applied, level 4 → 6 queues 4 (Fighter 4) and 6 (Fighter 6).
+  const behind = q('Fighter', [{ class: 'Fighter', level: 3 }], 4, 6)
+  check(J(behind) === J(['5:level_up_review', '6:asi_or_feat', '6:level_up_review']), `[queue] class levels are counted from the applied class levels (${behind.join(', ')})`)
+  const two = q('Fighter', null, 3, 5)
+  check(J(two) === J(['4:asi_or_feat', '4:level_up_review', '5:level_up_review']), '[queue] two levels at once queue in level order')
+
+  // Through the real award: a level-5 Fighter reaching 6 queues the ASI.
+  const h = await makeChar('TEST_LC_H Hero', { level: 5, experience: 13999, waiting: null })
+  const resH = await awardSessionXP(h, SCORES, DB)
+  const listH = keys(parsePendingChoices((await stored(h)).level_up_pending_choices))
+  check(resH.leveledUp && J(listH) === J(['6:asi_or_feat', '6:level_up_review']), `[queue] the session-end award queues the Fighter's level-6 ASI (${listH.join(', ')})`)
+  const w = await makeChar('TEST_LC_W Hero', { level: 5, experience: 13999, waiting: null, cls: 'Wizard' })
+  await awardSessionXP(w, SCORES, DB)
+  const listW = keys(parsePendingChoices((await stored(w)).level_up_pending_choices))
+  check(J(listW) === J(['6:level_up_review']), `[queue] the award queues no ASI for a Wizard reaching 6 (${listW.join(', ')})`)
+}
 
 console.log('\n=== [award] the session-end award carries waiting choices ===\n')
 {
@@ -131,17 +168,37 @@ try {
   const up = await req('POST', `/api/character/level-up/${e}`, { selectedClass: 'Fighter', hpRoll: 'average', asiChoice: { type: 'asi', increases: { str: 1, con: 1 } } })
   const rowE = await dbGet('SELECT level, level_up_pending_choices FROM characters WHERE id = ?', [e])
   check(up.status === 200 && rowE.level === 4, `[levelup] the level-4 level-up with an ASI succeeds (got ${up.status} ${J(up.json?.error || '')})`)
-  check(J(keys(parsePendingChoices(rowE.level_up_pending_choices))) === J(['3:level_up_review', '4:level_up_review']),
-    `[levelup] the ASI settles the level-4 ASI choice and only that one (${keys(parsePendingChoices(rowE.level_up_pending_choices)).join(', ')})`)
+  const listE = keys(parsePendingChoices(rowE.level_up_pending_choices))
+  check(J(listE) === J(['3:level_up_review']),
+    `[levelup] taking level 4 with an ASI makes the level-4 review and ability choices, and only those (${listE.join(', ')})`)
+  check(J(parsePendingChoices(rowE.level_up_pending_choices)[0]) === J(REVIEW(3)), '[levelup] the older waiting choice is untouched')
 
-  // A level with no ASI (Fighter 4 → 5): the waiting list is untouched.
+  // A level with no ASI (Fighter 4 → 5): the level-5 review is made; an
+  // ability choice queued for 5 that Fighter 5 does not grant goes; the
+  // older level-4 review stays.
   const f = await fighter('TEST_LC_F Hero', 4)
-  const waitingF = J([REVIEW(4), REVIEW(5)])
-  await dbRun('UPDATE characters SET level_up_pending_choices = ? WHERE id = ?', [waitingF, f])
+  await dbRun('UPDATE characters SET level_up_pending_choices = ? WHERE id = ?', [J([REVIEW(4), ASI(5), REVIEW(5)]), f])
   const upF = await req('POST', `/api/character/level-up/${f}`, { selectedClass: 'Fighter', hpRoll: 'average' })
   const rowF = await dbGet('SELECT level, level_up_pending_choices FROM characters WHERE id = ?', [f])
+  const listF = keys(parsePendingChoices(rowF.level_up_pending_choices))
   check(upF.status === 200 && rowF.level === 5, `[levelup] the level-5 level-up succeeds (got ${upF.status} ${J(upF.json?.error || '')})`)
-  check(rowF.level_up_pending_choices === waitingF, '[levelup] a level-up with no ASI leaves the waiting choices as they were')
+  check(J(listF) === J(['4:level_up_review']),
+    `[levelup] level 5 makes its review choice, and an ability choice Fighter 5 does not grant goes (${listF.join(', ')})`)
+
+  // Granted but not taken (Fighter 3 → 4 with no ASI sent): the ability
+  // choice stays waiting — and is added when it was missing.
+  const k = await fighter('TEST_LC_K Hero', 3)
+  await dbRun('UPDATE characters SET level_up_pending_choices = ? WHERE id = ?', [J([REVIEW(4)]), k])
+  const upK = await req('POST', `/api/character/level-up/${k}`, { selectedClass: 'Fighter', hpRoll: 'average' })
+  const listK = keys(parsePendingChoices((await dbGet('SELECT level_up_pending_choices FROM characters WHERE id = ?', [k])).level_up_pending_choices))
+  check(upK.status === 200 && J(listK) === J(['4:asi_or_feat']),
+    `[levelup] an ASI the level grants but the player did not take stays waiting (${upK.status}; ${listK.join(', ')})`)
+
+  // Nothing waiting, no ASI level: nothing is written.
+  const m = await fighter('TEST_LC_M Hero', 4)
+  const upM = await req('POST', `/api/character/level-up/${m}`, { selectedClass: 'Fighter', hpRoll: 'average' })
+  check(upM.status === 200 && (await dbGet('SELECT level_up_pending_choices FROM characters WHERE id = ?', [m])).level_up_pending_choices === null,
+    '[levelup] with nothing waiting and no ASI due, the list stays empty')
 
   // A refused level-up changes nothing.
   const g = await fighter('TEST_LC_G Hero', 3)

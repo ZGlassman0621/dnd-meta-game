@@ -10,6 +10,8 @@
  * Formula: xp = round(avg(scored) / 10 × xp_to_next / sessions_per_level) × breadth
  */
 
+import { hasASI } from '../config/levelProgression.js';
+
 // ---------------------------------------------------------------------------
 // D&D 2024 XP thresholds (cumulative XP to REACH each level)
 // ---------------------------------------------------------------------------
@@ -147,7 +149,7 @@ export async function scoreSessionWithLLM(sessionData, llmCall) {
 // full waiting list after this award; `newChoices` is what this award added.
 // ---------------------------------------------------------------------------
 export async function awardSessionXP(characterId, scores, db) {
-  const char = await db.get('SELECT id, level, experience, level_up_pending_choices FROM characters WHERE id = ?', [characterId]);
+  const char = await db.get('SELECT id, level, experience, class, class_levels, level_up_pending_choices FROM characters WHERE id = ?', [characterId]);
   if (!char) throw new Error(`Character not found: ${characterId}`);
   const level = char.level ?? 1;
   const result = calculateSessionRewards(scores, level);
@@ -162,7 +164,7 @@ export async function awardSessionXP(characterId, scores, db) {
     leveledUp = true;
   }
   const waiting = parsePendingChoices(char.level_up_pending_choices);
-  const newChoices = leveledUp ? queueLevelUpChoices(level, newLevel) : [];
+  const newChoices = leveledUp ? queueLevelUpChoices(char, level, newLevel) : [];
   const pendingChoices = mergePendingChoices(waiting, newChoices);
   if (leveledUp) {
     await db.run(`UPDATE characters SET experience = ?, level = ?, experience_to_next_level = ?, level_up_pending_choices = ? WHERE id = ?`, [newXpTotal, newLevel, xpToNext(newLevel), serializePendingChoices(pendingChoices), characterId]);
@@ -218,10 +220,27 @@ export function removePendingChoice(waiting, { level, type }) {
   return list;
 }
 
-function queueLevelUpChoices(oldLevel, newLevel) {
+// The choices each new level brings, by the level-up screen's own rules
+// (PM decision, 2026-11-26): an ability-score choice is queued only where
+// hasASI(class, class level) — the same check POST /api/character/level-up
+// makes — grants one, so a Fighter queues 6 and 14 and a Rogue 10. The class
+// and class level are worked out the way that route works them out: the
+// character's class_levels, or, when there are none, one entry of the
+// character's class at its current level; a new level goes to the route's
+// default class (the character's class) unless the player picks another at
+// level-up, which the level-up route then reconciles.
+export function queueLevelUpChoices(char, oldLevel, newLevel) {
+  const cls = String(char?.class || '');
+  let classLevels;
+  try { classLevels = char?.class_levels ? JSON.parse(char.class_levels) : null; } catch { classLevels = null; }
+  if (!Array.isArray(classLevels) || classLevels.length === 0) classLevels = [{ class: cls, level: oldLevel }];
+  const appliedTotal = classLevels.reduce((sum, c) => sum + (Number(c?.level) || 0), 0);
+  const own = classLevels.find(c => String(c?.class || '').toLowerCase() === cls.toLowerCase());
+  const ownApplied = Number(own?.level) || 0;
   const choices = [];
   for (let l = oldLevel + 1; l <= newLevel; l++) {
-    if ([4, 8, 12, 16, 19].includes(l)) choices.push({ level: l, type: 'asi_or_feat', prompt: 'Choose: Ability Score Improvement or a feat.' });
+    const classLevel = ownApplied + (l - appliedTotal);
+    if (cls && hasASI(cls, classLevel)) choices.push({ level: l, type: 'asi_or_feat', prompt: 'Choose: Ability Score Improvement or a feat.' });
     choices.push({ level: l, type: 'level_up_review', prompt: `Review level ${l} features with the DM.` });
   }
   return choices;

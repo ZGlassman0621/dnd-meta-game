@@ -12,7 +12,7 @@ import { getEventsVisibleToCharacter } from '../services/worldEventService.js';
 import { transferCanonToCampaign } from '../services/campaignCanonTransferService.js';
 import { handleServerError, notFound, validationError } from '../utils/errorHandler.js';
 import { safeParse } from '../utils/safeParse.js';
-import { parsePendingChoices, removePendingChoice, serializePendingChoices } from '../services/xpService.js';
+import { mergePendingChoices, parsePendingChoices, removePendingChoice, serializePendingChoices } from '../services/xpService.js';
 import {
   PROFICIENCY_BONUS,
   HIT_DICE,
@@ -8101,17 +8101,29 @@ router.post('/level-up/:id', async (req, res) => {
       }
     }
 
-    // Waiting level-up choices (PM decision, 2026-11-26): making a choice
-    // removes only that one. An ASI or feat taken at this level settles the
-    // waiting asi_or_feat choice for this level; every other waiting choice
-    // stays, in order.
-    const asiMade = hasASI(targetClassName, newClassLevel) && !!asiChoice &&
+    // Waiting level-up choices (PM decisions, 2026-11-26). Making a choice
+    // removes only that one; every other waiting choice stays, in order.
+    //  - Taking this level-up on the character sheet makes this level's
+    //    review choice.
+    //  - The ability choice for this level follows the class actually
+    //    levelled, by the same hasASI(class, class level) check as above:
+    //    taken → settled; not granted by that class at that class level
+    //    (the player levelled a different class than the one session end
+    //    queued for) → it was never this level's choice, and goes; granted
+    //    but not taken → it stays waiting, and is added if it was missing.
+    const asiDue = hasASI(targetClassName, newClassLevel);
+    const asiMade = asiDue && !!asiChoice &&
       ((asiChoice.type === 'asi' && !!asiChoice.increases) || (asiChoice.type === 'feat' && !!asiChoice.feat));
     const waitingChoices = parsePendingChoices(character.level_up_pending_choices);
-    const remainingChoices = asiMade
-      ? removePendingChoice(waitingChoices, { level: newTotalLevel, type: 'asi_or_feat' })
-      : waitingChoices;
-    const choicesChanged = remainingChoices.length !== waitingChoices.length;
+    let remainingChoices = removePendingChoice(waitingChoices, { level: newTotalLevel, type: 'level_up_review' });
+    if (asiMade || !asiDue) {
+      remainingChoices = removePendingChoice(remainingChoices, { level: newTotalLevel, type: 'asi_or_feat' });
+    } else {
+      remainingChoices = mergePendingChoices(remainingChoices, [
+        { level: newTotalLevel, type: 'asi_or_feat', prompt: 'Choose: Ability Score Improvement or a feat.' }
+      ]);
+    }
+    const choicesChanged = JSON.stringify(remainingChoices) !== JSON.stringify(waitingChoices);
 
     // Compute final character fields
     const newXPToNextLevel = getXPToNextLevel(newTotalLevel);
