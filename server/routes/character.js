@@ -3211,6 +3211,34 @@ function classLevelsScopeRefusal(rawLevels) {
   return null;
 }
 
+// level-up-off-by-one-fix (2026-11-27, PM option b): a character's
+// class_levels is the record of the levels actually taken — the
+// level-up route counts from it, while session end raises
+// characters.level. Without it the route fell back to
+// characters.level and refused the level session end just gave.
+// When a character becomes playable (creation_phase 'active') with
+// no class_levels, the record is written once: one entry, the class
+// at its stored level, in the shape the level-up route writes
+// ({ class, level, subclass }) — exactly what the route's own
+// fallback would have read at that moment. Draft placeholders
+// ('creating' / 'prelude' / no class) get no record yet; the
+// commit and the Prelude handoff write it when they flip the row
+// to 'active'. A row that already has class_levels is never touched.
+function creationClassLevelsJson(cls, level, subclass) {
+  const c = typeof cls === 'string' ? cls.trim() : '';
+  if (!c || c === 'creating' || c === 'prelude') return null;
+  const lvl = Number(level) >= 1 ? Math.floor(Number(level)) : 1;
+  return JSON.stringify([{ class: c, level: lvl, subclass: subclass || null }]);
+}
+async function writeCreationClassLevelsIfEmpty(characterId) {
+  const row = await dbGet('SELECT class, level, subclass, class_levels, creation_phase FROM characters WHERE id = ?', [characterId]);
+  if (!row || row.creation_phase !== 'active') return;
+  const existing = row.class_levels ? safeParse(row.class_levels, null) : null;
+  if (Array.isArray(existing) && existing.length > 0) return;
+  const json = creationClassLevelsJson(row.class, row.level, row.subclass);
+  if (json) await dbRun('UPDATE characters SET class_levels = ? WHERE id = ?', [json, characterId]);
+}
+
 // Create new character
 router.post('/', async (req, res) => {
   try {
@@ -3528,9 +3556,14 @@ router.post('/', async (req, res) => {
         organizations, allies, enemies, backstory, other_notes, physical_build,
         known_cantrips, known_spells, prepared_spells, feats, languages, tool_proficiencies,
         keeper_texts, keeper_recitations, keeper_genre_domain,
-        creation_phase, campaign_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        creation_phase, campaign_id, class_levels
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
+    // level-up-off-by-one-fix: a character born playable gets its
+    // class_levels record in the INSERT itself (drafts get none yet).
+    const creationClassLevels = creation_phase === 'active'
+      ? creationClassLevelsJson(charClass, level, subclass)
+      : null;
 
     const result = await dbRun(sql, [
       name, first_name, last_name, nickname, gender,
@@ -3546,7 +3579,7 @@ router.post('/', async (req, res) => {
       organizations, allies, enemies, backstory, other_notes, physical_build,
       known_cantrips, known_spells, prepared_spells, feats, languages, tool_proficiencies,
       keeper_texts, keeper_recitations, keeper_genre_domain,
-      creation_phase, campaign_id
+      creation_phase, campaign_id, creationClassLevels
     ]);
 
     const characterId = result.lastInsertRowid;
@@ -5043,6 +5076,14 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    // level-up-off-by-one-fix: a PUT that flips a row to 'active'
+    // (Prelude handoff, manual creator submit) writes its class_levels
+    // record when it has none. A PUT that sends class_levels itself
+    // already wrote it above, so this is a no-op then.
+    if (req.body.creation_phase === 'active') {
+      await writeCreationClassLevelsIfEmpty(req.params.id);
+    }
+
     const character = await dbGet('SELECT * FROM characters WHERE id = ?', [req.params.id]);
     res.json(character);
   } catch (error) {
@@ -5459,6 +5500,9 @@ router.post('/:id/commit', async (req, res) => {
     }
     // --- Flip + return. ---
     await dbRun("UPDATE characters SET creation_phase = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [characterId]);
+    // level-up-off-by-one-fix: the draft is now playable — write its
+    // class_levels record from the committed class/level (no-op when set).
+    await writeCreationClassLevelsIfEmpty(characterId);
     const committed = await dbGet('SELECT * FROM characters WHERE id = ?', [characterId]);
     return res.json(committed);
   } catch (error) {

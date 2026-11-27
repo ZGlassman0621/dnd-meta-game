@@ -691,17 +691,19 @@ group('(f) HTTP persist (real router + real DB)');
     'skills persisted and read back');
   const themeRow = await db.dbGet('SELECT theme_id FROM character_themes WHERE character_id = ?', [clericId]);
   check(themeRow?.theme_id === 'soldier', `theme soldier persisted for the cleric (got ${themeRow?.theme_id})`);
-  // POST INSERT balance: 64 columns / 64 placeholders, prepared_spells +
+  // POST INSERT balance: 65 columns / 65 placeholders, prepared_spells +
   // physical_build in the list (Stage 6 adds physical_build — the draft
   // POST used to drop it, so an empty-body commit could never succeed).
+  // level-up-off-by-one-fix (2026-11-27) adds class_levels: 64 → 65.
   const routeSrc = readRepo('server/routes/character.js');
   const insertMatch = routeSrc.match(/INSERT INTO characters \(\s*([\s\S]*?)\s*\) VALUES \(([\s\S]*?)\)/);
   check(insertMatch !== null, 'POST INSERT statement found in character.js');
   if (insertMatch) {
     const cols = insertMatch[1].split(',').map((c) => c.trim()).filter(Boolean);
     const placeholders = (insertMatch[2].match(/\?/g) || []).length;
-    check(cols.length === 64 && placeholders === 64,
-      `POST INSERT is balanced at 64 columns / 64 placeholders (got ${cols.length} / ${placeholders})`);
+    check(cols.length === 65 && placeholders === 65,
+      `POST INSERT is balanced at 65 columns / 65 placeholders (got ${cols.length} / ${placeholders})`);
+    check(cols.includes('class_levels'), 'POST INSERT column list includes class_levels (level-up-off-by-one-fix)');
     check(cols.includes('prepared_spells'), 'POST INSERT column list includes prepared_spells');
     check(cols.includes('physical_build'), 'POST INSERT column list includes physical_build (Stage 6: the draft POST stores it)');
   }

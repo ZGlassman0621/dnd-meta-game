@@ -300,6 +300,11 @@ group('(a) happy-path commit (dwarf cleric)');
   check(committed.json?.creation_phase === 'active', `commit flips creation_phase to 'active' (got ${committed.json?.creation_phase})`);
   const row = await readCharacter(id);
   check(row?.creation_phase === 'active', 'stored row is active after commit');
+  // level-up-off-by-one-fix (2026-11-27): the draft carries no class_levels;
+  // the commit writes the record of levels taken — its class at level 1.
+  check(draftRow?.class_levels == null, `draft has no class_levels yet (got ${draftRow?.class_levels})`);
+  check(row?.class_levels === JSON.stringify([{ class: row?.class, level: 1, subclass: row?.subclass || null }]),
+    `commit writes class_levels [${row?.class} 1] (got ${row?.class_levels})`);
   check(row?.max_hp === 11 && row?.current_hp === 11, `commit keeps derived HP 11 (got ${row?.max_hp}/${row?.current_hp})`);
   check(row?.armor_class === 15 && row?.gold_gp === 7 && row?.speed === 25, 'commit keeps derived AC / gold / speed');
   check(parseCol(row, 'inventory').some((it) => it.name === 'Amulet' && it.source === 'stage5-package'), 'commit keeps the resolved package inventory');
