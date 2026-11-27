@@ -10,7 +10,7 @@ import { XP_THRESHOLDS } from '../config/levelProgression.js';
 import { scoreSessionWithLLM, awardSessionXP } from './xpService.js';
 import { isSkipResponse, parseDowntimeAssignments, scheduleDowntime, shortSkip } from './downtimeService.js';
 import { sweepDeferredResolutions } from './deferredResolutionSweep.js';
-import { getCurrentDay } from './scheduleService.js';
+import { getClock, getCurrentDay } from './scheduleService.js';
 
 const STAGES = ['xp', 'downtime', 'domains', 'digest', 'sweep'];
 
@@ -109,8 +109,10 @@ async function runSweepStage(sessionId, { campaignId, characterId }) {
   if (existing && existing.status === 'complete') return { skipped: true, ...JSON.parse(existing.detail_json || '{}') };
   await markStage(sessionId, 'sweep', 'started');
   try {
-    const gameDay = await getCurrentDay(campaignId);
-    const result = await sweepDeferredResolutions(campaignId, characterId, gameDay);
+    // Both day scales: companion activities are on the absolute counter,
+    // commission deadlines on day-of-year (G-3). See deferredResolutionSweep.js.
+    const clock = await getClock(campaignId);
+    const result = await sweepDeferredResolutions(campaignId, characterId, clock);
     await markStage(sessionId, 'sweep', 'complete', { ...result });
     return { status: 'complete', ...result };
   } catch (e) {

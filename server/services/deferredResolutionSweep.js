@@ -25,14 +25,28 @@ import { processDueOrders, expireStaleReadyOrders } from './merchantOrderService
 import * as narrativeQueueService from './narrativeQueueService.js';
 
 /**
+ * Day scales (return-loop-commission-fixes, G-3). The world clock carries two
+ * scales, and each resolver reads the one its rows were written on — the same
+ * split the living-world tick uses (livingWorldService.js, steps 3 and 3.9):
+ *   - companion activities live on entity_schedule start_day/end_day, the
+ *     ABSOLUTE day counter (clock.day);
+ *   - commission deadline_game_day / ready_game_day are written from
+ *     characters.game_day, the DAY-OF-YEAR scale (clock.dayOfYear).
+ * The two are equal only until the first new year, so passing one number to
+ * both made every commission come due once a campaign was a year old.
+ *
  * @param {number} campaignId
  * @param {number} characterId - the session's character (narrative items are scoped to them)
- * @param {number} gameDay - current campaign day (post-advance)
+ * @param {{day:number, dayOfYear:number}|number} clock - the post-advance clock
+ *   (scheduleService.getClock). A bare number means both scales are equal
+ *   (a first-year clock).
  * @returns {Promise<{activitiesResolved:number, ordersReadied:number, ordersExpired:number}>}
  */
-export async function sweepDeferredResolutions(campaignId, characterId, gameDay) {
+export async function sweepDeferredResolutions(campaignId, characterId, clock) {
   const result = { activitiesResolved: 0, ordersReadied: 0, ordersExpired: 0 };
-  if (!campaignId || !gameDay) return result;
+  const gameDay = typeof clock === 'number' ? clock : clock?.day;
+  const orderDay = typeof clock === 'number' ? clock : clock?.dayOfYear;
+  if (!campaignId || !gameDay || !orderDay) return result;
 
   // 1. Companion away-activities past their expected duration. resolveActivity
   // returns the companion to 'active' and queues its own reunion narrative.
@@ -45,7 +59,7 @@ export async function sweepDeferredResolutions(campaignId, characterId, gameDay)
   // 2. Merchant commissions past their deadline → ready, with a narrative
   // item so the DM can mention the pickup next session.
   try {
-    const readied = await processDueOrders(gameDay);
+    const readied = await processDueOrders(orderDay);
     for (const o of readied) {
       if (o.character_id !== characterId) continue;
       result.ordersReadied++;
@@ -67,7 +81,7 @@ export async function sweepDeferredResolutions(campaignId, characterId, gameDay)
 
   // 3. Ready orders left uncollected too long → expired, with a narrative item.
   try {
-    const expired = await expireStaleReadyOrders(gameDay);
+    const expired = await expireStaleReadyOrders(orderDay);
     for (const o of expired) {
       if (o.character_id !== characterId) continue;
       result.ordersExpired++;

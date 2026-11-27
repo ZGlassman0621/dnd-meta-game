@@ -142,6 +142,75 @@ async function run() {
   const empty = await sweepDeferredResolutions(null, null, null);
   assertEqual(empty.activitiesResolved, 0, 'null args resolve nothing');
 
+  // ---- Second-year clock: each resolver reads its own scale (G-3) ----
+  // Absolute day 465 = day 100 of the campaign's second year. Commission
+  // deadlines are on the day-of-year scale; companion activities on the
+  // absolute counter. A single number for both made every commission due.
+  console.log('\n  -- second-year clock (absolute 465, day-of-year 100) --');
+  const Y2 = { day: 465, dayOfYear: 100 };
+  const mkOrder = async (name, deadline, status, readyDay = null) => {
+    const r = await dbRun(
+      `INSERT INTO merchant_orders (merchant_id, character_id, item_name, quoted_price_cp, deposit_paid_cp, balance_cp, commissioned_game_day, deadline_game_day, ready_game_day, status)
+       VALUES (?, ?, ?, 1000, 200, 800, ?, ?, ?, ?)`,
+      [merchantId, characterId, name, Math.max(1, deadline - 10), deadline, readyDay, status]);
+    const id = Number(r.lastInsertRowid); ids.orders.push(id); return id;
+  };
+  const yDue = await mkOrder('TEST Y2 Dagger', 98, 'pending');
+  const yLater = await mkOrder('TEST Y2 Helm', 150, 'pending');
+  const yFresh = await mkOrder('TEST Y2 Boots', 75, 'ready', 80);   // 20 days held
+  const yStale = await mkOrder('TEST Y2 Cloak', 55, 'ready', 60);   // 40 days held
+
+  const mkAct = async (name, start, end) => {
+    const n = await dbRun(`INSERT INTO npcs (name, race, occupation, current_location, lifecycle_status) VALUES (?, 'Human', 'Scout', 'Town', 'alive')`, [name]);
+    const nId = Number(n.lastInsertRowid); ids.npcs.push(nId);
+    const c = await dbRun(`INSERT INTO companions (npc_id, recruited_by_character_id, status) VALUES (?, ?, 'away')`, [nId, characterId]);
+    const cId = Number(c.lastInsertRowid); ids.companions.push(cId);
+    const a = await dbRun(
+      `INSERT INTO entity_schedule (entity_type, entity_id, entity_name, activity, start_day, end_day, status, details_json)
+       VALUES ('companion', ?, ?, 'scouting', ?, ?, 'active', ?)`,
+      [cId, name, start, end, JSON.stringify({ companion_id: cId, character_id: characterId, campaign_id: campaignId })]);
+    const aId = Number(a.lastInsertRowid); ids.activities.push(aId);
+    await dbRun(`UPDATE companions SET away_activity_id = ? WHERE id = ?`, [aId, cId]);
+    return aId;
+  };
+  const yActDone = await mkAct('TEST_Sweep Y2 Scout', 455, 460);    // absolute: past due
+  const yActAway = await mkAct('TEST_Sweep Y2 Ranger', 462, 470);   // absolute: not yet
+
+  const y2 = await sweepDeferredResolutions(campaignId, characterId, Y2);
+  assertEqual(y2.ordersReadied, 1, '[year 2] exactly one commission comes due (deadline day 98)');
+  assertEqual(y2.ordersExpired, 1, '[year 2] exactly one ready commission expires (held 40 days)');
+  // Two activities are past due on the absolute counter: the first block's
+  // not-yet-due one (end day 103) and the Y2 scout (end day 460).
+  assertEqual(y2.activitiesResolved, 2, '[year 2] the two companion activities past absolute day 465 resolve (end days 103 and 460)');
+  const yd = await dbGet(`SELECT status, ready_game_day FROM merchant_orders WHERE id = ?`, [yDue]);
+  assertEqual(yd.status, 'ready', '[year 2] commission due day 98 is ready');
+  assertEqual(yd.ready_game_day, 100, '[year 2] it is stamped ready on the day-of-year scale, day 100');
+  const yl = await dbGet(`SELECT status, ready_game_day FROM merchant_orders WHERE id = ?`, [yLater]);
+  assertEqual(yl.status, 'pending', '[year 2] commission due day 150 is still being made');
+  assertEqual(yl.ready_game_day, null, '[year 2] it carries no ready stamp');
+  const yf = await dbGet(`SELECT status FROM merchant_orders WHERE id = ?`, [yFresh]);
+  assertEqual(yf.status, 'ready', '[year 2] commission ready day 80 (20 days held) is still held');
+  const ys = await dbGet(`SELECT status FROM merchant_orders WHERE id = ?`, [yStale]);
+  assertEqual(ys.status, 'expired', '[year 2] commission ready day 60 (40 days held) expires');
+  const ya1 = await dbGet(`SELECT status FROM entity_schedule WHERE id = ?`, [yActDone]);
+  assertEqual(ya1.status, 'completed', '[year 2] companion activity ending absolute day 460 completes');
+  const ya2 = await dbGet(`SELECT status FROM entity_schedule WHERE id = ?`, [yActAway]);
+  assertEqual(ya2.status, 'active', '[year 2] companion activity ending absolute day 470 stays active');
+
+  // Ready-on-day-100 commission is not expired by a later absolute counter:
+  // 30 days on (absolute 495 = day 130) it is still inside its window.
+  const y2b = await sweepDeferredResolutions(campaignId, characterId, { day: 495, dayOfYear: 130 });
+  const yd2 = await dbGet(`SELECT status FROM merchant_orders WHERE id = ?`, [yDue]);
+  assertEqual(yd2.status, 'ready', '[year 2] 30 days after its day-100 ready stamp the commission is still held');
+  assertEqual(y2b.ordersExpired, 1, '[year 2] only the day-80 commission expires on day 130 (50 days held)');
+  const y2c = await sweepDeferredResolutions(campaignId, characterId, { day: 496, dayOfYear: 131 });
+  const yd3 = await dbGet(`SELECT status FROM merchant_orders WHERE id = ?`, [yDue]);
+  assertEqual(yd3.status, 'expired', '[year 2] 31 days after its day-100 ready stamp the commission expires');
+  // The first block's sword was also stamped ready on day 100, so it shares the window.
+  assertEqual(y2c.ordersExpired, 2, '[year 2] the two commissions stamped ready day 100 expire on day 131, no others');
+  const yl2 = await dbGet(`SELECT status FROM merchant_orders WHERE id = ?`, [yLater]);
+  assertEqual(yl2.status, 'pending', '[year 2] the day-150 commission is still being made on day 131');
+
   // ---- Cleanup (children before parents) ----
   await dbRun(`DELETE FROM narrative_queue WHERE character_id = ?`, [characterId]);
   await dbRun(`DELETE FROM entity_schedule WHERE id IN (${ids.activities.join(',')})`);
