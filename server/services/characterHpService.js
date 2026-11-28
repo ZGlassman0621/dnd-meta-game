@@ -185,11 +185,11 @@ export async function applyHpChange(characterId, delta, reason = null, { crit = 
  *   - damage while ALREADY at 0 adds one failed death save, two on a crit,
  *     against the companion's existing counters; three failures is the same
  *     outcome the companion death-save route reports (`dead`).
- * A companion stabilised by a Healer's Kit (healers-kit-stabilize) holds the
- * PC's stable state, three successes at 0 HP: damage at 0 clears it (and its
- * recovery hour), the same as the PC; the failure(s) still count. (The
- * Medicine stabilise route only resets the counters.) Healing does not come
- * through here.
+ * A stable companion holds the PC's stable state, three successes at 0 HP —
+ * however it got there (Healer's Kit, Medicine check, three successful saves;
+ * stabilize-recovery-alignment): damage at 0 clears it (and its recovery
+ * hour), the same as the PC; the failure(s) still count. Healing does not
+ * come through here.
  *
  * @param {number} companionId
  * @param {number} amount - Damage, positive.
@@ -272,7 +272,7 @@ export async function gainTempHp(characterId, amount) {
  * @returns {Promise<object|null>} Null if the character is missing or is not
  *   currently dying (at 0 HP, unconscious, not already dead).
  */
-export async function rollDeathSave(characterId, reportedD20) {
+export async function rollDeathSave(characterId, reportedD20, { sessionId = null } = {}) {
   // Combat-loop fix P4 (Zach 2026-11-23): the engine never rolls for the
   // player. The death save is the player's d20 — reported, then judged
   // here. With no reported die there is nothing to judge.
@@ -334,6 +334,15 @@ export async function rollDeathSave(characterId, reportedD20) {
     [successes, failures, died ? 1 : 0, characterId]
   );
 
+  // stabilize-recovery-alignment (2024 PHB): a creature that stabilizes
+  // itself regains 1 HP after 1d4 hours too. The player rolls that d4 —
+  // the same ask a Healer's Kit stabilization posts (pendingRecoveryDie).
+  let recovery = null;
+  if (stabilised) {
+    const { startStableRecovery } = await import('./healersKitService.js');
+    recovery = await startStableRecovery({ kind: 'player', id: characterId, sessionId });
+  }
+
   return {
     type: 'death_save',
     characterId,
@@ -345,7 +354,8 @@ export async function rollDeathSave(characterId, reportedD20) {
     failures,
     died,
     stabilised,
-    currentHp: 0
+    currentHp: 0,
+    ...(recovery ? { recovery } : {})
   };
 }
 

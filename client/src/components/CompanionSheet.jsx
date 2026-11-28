@@ -151,7 +151,7 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
       const r = await fetch(`/api/companion/${companion.id}/stabilize`, { method: 'POST' })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error)
-      setDeathSaves({ successes: 0, failures: 0, at_zero_hp: true })
+      setDeathSaves({ successes: data.successes, failures: data.failures, at_zero_hp: true })
       if (onUpdate) onUpdate()
     } catch (err) { setError(err.message) }
   }
@@ -655,7 +655,7 @@ function CompanionSheet({ companion, onClose, onDismiss, onUpdate }) {
                 className="button"
                 onClick={stabilizeCompanion}
                 style={{ flex: 1, background: '#7f8c8d' }}
-                title="Reset both tallies to 0 (e.g., Medicine DC 10)"
+                title="Record a stabilization (e.g., Medicine DC 10 made): stable at 0 HP, regains 1 HP after 1d4 hours"
               >Stabilize</button>
             </div>
           </div>

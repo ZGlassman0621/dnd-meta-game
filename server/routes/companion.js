@@ -23,6 +23,7 @@ import { sendOnActivity, getAwayCompanions, getActivityById, recallCompanion } f
 // never from characters.game_day (day-of-year scale). That mismatch WAS the
 // companion-activity clock split.
 import { getCurrentDay } from '../services/scheduleService.js';
+import { startStableRecovery } from '../services/healersKitService.js';
 import {
   autoAssignCompanionTheme,
   autoSeedCompanionAncestryFeatTier1,
@@ -1052,8 +1053,9 @@ router.post('/:id/death-save', async (req, res) => {
     if ((companion.companion_current_hp || 0) > 0) {
       return res.status(400).json({ error: 'Companion is not at 0 HP — no death save needed' });
     }
-    // healers-kit-stabilize: a Healer's Kit leaves the companion stable
-    // (three successes at 0 HP, healersKitService) — no more death saves.
+    // A stable companion — three successes at 0 HP, however it got there
+    // (Healer's Kit, Medicine check, three successful saves;
+    // stabilize-recovery-alignment) — makes no more death saves.
     if ((companion.death_save_successes || 0) >= 3) {
       return res.status(400).json({ error: 'Companion is stable — no death save needed' });
     }
@@ -1087,8 +1089,11 @@ router.post('/:id/death-save', async (req, res) => {
     } else if (resolved === 'success') {
       successes = Math.min(3, successes + 1);
       if (successes >= 3) {
+        // stabilize-recovery-alignment: hold the stable state (successes 3,
+        // failures 0 at 0 HP) — the state a Healer's Kit leaves — not a
+        // 0/0 reset that reads as dying. The recovery die is set below.
         stabilized = true;
-        successes = 0;
+        successes = 3;
         failures = 0;
         message = 'Stabilized after three successful death saves.';
       } else {
@@ -1120,11 +1125,14 @@ router.post('/:id/death-save', async (req, res) => {
        WHERE id = ?`,
       [successes, failures, hp, req.params.id]
     );
+    // 2024 PHB: a stable creature regains 1 HP after 1d4 hours (engine's d4).
+    const recovery = stabilized ? await startStableRecovery({ kind: 'companion', id: Number(req.params.id) }) : null;
 
     res.json({
       successes,
       failures,
       stabilized,
+      ...(recovery ? { recovery } : {}),
       dead,
       hp,
       roll: rolledValue,
@@ -1136,7 +1144,11 @@ router.post('/:id/death-save', async (req, res) => {
   }
 });
 
-// Stabilize a dying companion (e.g., Medicine DC 10 check succeeds)
+// Stabilize a dying companion (e.g., Medicine DC 10 check succeeds — the
+// caller makes the check; this route records the outcome).
+// stabilize-recovery-alignment (2024 PHB): the companion holds the stable
+// state a Healer's Kit leaves — successes 3, failures 0 at 0 HP, cleared by
+// damage at 0 HP — and regains 1 HP after 1d4 hours (the engine's d4).
 router.post('/:id/stabilize', async (req, res) => {
   try {
     const companion = await dbGet('SELECT companion_current_hp FROM companions WHERE id = ?', [req.params.id]);
@@ -1146,11 +1158,12 @@ router.post('/:id/stabilize', async (req, res) => {
     }
     await dbRun(
       `UPDATE companions
-       SET death_save_successes = 0, death_save_failures = 0
+       SET death_save_successes = 3, death_save_failures = 0
        WHERE id = ?`,
       [req.params.id]
     );
-    res.json({ stabilized: true, successes: 0, failures: 0 });
+    const recovery = await startStableRecovery({ kind: 'companion', id: Number(req.params.id) });
+    res.json({ stabilized: true, successes: 3, failures: 0, recovery });
   } catch (error) {
     handleServerError(res, error, 'stabilize companion');
   }

@@ -16,7 +16,8 @@
  *    session time passes the hour; damage at 0 clears it;
  *  - the marker through the real pipeline, the engine line, the DM prompt
  *    line, and the companion turn directive;
- *  - the Medicine-check stabilize route is unchanged.
+ *  - the Medicine-check stabilize route keeps its check (since
+ *    stabilize-recovery-alignment it leaves the kit's stable state).
  * Run: npm test healers-kit
  */
 import express from 'express';
@@ -330,7 +331,11 @@ try {
       const r = await fetch(`${base}/${c1}/stabilize`, { method: 'POST' });
       const body = await r.json();
       const st = await compState(c1);
-      check(r.status === 200 && body.stabilized === true && body.successes === 0 && body.failures === 0 && st.s === 0 && st.f === 0, 'Medicine stabilize (DC 10 made by the caller): counters reset exactly as before');
+      // stabilize-recovery-alignment (2026-11-27): this pinned the old 0/0
+      // reset — the mismatch that job removed. Medicine now leaves the
+      // kit's stable state (successes 3); its recovery is covered in
+      // tests/stabilize-recovery-alignment.test.js.
+      check(r.status === 200 && body.stabilized === true && body.successes === 3 && body.failures === 0 && st.s === 3 && st.f === 0, 'Medicine stabilize (DC 10 made by the caller): stable, successes 3, failures 0 — the kit\'s state');
       const c2 = await companion('TEST_HK Med Two', hero, { hp: 4 });
       const r2 = await fetch(`${base}/${c2}/stabilize`, { method: 'POST' });
       check(r2.status === 400, 'Medicine stabilize on a companion above 0 HP still refuses');

@@ -25,7 +25,9 @@
  *     the session clock passes the hour (restTimeService.advanceClockForSession).
  * Refusals spend nothing.
  *
- * The Medicine-check path (no kit, DC 10) is untouched.
+ * The Medicine-check path (no kit, DC 10) keeps its check; since
+ * stabilize-recovery-alignment it leaves the same stable state and starts
+ * the same 1d4 recovery (startStableRecovery), as do three death-save successes.
  */
 import { dbGet, dbRun, dbAll } from '../database.js';
 import { safeParse } from '../utils/safeParse.js';
@@ -168,6 +170,36 @@ async function turnRefusal(sessionId, user) {
 async function setRecoverAt(kind, id, at) {
   const table = kind === 'player' ? 'characters' : 'companions';
   await dbRun(`UPDATE ${table} SET stable_recover_at = ? WHERE id = ?`, [at, id]);
+}
+
+/**
+ * stabilize-recovery-alignment (2026-11-27; 2024 PHB, book rule, no flag):
+ * every stable creature regains 1 HP after 1d4 hours — not only a
+ * kit-stabilized one. Called by the two non-kit routes to stable: the
+ * Medicine check (companion route) and three successful death saves
+ * (the player's rollDeathSave, the companion death-save route). The caller
+ * has already written the stable state (successes 3 at 0 HP).
+ *   - companion: the engine rolls the d4 (the DM's creature);
+ *   - player: the player rolls it — the same out-of-combat ask the kit
+ *     uses (pendingRecoveryDie, settled by applyReportedRecoveryDie).
+ * The Healer's Kit path keeps its own code (unchanged by this job).
+ */
+export async function startStableRecovery({ kind, id, sessionId = null }) {
+  if (kind === 'player') {
+    const now = absoluteHour(await clockFor(id));
+    await setRecoverAt('player', id, null);
+    if (!sessionId) return { die: RECOVERY_DIE, pendingPlayerDie: false, note: 'no session: the recovery die is not asked' };
+    const cfg = await readSessionCfg(sessionId);
+    cfg.pendingRecoveryDie = { characterId: id, stabilizedAt: now, postedAt: Date.now() };
+    await writeSessionCfg(sessionId, cfg);
+    return { die: RECOVERY_DIE, pendingPlayerDie: true };
+  }
+  const row = await dbGet('SELECT recruited_by_character_id FROM companions WHERE id = ?', [id]);
+  if (!row) return null;
+  const now = absoluteHour(await clockFor(row.recruited_by_character_id));
+  const d = roll(4, 1, { reason: 'stable recovery' }).total;
+  await setRecoverAt('companion', id, now + d);
+  return { die: RECOVERY_DIE, hours: d, recoverAt: now + d };
 }
 
 async function readSessionCfg(sessionId) {
@@ -379,5 +411,5 @@ registerMarkerHandler('HEALERS_KIT', async (parsed, context) => {
 export default {
   KIT_USES, RECOVERY_DIE, normalizeItemName, isHealersKit, kitUsesLeft, kitTotalUses, spendKitUse,
   absoluteHour, memberState, useHealersKit, applyReportedRecoveryDie, processStableRecoveries,
-  healersKitResultText,
+  healersKitResultText, startStableRecovery,
 };

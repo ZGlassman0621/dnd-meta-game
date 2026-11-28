@@ -1935,7 +1935,10 @@ async function testCompanionDeathSaveStabilizesAtThreeSuccesses() {
   await api('POST', `/api/companion/${companionId}/death-save`, { outcome: 'success' });
   const r = await api('POST', `/api/companion/${companionId}/death-save`, { outcome: 'success' });
   assert(r.body.stabilized === true, 'stabilized=true after third success');
-  assert(r.body.successes === 0 && r.body.failures === 0, 'tallies reset to 0 after stabilize');
+  // stabilize-recovery-alignment (2026-11-27): the old expectation (0/0)
+  // asserted the mismatch this job removed — a 0/0 companion at 0 HP read
+  // as dying. Stable is now stored one way: successes 3, failures 0.
+  assert(r.body.successes === 3 && r.body.failures === 0, 'stable after stabilize: successes 3, failures 0');
 
   await cleanupTestCompanion(companionId, npcId);
 }
@@ -1978,13 +1981,16 @@ async function testCompanionDeathSaveCriticalFailureCountsTwo() {
 }
 
 async function testCompanionStabilizeEndpoint() {
-  console.log('\n  -- Stabilize resets death save tallies --');
+  console.log('\n  -- Stabilize leaves the stable state --');
   const { npcId, companionId } = await createTestNpcAndRecruit('Human', 'Fighter', 3);
   await dbRun('UPDATE companions SET companion_current_hp = 0, death_save_successes = 1, death_save_failures = 2 WHERE id = ?', [companionId]);
 
   const r = await api('POST', `/api/companion/${companionId}/stabilize`);
   assert(r.status === 200, 'stabilize returns 200');
-  assert(r.body.successes === 0 && r.body.failures === 0, 'tallies reset to 0');
+  // stabilize-recovery-alignment (2026-11-27): the old expectation (0/0)
+  // asserted the mismatch this job removed — a Medicine-stabilized
+  // companion read as dying. It now holds the kit's stable state.
+  assert(r.body.successes === 3 && r.body.failures === 0, 'stable: successes 3, failures 0');
 
   await cleanupTestCompanion(companionId, npcId);
 }

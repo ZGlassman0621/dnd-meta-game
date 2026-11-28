@@ -1739,7 +1739,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
             const pendingSave = safeParse((await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]))?.session_config, {}).pendingDeathSave;
             if (pendingSave) {
               await takePendingDeathSave(sidN);
-              deathSaveRes = await rollDeathSave(session.character_id, d[0]);
+              deathSaveRes = await rollDeathSave(session.character_id, d[0], { sessionId: sidN });
               if (deathSaveRes) {
                 const pen = deathSaveRes.penalty ? ` ${signedNum(deathSaveRes.penalty)} (exhaustion)` : '';
                 const m = `Death save: d20 ${deathSaveRes.roll}${pen} vs DC 10 — ${String(deathSaveRes.outcome).replace(/_/g, ' ')} (successes ${deathSaveRes.successes}/3, failures ${deathSaveRes.failures}/3)`;
@@ -1748,7 +1748,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
                 engineFacts.push(
                   `[DEATH SAVE — system fact: the player rolled ${deathSaveRes.roll}. Result: ${deathSaveRes.outcome}. Successes ${deathSaveRes.successes}/3, failures ${deathSaveRes.failures}/3.` +
                   (deathSaveRes.died ? ' THE PLAYER CHARACTER HAS DIED.' : '') +
-                  (deathSaveRes.stabilised ? ' The player is now stable at 0 HP, still unconscious.' : '') +
+                  (deathSaveRes.stabilised ? ` The player is now stable at 0 HP, still unconscious.${deathSaveRes.recovery?.pendingPlayerDie ? ' The player rolls 1d4 for the hours until they regain 1 HP.' : ''}` : '') +
                   (deathSaveRes.outcome === 'revived' ? ' The player regained 1 HP and is conscious again.' : '') + ' Narrate it.]');
               }
             }
