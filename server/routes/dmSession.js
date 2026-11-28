@@ -59,10 +59,9 @@ import '../services/sceneLinkService.js';
 // never runs.
 import '../services/dungeonGenerationService.js';
 // Time-evolution engine: timeEvolutionService registers the
-// EVOLVE_PLACE handler at module load. Imported for its side effect,
-// like the services above — without this import the marker silently
-// never runs.
-import '../services/timeEvolutionService.js';
+// EVOLVE_PLACE handler at module load (without this import the marker
+// silently never runs), and session end calls its tick trigger.
+import { tickEvolution } from '../services/timeEvolutionService.js';
   // Family 8 — subclass markers (mechanics-hooks): registers the
   // BEND_LUCK / TIDES_OF_CHAOS / PRESERVE_LIFE / TAMED_SURGE /
   // TELEPATHIC_SPEECH / AWAKENED_MIND / HOUND_OF_ILL_OMEN /
@@ -3919,6 +3918,10 @@ router.post('/:sessionId/end', requireSessionCampaign, async (req, res) => {
     const endCfg = safeParse(session.session_config, {});
     const elapsedHours = Number(endCfg.elapsedHours) || 0;
     let daysElapsed = 0;
+    // True only when the shared world clock itself moved over the session
+    // (not a flashback, which advances the character's own date but leaves
+    // the world clock put). Gates the scene-evolution tick below.
+    let worldClockAdvanced = false;
 
     // Advance game date
     const currentGameDay = session.game_start_day || character.game_day || 1;
@@ -3943,6 +3946,7 @@ router.post('/:sessionId/end', requireSessionCampaign, async (req, res) => {
       const isFlashback = Number.isFinite(gapAtStart) ? gapAtStart > 0 : !sessionAtOrAhead;
       if (!isFlashback) {
         daysElapsed = sessionEndDays({ startDay: currentGameDay, startYear: currentGameYear, clockDayOfYear: clkBefore.dayOfYear, clockYear: clkBefore.year });
+        worldClockAdvanced = daysElapsed > 0;
         // The character's date never moves backward: if the clock somehow
         // ends behind the session's start (an unsynced clock — /start's
         // sync normally prevents this), the session's own date stands.
@@ -4014,6 +4018,36 @@ router.post('/:sessionId/end', requireSessionCampaign, async (req, res) => {
         // session that failed to end. The turn's rewards, chronicle and game
         // date are all still recorded below.
         console.error('[living-world] tick failed at session end (non-fatal):', e?.message);
+      }
+    }
+
+    // Scene evolution, tick trigger (locked time-evolution design,
+    // 2026-11-03): a world-clock advance evaluates every scene in the
+    // campaign. tickEvolution writes nothing and creates no news; it
+    // returns candidates whose band has been crossed. Application stays
+    // DM-proposed ([EVOLVE_PLACE]). The candidates are reported in the
+    // response as `sceneEvolution`; nothing consumes them yet (the
+    // evolution → DM prompt wiring is post-MVP). Not gated on
+    // LIVING_WORLD_TICK, by the design's own note in timeEvolutionService.
+    // Runs after the clock advance above, against the clock where the
+    // session left it. Non-fatal, like the tick.
+    let sceneEvolution = null;
+    if (worldClockAdvanced && character.campaign_id) {
+      try {
+        const clk = await getClock(character.campaign_id);
+        const evo = await tickEvolution(character.campaign_id, { currentWorldDay: clk.day, currentYear: clk.year });
+        sceneEvolution = {
+          worldDay: clk.day,
+          candidates: (evo.candidates || []).map(c => ({
+            sceneId: c.sceneId, name: c.name, band: c.band, lastBand: c.lastBand,
+            elapsedYears: c.elapsedYears,
+          })),
+        };
+        if (sceneEvolution.candidates.length > 0) {
+          console.log(`[time-evolution] session ${sessionId}: ${sceneEvolution.candidates.length} scene evolution candidate(s)`);
+        }
+      } catch (e) {
+        console.error('[time-evolution] scene evolution tick failed at session end (non-fatal):', e?.message);
       }
     }
 
@@ -4251,7 +4285,11 @@ router.post('/:sessionId/end', requireSessionCampaign, async (req, res) => {
               .filter(s => s.status === 'failed')
               .map(s => s.step)
           }
-        : undefined
+        : undefined,
+      // Scene-evolution candidates from the world-clock advance (G-7).
+      // Undefined when the world clock did not move or the character has
+      // no campaign.
+      sceneEvolution: sceneEvolution || undefined
     });
 
     // Phase 2.3b — snapshot the campaign after the session is safely recorded.

@@ -219,7 +219,22 @@ async function buildLoopFixture(prefix, { withPendingState = true } = {}) {
   }
   f.dueOrderId = await order(`${prefix} longsword`, DOY_START + 2)
   f.laterOrderId = await order(`${prefix} shield`, DOY_START + 50)
+  await addScenes(f)
   return f
+}
+
+/**
+ * Two places in the campaign (G-7): one generated six years before the
+ * session (a "minor" band crossed, no history yet → an evolution
+ * candidate) and one generated on the session's start day (stable → not).
+ */
+async function addScenes(f) {
+  const scene = async (name, generatedDay) => Number((await dbRun(
+    "INSERT INTO scenes (campaign_id, name, kind, status, generated_world_day, generated_world_year) VALUES (?, ?, 'dungeon', 'skeleton', ?, ?)",
+    [f.campaignId, name, generatedDay, 1492]
+  )).lastInsertRowid)
+  f.oldSceneId = await scene(`${f.prefix || 'TEST_RL'} Old Watchtower`, ABS_START - 6 * 365)
+  f.freshSceneId = await scene(`${f.prefix || 'TEST_RL'} New Barrow`, ABS_START)
 }
 
 /** Time passes in play through the same service the [TIME_ADVANCE] marker uses. */
@@ -322,10 +337,30 @@ try {
   const npcSched = await dbGet('SELECT status FROM entity_schedule WHERE id = ?', [A.npcScheduleId])
   check(npcSched.status === 'active',
     '[tick] by design ("resolving nothing yet"): a non-companion schedule that came due stays active — session end resolves only companion activities and commissions')
-  const evoCallers = ['server/routes/dmSession.js', 'server/services/sessionEndService.js', 'server/services/livingWorldService.js',
-    'server/services/deferredResolutionSweep.js'].filter((f) => /\btickEvolution\s*\(/.test(read(f)))
-  check(evoCallers.length > 0,
-    '[tick] GAP G-7: a world-clock advance at session end evaluates scene evolution (tickEvolution has no caller; no candidates are produced or applied)')
+  // G-7 behaviour check (replaces the old source check): the session's
+  // world-clock advance evaluated the campaign's scenes and produced the
+  // one candidate whose band was crossed. Candidates are written nowhere
+  // (tickEvolution writes nothing by design); they ride the response.
+  const evoCands = endRes.body?.sceneEvolution?.candidates || []
+  check(evoCands.some((c) => c.sceneId === A.oldSceneId && c.band === 'minor') && !evoCands.some((c) => c.sceneId === A.freshSceneId),
+    `[tick] GAP G-7: a world-clock advance at session end evaluates scene evolution (got ${show(evoCands)})`)
+  check(endRes.body?.sceneEvolution?.worldDay === ABS_START + SPAN_DAYS,
+    `[tick] scene evolution was evaluated against the clock where the session left it, day ${ABS_START + SPAN_DAYS} (got ${endRes.body?.sceneEvolution?.worldDay})`)
+  const evoWrites = await dbGet(
+    `SELECT (SELECT COUNT(*) FROM scene_evolution_history WHERE scene_id IN (?, ?)) AS h,
+            (SELECT COUNT(*) FROM scene_evolution_news WHERE scene_id IN (?, ?)) AS n`,
+    [A.oldSceneId, A.freshSceneId, A.oldSceneId, A.freshSceneId])
+  check(Number(evoWrites.h) === 0 && Number(evoWrites.n) === 0,
+    '[tick] a candidate is not an evolution: no chapter and no news were written (application stays DM-proposed)')
+  {
+    // A session in which no world time passed evaluates nothing.
+    const N = await buildLoopFixture('TEST_RL_N', { withPendingState: false })
+    await addScenes(N)
+    const res = await server.post(`/api/dm-session/${N.sessionId}/end`, {})
+    cleanup.runs.push(String(N.sessionId))
+    check(res.status === 200 && res.body?.daysElapsed === 0 && res.body?.sceneEvolution === undefined,
+      `[tick] a session end that does not advance the world clock evaluates no scene evolution (days ${res.body?.daysElapsed}, sceneEvolution ${show(res.body?.sceneEvolution)})`)
+  }
 
   // ═════════════════════════════════════════════════════════════════════════
   console.log('\n=== STEP 4 [persist] — the state is on disk, read through a new connection ===\n')
@@ -576,6 +611,7 @@ for (const f of cleanup.fixtures) {
   await quiet(cleanupRun('DELETE FROM story_chronicles WHERE campaign_id = ?', [f.campaignId]))
   await quiet(cleanupRun('DELETE FROM campaign_weather WHERE campaign_id = ?', [f.campaignId]))
   await quiet(cleanupRun('DELETE FROM world_clock WHERE campaign_id = ?', [f.campaignId]))
+  await quiet(cleanupRun('DELETE FROM scenes WHERE campaign_id = ?', [f.campaignId]))
   const extra = await dbAll('SELECT id FROM dm_sessions WHERE character_id = ? AND id != ?', [f.characterId, f.sessionId])
   for (const s of extra) {
     await quiet(cleanupRun('DELETE FROM ai_call_log WHERE session_id = ?', [s.id]))

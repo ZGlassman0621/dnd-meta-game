@@ -13,7 +13,10 @@
  *   - return: evaluateReturn() on re-entry (suggests; also stamps the
  *     last-visited anchor). Application is always DM-proposed.
  *   - tick: tickEvolution() evaluates every scene in a campaign on
- *     world-clock advance and returns candidates whose bands have
+ *     world-clock advance (called from session end in
+ *     routes/dmSession.js when the world clock moved; the candidates
+ *     ride the /end response as `sceneEvolution` and nothing else
+ *     consumes them yet) and returns candidates whose bands have
  *     been crossed. It writes NOTHING and creates NO news: news
  *     reports an evolution that already happened, never a spoiler.
  *
