@@ -1,7 +1,7 @@
 /**
  * Per-theme bonds prompts — clickable starters for Step 7's "Bonds"
  * field (Model A: click drops into textarea, then editable). Per
- * PHASE_2_CREATOR_SPEC.md §7.4.
+ * archive/PHASE_2_CREATOR_SPEC.md §7.4.
  *
  * Bonds describe what the character values most — specific people, places,
  * objects, or unfinished business they'd pay real cost to protect, recover,

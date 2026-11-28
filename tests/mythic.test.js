@@ -1,6 +1,9 @@
 /**
- * Mythic Progression System Tests — Coverage for config data, marker detection,
- * service logic, piety system, epic boons, and legendary items.
+ * Mythic Progression System Tests — Coverage for config data, service logic,
+ * piety system, epic boons, and legendary items. (Its legacy MYTHIC_TRIAL /
+ * PIETY_CHANGE / ITEM_AWAKEN / MYTHIC_SURGE detect-function tests were
+ * deleted with the functions in l1-l6-cleanup, v1.0.229; those schemas are
+ * covered by sc6-4d-combat-mythic-schemas and the piety pipeline.)
  */
 
 import {
@@ -26,13 +29,6 @@ import {
   getShadowCategory,
   BASE_MYTHIC_ABILITIES
 } from '../server/config/mythicProgression.js';
-
-import {
-  detectMythicTrial,
-  detectPietyChange,
-  detectItemAwaken,
-  detectMythicSurge
-} from '../server/services/dmSessionService.js';
 
 let passed = 0;
 let failed = 0;
@@ -379,84 +375,6 @@ assert(SHADOW_PATH_INTERACTION.neutral.paths.includes('trickster'), 'Trickster i
 
 assert(SHADOW_PATH_INTERACTION.light.fullPowerMaxShadow === 2, 'Light full power max shadow is 2');
 assert(SHADOW_PATH_INTERACTION.light.weakenedMaxShadow === 5, 'Light weakened max shadow is 5');
-
-// ============================================================
-// 10. detectMythicTrial — Marker Detection
-// ============================================================
-console.log('\n=== Test 10: detectMythicTrial ===\n');
-
-const trial1 = detectMythicTrial('The hero stood firm. [MYTHIC_TRIAL: Name="The Bridge of Dawn" Description="Held the bridge alone against the horde" Outcome="passed"] The world changed.');
-assert(trial1 !== null, 'Detects MYTHIC_TRIAL marker');
-assert(trial1.name === 'The Bridge of Dawn', 'Parses trial name');
-assert(trial1.description === 'Held the bridge alone against the horde', 'Parses trial description');
-assert(trial1.outcome === 'passed', 'Parses outcome');
-
-const trial2 = detectMythicTrial('[MYTHIC_TRIAL: Name="Failed Test" Description="Could not resist the temptation" Outcome="failed"]');
-assert(trial2 !== null, 'Detects failed trial');
-assert(trial2.outcome === 'failed', 'Parses failed outcome');
-
-const trial3 = detectMythicTrial('[MYTHIC_TRIAL: Name="Path Shift" Outcome="redirected"]');
-assert(trial3 !== null, 'Detects trial with minimal fields');
-assert(trial3.outcome === 'redirected', 'Parses redirected outcome');
-
-const trialNone = detectMythicTrial('No mythic trial markers in this narrative.');
-assert(trialNone === null, 'Returns null for no marker');
-
-// ============================================================
-// 11. detectPietyChange — Marker Detection
-// ============================================================
-console.log('\n=== Test 11: detectPietyChange ===\n');
-
-const piety1 = detectPietyChange('[PIETY_CHANGE: Deity="Lathander" Amount=1 Reason="Protected the innocent"]');
-assert(Array.isArray(piety1), 'Returns array');
-assert(piety1.length === 1, 'Finds one piety change');
-assert(piety1[0].deity === 'Lathander', 'Parses deity name');
-assert(piety1[0].amount === 1, 'Parses amount as integer');
-assert(piety1[0].reason === 'Protected the innocent', 'Parses reason');
-
-// Multiple piety changes
-const piety2 = detectPietyChange('Something happened. [PIETY_CHANGE: Deity="Lathander" Amount=1 Reason="Good deed"] And later [PIETY_CHANGE: Deity="Malar" Amount=-1 Reason="Defied the hunt"]');
-assert(piety2.length === 2, 'Finds two piety changes');
-assert(piety2[1].deity === 'Malar', 'Second change has correct deity');
-assert(piety2[1].amount === -1, 'Parses negative amount');
-
-const pietyNone = detectPietyChange('No piety changes here.');
-assert(pietyNone.length === 0, 'Returns empty array for no markers');
-
-// ============================================================
-// 12. detectItemAwaken — Marker Detection
-// ============================================================
-console.log('\n=== Test 12: detectItemAwaken ===\n');
-
-const item1 = detectItemAwaken('[ITEM_AWAKEN: Item="Dawn\'s Light" NewState="awakened" Deed="Struck down the shadow demon lord"]');
-assert(item1 !== null, 'Detects ITEM_AWAKEN marker');
-assert(item1.item === "Dawn's Light", 'Parses item name with apostrophe');
-assert(item1.newState === 'awakened', 'Parses new state');
-assert(item1.deed === 'Struck down the shadow demon lord', 'Parses deed');
-
-const item2 = detectItemAwaken('[ITEM_AWAKEN: Item="Holy Avenger" NewState="exalted" Deed="Banished an archfiend"]');
-assert(item2 !== null, 'Detects exalted state');
-assert(item2.newState === 'exalted', 'Parses exalted state');
-
-const itemNone = detectItemAwaken('No item awakening here.');
-assert(itemNone === null, 'Returns null for no marker');
-
-// ============================================================
-// 13. detectMythicSurge — Marker Detection
-// ============================================================
-console.log('\n=== Test 13: detectMythicSurge ===\n');
-
-const surge1 = detectMythicSurge('[MYTHIC_SURGE: Ability="divine_surge" Cost=1]');
-assert(surge1 !== null, 'Detects MYTHIC_SURGE marker');
-assert(surge1.ability === 'divine_surge', 'Parses ability name');
-assert(surge1.cost === 1, 'Parses cost as integer');
-
-const surge2 = detectMythicSurge('[MYTHIC_SURGE: Ability="surge" Cost=2]');
-assert(surge2 !== null, 'Detects surge with cost 2');
-assert(surge2.cost === 2, 'Parses cost 2');
-
-const surgeNone = detectMythicSurge('No surge markers.');
-assert(surgeNone === null, 'Returns null for no marker');
 
 // ============================================================
 // 14. Path-Specific Checks — Key Paths

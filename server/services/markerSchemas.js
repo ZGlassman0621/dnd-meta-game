@@ -204,6 +204,15 @@ export const MARKER_SCHEMAS = {
     }
   },
 
+  // l1-l6-cleanup (v1.0.229): ATTACK, DODGE, DISENGAGE, HELP, HIDE,
+  // READY and MASTERY_SET were each defined twice in this object. A JS
+  // object literal keeps a duplicated key at its FIRST position but
+  // takes its LAST value, so the second definitions (combat item 2/3
+  // "dispatch blocks") were the ones every parse read, and the first
+  // ones were never read. The live definitions now sit here, at the
+  // first position, so Object.keys order — which sets validation and
+  // handler dispatch order (markerPipeline iterates validByKey) — is
+  // unchanged. The unread first copies are gone.
   ATTACK: {
     position: 'inline',
     fields: {
@@ -211,8 +220,6 @@ export const MARKER_SCHEMAS = {
       Target: { type: 'string', required: true },
       Spell: { type: 'string', required: false },
       Damage: { type: 'string', required: false },
-      Advantage: { type: 'string', required: false },
-      Disadvantage: { type: 'string', required: false },
       // Combat item 1: Hand="off" attacks with the off-hand weapon
       // (Light weapons only, no ability modifier to its damage, once
       // per turn); Thrown="true" declares a thrown attack (the weapon
@@ -223,16 +230,22 @@ export const MARKER_SCHEMAS = {
       // reach — positioning is the DM's attestation until item 4
       // checks adjacency in the engine).
       Hand: { type: 'string', required: false },
-      Thrown: { type: 'string', required: false },
-      Cleave: { type: 'string', required: false },
+      Thrown: { type: 'bool', required: false },
+      Cleave: { type: 'bool', required: false },
       // Combat item 3, Tier 2: Bonus="true" declares a bonus-action
       // attack (GWM crit/kill, Polearm Master). It charges the bonus
       // action and does not consume an Attack-action swing.
-      Bonus: { type: 'string', required: false },
+      Bonus: { type: 'bool', required: false },
       // Combat item 3, Tier 3: Ready="true" declares a readied attack
       // firing — a stored READY and an available reaction are
       // required, and the reaction is spent on the firing.
-      Ready: { type: 'string', required: false }
+      Ready: { type: 'bool', required: false },
+      Advantage: { type: 'bool', required: false },
+      Disadvantage: { type: 'bool', required: false },
+      Ally: { type: 'bool', required: false },
+      AllyAdjacent: { type: 'bool', required: false },
+      Smite: { type: 'int', required: false, min: 1, max: 9 },
+      SmiteFiend: { type: 'bool', required: false }
     }
   },
 
@@ -251,7 +264,8 @@ export const MARKER_SCHEMAS = {
     position: 'inline',
     fields: {
       Target: { type: 'string', required: true },
-      Bonus: { type: 'string', required: false }
+      Bonus: { type: 'bool', required: false },
+      Ready: { type: 'bool', required: false }
     }
   },
 
@@ -259,7 +273,8 @@ export const MARKER_SCHEMAS = {
     position: 'inline',
     fields: {
       Target: { type: 'string', required: true },
-      Bonus: { type: 'string', required: false }
+      Bonus: { type: 'bool', required: false },
+      Ready: { type: 'bool', required: false }
     }
   },
 
@@ -268,7 +283,8 @@ export const MARKER_SCHEMAS = {
     fields: {
       Helper: { type: 'string', required: true },
       Target: { type: 'string', required: true },
-      Ally: { type: 'string', required: true }
+      Ally: { type: 'string', required: true },
+      Ready: { type: 'bool', required: false }
     }
   },
 
@@ -276,7 +292,11 @@ export const MARKER_SCHEMAS = {
     position: 'inline',
     fields: {
       Target: { type: 'string', required: true },
-      Bonus: { type: 'string', required: false }
+      Bonus: { type: 'bool', required: false },
+      Ready: { type: 'bool', required: false },
+      Stealth: { type: 'number', required: false },
+      StealthDie: { type: 'number', required: false },
+      End: { type: 'bool', required: false }
     }
   },
 
@@ -285,7 +305,9 @@ export const MARKER_SCHEMAS = {
     fields: {
       Target: { type: 'string', required: true },
       Action: { type: 'string', required: true },
-      Trigger: { type: 'string', required: true }
+      Trigger: { type: 'string', required: true },
+      Spell: { type: 'string', required: false },
+      Level: { type: 'number', required: false }
     }
   },
 
@@ -1183,46 +1205,12 @@ PERCEPTION_PREROLL: {
 
   // Combat item 2 (2026-10-30): these markers had handlers but NO
   // schema, so processResponseMarkers never dispatched them —
-  // validateDmMarkers only iterates MARKER_SCHEMAS keys. ATTACK and
-  // MASTERY_SET (combat item 1) were in the same state; adding them
+  // validateDmMarkers only iterates MARKER_SCHEMAS keys. Adding them
   // here makes the pipeline actually fire them instead of silently
   // dropping them. Field names match the handler reads exactly
-  // (capitalized), so parsed keys line up with parsed.Attacker etc.
-  ATTACK: {
-    position: 'inline',
-    fields: {
-      Attacker: { type: 'string', required: true },
-      Target: { type: 'string', required: true },
-      Spell: { type: 'string', required: false },
-      Damage: { type: 'string', required: false },
-      Hand: { type: 'string', required: false },
-      Thrown: { type: 'bool', required: false },
-      Cleave: { type: 'bool', required: false },
-      // Combat item 3, Tier 2 (see the first ATTACK block — this
-      // dispatch block is the one the pipeline actually parses, so
-      // every field must be listed here too, or it is stripped
-      // before the handler ever sees it).
-      Bonus: { type: 'bool', required: false },
-      // Combat item 3, Tier 3: Ready="true" declares a readied attack
-      // firing — a stored READY and an available reaction required.
-      Ready: { type: 'bool', required: false },
-      Advantage: { type: 'bool', required: false },
-      Disadvantage: { type: 'bool', required: false },
-      Ally: { type: 'bool', required: false },
-      AllyAdjacent: { type: 'bool', required: false },
-      Smite: { type: 'int', required: false, min: 1, max: 9 },
-      SmiteFiend: { type: 'bool', required: false }
-    }
-  },
-
-  MASTERY_SET: {
-    position: 'inline',
-    fields: {
-      Target: { type: 'string', required: true },
-      Weapons: { type: 'string', required: true }
-    }
-  },
-
+  // (capitalized), so parsed keys line up with parsed.Target etc.
+  // (ATTACK and MASTERY_SET's live definitions used to sit here too;
+  // they now sit at their first position above — l1-l6-cleanup.)
   RAGE: {
     position: 'inline',
     fields: {
@@ -1509,48 +1497,9 @@ PERCEPTION_PREROLL: {
     }
   },
 
-  // Combat item 3, Tier 3 (dispatch block — the pipeline parses
-  // this one, so every field must be listed here too).
-  DODGE: {
-    position: 'inline',
-    fields: {
-      Target: { type: 'string', required: true },
-      Bonus: { type: 'bool', required: false },
-      Ready: { type: 'bool', required: false }
-    }
-  },
-
-  DISENGAGE: {
-    position: 'inline',
-    fields: {
-      Target: { type: 'string', required: true },
-      Bonus: { type: 'bool', required: false },
-      Ready: { type: 'bool', required: false }
-    }
-  },
-
-  HELP: {
-    position: 'inline',
-    fields: {
-      Helper: { type: 'string', required: true },
-      Target: { type: 'string', required: true },
-      Ally: { type: 'string', required: true },
-      Ready: { type: 'bool', required: false }
-    }
-  },
-
-  HIDE: {
-    position: 'inline',
-    fields: {
-      Target: { type: 'string', required: true },
-      Bonus: { type: 'bool', required: false },
-      Ready: { type: 'bool', required: false },
-      Stealth: { type: 'number', required: false },
-      StealthDie: { type: 'number', required: false },
-      End: { type: 'bool', required: false }
-    }
-  },
-
+  // (Combat item 3, Tier 3: the live DODGE / DISENGAGE / HELP / HIDE /
+  // READY definitions used to sit here as a second "dispatch block";
+  // they now sit at their first position above — l1-l6-cleanup.)
   SEARCH: {
     position: 'inline',
     fields: {
@@ -1558,17 +1507,6 @@ PERCEPTION_PREROLL: {
       Target: { type: 'string', required: true },
       Perception: { type: 'number', required: false },
       PerceptionDie: { type: 'number', required: false }
-    }
-  },
-
-  READY: {
-    position: 'inline',
-    fields: {
-      Target: { type: 'string', required: true },
-      Action: { type: 'string', required: true },
-      Trigger: { type: 'string', required: true },
-      Spell: { type: 'string', required: false },
-      Level: { type: 'number', required: false }
     }
   },
 

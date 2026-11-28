@@ -8,7 +8,7 @@
  * `campaign_threads` at handoff.
  *
  * See Phase 1 Decision 6 (DECISION_LOG 2026-04-29) for the design and
- * PRELUDE_IMPLEMENTATION_PLAN.md §3d / §5h for the marker semantics.
+ * PROLOGUE_DESIGN.md (was PRELUDE_IMPLEMENTATION_PLAN.md) §3d / §5h for the marker semantics.
  *
  * Subject resolution: when a [CANON_THREAD] arrives, we attempt to bind
  * its subject string to an existing prelude_canon_npcs or

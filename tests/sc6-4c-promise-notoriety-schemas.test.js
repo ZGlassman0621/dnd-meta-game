@@ -3,7 +3,7 @@
  * notoriety silent-drop bug-fix snapshot.
  *
  * Headlines this ship: the NOTORIETY_GAIN/LOSS migration RESOLVES the
- * silent-drop bug documented in KNOWN_BUGS.md (canonical-format markers
+ * silent-drop bug documented in archive/KNOWN_BUGS.md (canonical-format markers
  * were chokepointed by parseMarkerKeyValue's comma-split-only parser).
  * The schema's extractField regex handles BOTH formats natively, so
  * migration through the marker pipeline auto-fixes the bug. Tests
@@ -46,13 +46,13 @@ console.log('\n=== All 4 cluster-3 schemas registered + handlers wired ===\n')
   }
 }
 
-console.log('\n=== Legacy detect-functions still exported (deprecate by hiding) ===\n')
+console.log('\n=== Legacy detect-functions deleted (l1-l6-cleanup, v1.0.229): the pipeline is the only parser ===\n')
 {
   for (const fn of [
     'detectPromiseMade', 'detectPromiseFulfilled',
     'detectNotorietyGain', 'detectNotorietyLoss'
   ]) {
-    assert(typeof dmSessionService[fn] === 'function', `${fn} still exported`)
+    assert(dmSessionService[fn] === undefined, `${fn} no longer exported`)
   }
 }
 

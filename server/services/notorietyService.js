@@ -312,7 +312,7 @@ export async function getNotorietyForPrompt(characterId, campaignId) {
  * marker. Replaces the inline detect-call dispatch at the pre-SC-6.4c
  * routes/dmSession.js:1906 site.
  *
- * **Resolves the silent-drop bug** (KNOWN_BUGS.md archive entry, found
+ * **Resolves the silent-drop bug** (archive/KNOWN_BUGS.md entry, found
  * during SC-6.4 prep): the legacy detect path used `parseMarkerKeyValue`
  * which only parsed comma-separated unquoted values; the AI prompt
  * instructs the canonical quoted-space-separated format

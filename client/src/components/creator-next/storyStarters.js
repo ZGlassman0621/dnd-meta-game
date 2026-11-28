@@ -29,7 +29,7 @@
  * Provenance (shown to the player as a source line): none of this is
  * 2024 book text.
  *   - The theme starters were written for this game (the files'
- *     headers cite PHASE_2_CREATOR_SPEC.md §7.2–7.6).
+ *     headers cite archive/PHASE_2_CREATOR_SPEC.md §7.2–7.6).
  *   - The appearance lists were compiled for this game from older
  *     books (the files' headers cite "PHB Chapter 2 race entries",
  *     Volo's Guide, Eberron: Rising from the Last War and Mordenkainen's

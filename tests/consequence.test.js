@@ -1,17 +1,13 @@
 /**
  * Consequence Automation Tests — Coverage for:
  * - Migration 011 schema
- * - Promise marker detection (PROMISE_MADE, PROMISE_FULFILLED)
+ * - (Promise marker detect-function tests were deleted with the legacy
+ *   functions in l1-l6-cleanup, v1.0.229; PROMISE_MADE / PROMISE_FULFILLED
+ *   schemas are covered by sc6-4c-promise-notoriety-schemas.)
  * - Consequence service logic (overdue promises, expired quests)
  * - Enhanced addPromise() with game_day tracking
  * - Living world tick integration
  */
-
-import {
-  detectPromiseMade,
-  detectPromiseFulfilled,
-  detectMythicTrial
-} from '../server/services/dmSessionService.js';
 
 let passed = 0;
 let failed = 0;
@@ -24,130 +20,6 @@ function assert(condition, message) {
     console.log(`  \u2717 FAIL: ${message}`);
     failed++;
   }
-}
-
-// ============================================================
-// 1. PROMISE_MADE Marker Detection
-// ============================================================
-console.log('\n=== Test 1: PROMISE_MADE Marker Detection ===\n');
-
-// Basic detection
-{
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Elara" Promise="Return the stolen amulet within a tenday" Deadline=10]');
-  assert(result.length === 1, 'Detects single PROMISE_MADE marker');
-  assert(result[0].npc === 'Elara', 'Extracts NPC name');
-  assert(result[0].promise === 'Return the stolen amulet within a tenday', 'Extracts promise text');
-  assert(result[0].deadline === 10, 'Extracts deadline in days');
-}
-
-// No deadline
-{
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Theron" Promise="Find his lost brother"]');
-  assert(result.length === 1, 'Detects PROMISE_MADE without deadline');
-  assert(result[0].npc === 'Theron', 'Extracts NPC name without deadline');
-  assert(result[0].promise === 'Find his lost brother', 'Extracts promise text without deadline');
-  assert(result[0].deadline === 0, 'Deadline defaults to 0 when omitted');
-}
-
-// Multiple markers
-{
-  const narrative = `The merchant smiled. [PROMISE_MADE: NPC="Gareth" Promise="Deliver the package to Waterdeep" Deadline=7]
-Some more narrative text. [PROMISE_MADE: NPC="Lyra" Promise="Protect her son during the journey"]`;
-  const result = detectPromiseMade(narrative);
-  assert(result.length === 2, 'Detects multiple PROMISE_MADE markers');
-  assert(result[0].npc === 'Gareth', 'First marker NPC correct');
-  assert(result[0].deadline === 7, 'First marker deadline correct');
-  assert(result[1].npc === 'Lyra', 'Second marker NPC correct');
-  assert(result[1].deadline === 0, 'Second marker has no deadline');
-}
-
-// Case insensitive
-{
-  const result = detectPromiseMade('[promise_made: NPC="Test" Promise="test promise"]');
-  assert(result.length === 1, 'Case-insensitive detection');
-}
-
-// No markers
-{
-  const result = detectPromiseMade('Just some regular narrative text with no markers.');
-  assert(result.length === 0, 'Returns empty array when no markers');
-}
-
-// Null/empty input
-{
-  assert(detectPromiseMade(null).length === 0, 'Handles null input');
-  assert(detectPromiseMade('').length === 0, 'Handles empty string');
-  assert(detectPromiseMade(undefined).length === 0, 'Handles undefined');
-}
-
-// Missing required fields
-{
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Gareth"]'); // Missing Promise
-  assert(result.length === 0, 'Rejects marker missing Promise field');
-}
-
-{
-  const result = detectPromiseMade('[PROMISE_MADE: Promise="Do something"]'); // Missing NPC
-  assert(result.length === 0, 'Rejects marker missing NPC field');
-}
-
-// ============================================================
-// 2. PROMISE_FULFILLED Marker Detection
-// ============================================================
-console.log('\n=== Test 2: PROMISE_FULFILLED Marker Detection ===\n');
-
-// Basic detection
-{
-  const result = detectPromiseFulfilled('[PROMISE_FULFILLED: NPC="Elara" Promise="Return the stolen amulet"]');
-  assert(result.length === 1, 'Detects single PROMISE_FULFILLED marker');
-  assert(result[0].npc === 'Elara', 'Extracts NPC name');
-  assert(result[0].promise === 'Return the stolen amulet', 'Extracts promise text');
-}
-
-// Multiple markers
-{
-  const narrative = `You hand over the package. [PROMISE_FULFILLED: NPC="Gareth" Promise="Deliver the package"]
-The priestess nods. [PROMISE_FULFILLED: NPC="Lyra" Promise="Protect her son"]`;
-  const result = detectPromiseFulfilled(narrative);
-  assert(result.length === 2, 'Detects multiple PROMISE_FULFILLED markers');
-  assert(result[0].npc === 'Gareth', 'First marker NPC correct');
-  assert(result[1].npc === 'Lyra', 'Second marker NPC correct');
-}
-
-// Case insensitive
-{
-  const result = detectPromiseFulfilled('[promise_fulfilled: NPC="Test" Promise="test"]');
-  assert(result.length === 1, 'Case-insensitive detection');
-}
-
-// No markers
-{
-  assert(detectPromiseFulfilled(null).length === 0, 'Handles null input');
-  assert(detectPromiseFulfilled('No markers here').length === 0, 'Returns empty for no markers');
-}
-
-// Missing required fields
-{
-  const result = detectPromiseFulfilled('[PROMISE_FULFILLED: NPC="Gareth"]');
-  assert(result.length === 0, 'Rejects marker missing Promise field');
-}
-
-// ============================================================
-// 3. Both Markers in Same Narrative
-// ============================================================
-console.log('\n=== Test 3: Mixed Promise Markers ===\n');
-
-{
-  const narrative = `The ranger approaches. "I need your help," she says. [PROMISE_MADE: NPC="Sylvana" Promise="Clear the goblin camp" Deadline=5]
-Later, you return with the stolen goods. [PROMISE_FULFILLED: NPC="Marcus" Promise="Retrieve the merchant's goods"]`;
-
-  const made = detectPromiseMade(narrative);
-  const fulfilled = detectPromiseFulfilled(narrative);
-
-  assert(made.length === 1, 'Detects PROMISE_MADE in mixed narrative');
-  assert(fulfilled.length === 1, 'Detects PROMISE_FULFILLED in mixed narrative');
-  assert(made[0].npc === 'Sylvana', 'PROMISE_MADE NPC correct in mixed');
-  assert(fulfilled[0].npc === 'Marcus', 'PROMISE_FULFILLED NPC correct in mixed');
 }
 
 // ============================================================
@@ -197,45 +69,6 @@ console.log('\n=== Test 6: Migration 011 Structure ===\n');
 }
 
 // ============================================================
-// 7. Promise Marker Edge Cases
-// ============================================================
-console.log('\n=== Test 7: Promise Marker Edge Cases ===\n');
-
-// Promise with single quotes
-{
-  const result = detectPromiseMade("[PROMISE_MADE: NPC='Gareth' Promise='Find the ring' Deadline=3]");
-  assert(result.length === 1, 'Handles single-quoted values');
-  assert(result[0].npc === 'Gareth', 'Single-quoted NPC parsed correctly');
-}
-
-// Promise with special characters in text
-{
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Lady D\'Amberville" Promise="Return her family heirloom"]');
-  assert(result.length === 1, 'Handles NPC name with apostrophe');
-}
-
-// Deadline edge cases
-{
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Test" Promise="test" Deadline=0]');
-  assert(result.length === 1, 'Handles Deadline=0');
-  assert(result[0].deadline === 0, 'Deadline=0 parsed as 0');
-}
-
-{
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Test" Promise="test" Deadline=abc]');
-  assert(result.length === 1, 'Handles non-numeric deadline');
-  assert(result[0].deadline === 0, 'Non-numeric deadline defaults to 0');
-}
-
-// Very long promise text
-{
-  const longPromise = 'A'.repeat(500);
-  const result = detectPromiseMade(`[PROMISE_MADE: NPC="Test" Promise="${longPromise}"]`);
-  assert(result.length === 1, 'Handles very long promise text');
-  assert(result[0].promise.length === 500, 'Long promise text preserved');
-}
-
-// ============================================================
 // 8. Marker Cleaning Integration
 // ============================================================
 console.log('\n=== Test 8: Marker Cleaning Patterns ===\n');
@@ -254,37 +87,6 @@ console.log('\n=== Test 8: Marker Cleaning Patterns ===\n');
   assert(!cleaned.includes('PROMISE_FULFILLED'), 'PROMISE_FULFILLED marker stripped from narrative');
   assert(cleaned.includes('You return the sword.'), 'Text before marker preserved');
   assert(cleaned.includes('She smiles.'), 'Text after marker preserved');
-}
-
-// ============================================================
-// 9. Existing Marker Detection Still Works
-// ============================================================
-console.log('\n=== Test 9: Existing Markers Unaffected ===\n');
-
-{
-  const mythicResult = detectMythicTrial('[MYTHIC_TRIAL: Name="Test Trial" Description="A test" Outcome="passed"]');
-  assert(mythicResult !== null, 'MYTHIC_TRIAL detection still works');
-  assert(mythicResult.name === 'Test Trial', 'MYTHIC_TRIAL name parsed correctly');
-  assert(mythicResult.outcome === 'passed', 'MYTHIC_TRIAL outcome parsed correctly');
-}
-
-// ============================================================
-// 10. Promise Fulfillment Matching Logic
-// ============================================================
-console.log('\n=== Test 10: Promise Fulfillment Text Matching ===\n');
-
-{
-  // Test that PROMISE_FULFILLED can match partial text
-  const made = detectPromiseMade('[PROMISE_MADE: NPC="Elara" Promise="Return the stolen amulet within a tenday" Deadline=10]');
-  const fulfilled = detectPromiseFulfilled('[PROMISE_FULFILLED: NPC="Elara" Promise="Return the stolen amulet"]');
-
-  assert(made.length === 1, 'Made marker detected');
-  assert(fulfilled.length === 1, 'Fulfilled marker detected');
-
-  // The matching logic in dmSession.js uses .includes() on the first 20 chars
-  const promiseText = made[0].promise.toLowerCase();
-  const fulfillText = fulfilled[0].promise.toLowerCase().substring(0, 20);
-  assert(promiseText.includes(fulfillText), 'Fulfilled text matches made text via substring');
 }
 
 // ============================================================
@@ -446,54 +248,6 @@ console.log('\n=== Test 14: Promise Weight Config ===\n');
     'FULFILL_WEIGHTS: critical > major disposition');
   assert(FULFILL_WEIGHTS.major.directDisposition > FULFILL_WEIGHTS.moderate.directDisposition,
     'FULFILL_WEIGHTS: major > moderate disposition');
-}
-
-// ============================================================
-// 15. Weight Detection in PROMISE_MADE Marker
-// ============================================================
-console.log('\n=== Test 15: Weight Detection in PROMISE_MADE ===\n');
-
-{
-  // Weight=major
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Elara" Promise="Save her daughter" Deadline=10 Weight=major]');
-  assert(result.length === 1, 'Detects PROMISE_MADE with Weight');
-  assert(result[0].weight === 'major', 'Extracts Weight=major correctly');
-}
-
-{
-  // Weight=trivial
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Child" Promise="Return the sweet treat" Weight=trivial]');
-  assert(result.length === 1, 'Detects trivial weight');
-  assert(result[0].weight === 'trivial', 'Extracts Weight=trivial correctly');
-}
-
-{
-  // Weight=critical
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="King" Promise="Save the realm" Weight=critical Deadline=30]');
-  assert(result.length === 1, 'Detects critical weight');
-  assert(result[0].weight === 'critical', 'Extracts Weight=critical correctly');
-  assert(result[0].deadline === 30, 'Deadline still parsed with weight present');
-}
-
-{
-  // Missing Weight defaults to moderate
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Test" Promise="test promise"]');
-  assert(result.length === 1, 'Detects marker without Weight field');
-  assert(result[0].weight === 'moderate', 'Missing weight defaults to moderate');
-}
-
-{
-  // Invalid Weight defaults to moderate
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Test" Promise="test" Weight=legendary]');
-  assert(result.length === 1, 'Detects marker with invalid Weight');
-  assert(result[0].weight === 'moderate', 'Invalid weight defaults to moderate');
-}
-
-{
-  // Case-insensitive weight
-  const result = detectPromiseMade('[PROMISE_MADE: NPC="Test" Promise="test" Weight=MAJOR]');
-  assert(result.length === 1, 'Detects UPPERCASE weight');
-  assert(result[0].weight === 'major', 'Uppercase weight normalized to lowercase');
 }
 
 // ============================================================

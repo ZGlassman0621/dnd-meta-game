@@ -20,7 +20,7 @@
 //     effect now is too, so a DM rest that heals/restores slots and
 //     reaches the sheet as a new prop refreshes all three. (There is no
 //     DM-turn hook in this sheet: it never mounts during a DM session —
-//     it is rendered by CompanionsPage / CompanionManager, while the DM
+//     it is rendered by CompanionsPage, while the DM
 //     rest happens in DMSession — so reopening the sheet after a DM
 //     rest remounts it and the mount fetch reads fresh state. Residual
 //     gap, recorded not hidden: a companion at FULL HP with a condition

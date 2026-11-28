@@ -1,7 +1,7 @@
 /**
  * Per-theme personality prompts — clickable starters for Step 7's
  * "Personality traits" field (Model A: click drops into textarea, then
- * editable). Per PHASE_2_CREATOR_SPEC.md §7.2.
+ * editable). Per archive/PHASE_2_CREATOR_SPEC.md §7.2.
  *
  * Phase 2 close-out (2026-05-03): full alignment coverage. 21 themes ×
  * 9 alignments = 189 prompts. Replaces the v1.0.114 ship which had

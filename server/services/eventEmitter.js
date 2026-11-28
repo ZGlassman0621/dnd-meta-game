@@ -138,25 +138,6 @@ export async function emit(eventType, data = {}) {
 }
 
 /**
- * Get all registered event types
- * @returns {string[]} - Array of event types with handlers
- */
-export function getRegisteredEventTypes() {
-  return Array.from(handlers.keys());
-}
-
-/**
- * Get handler count for an event type
- * @param {string} eventType - The event type
- * @returns {number} - Number of handlers
- */
-export function getHandlerCount(eventType) {
-  const typeHandlers = handlers.get(eventType);
-  const typeOnceHandlers = onceHandlers.get(eventType);
-  return (typeHandlers?.size || 0) + (typeOnceHandlers?.size || 0);
-}
-
-/**
  * Get recent event history
  * @param {number} count - Number of events to return
  * @returns {object[]} - Recent events
@@ -178,99 +159,10 @@ export function getEventsByType(eventType, count = 10) {
 }
 
 /**
- * Clear all handlers (useful for testing)
- */
-export function clearAllHandlers() {
-  handlers.clear();
-  onceHandlers.clear();
-}
-
-/**
  * Clear event history
  */
 export function clearEventHistory() {
   eventHistory.length = 0;
-}
-
-// ============================================================
-// CONVENIENCE EMIT FUNCTIONS
-// ============================================================
-
-/**
- * Emit an adventure complete event
- */
-export async function emitAdventureComplete(adventureData) {
-  return emit(GAME_EVENTS.ADVENTURE_COMPLETE, adventureData);
-}
-
-/**
- * Emit a story thread resolved event
- */
-export async function emitStoryThreadResolved(threadData) {
-  return emit(GAME_EVENTS.STORY_THREAD_RESOLVED, threadData);
-}
-
-/**
- * Emit a location discovered event
- */
-export async function emitLocationDiscovered(locationData) {
-  return emit(GAME_EVENTS.LOCATION_DISCOVERED, locationData);
-}
-
-/**
- * Emit an NPC interaction event
- */
-export async function emitNpcInteraction(interactionData) {
-  return emit(GAME_EVENTS.NPC_INTERACTION, interactionData);
-}
-
-/**
- * Emit an NPC disposition changed event
- */
-export async function emitNpcDispositionChanged(dispositionData) {
-  return emit(GAME_EVENTS.NPC_DISPOSITION_CHANGED, dispositionData);
-}
-
-/**
- * Emit an item obtained event
- */
-export async function emitItemObtained(itemData) {
-  return emit(GAME_EVENTS.ITEM_OBTAINED, itemData);
-}
-
-/**
- * Emit a faction standing changed event
- */
-export async function emitFactionStandingChanged(factionData) {
-  return emit(GAME_EVENTS.FACTION_STANDING_CHANGED, factionData);
-}
-
-/**
- * Emit a companion loyalty changed event
- */
-export async function emitCompanionLoyaltyChanged(loyaltyData) {
-  return emit(GAME_EVENTS.COMPANION_LOYALTY_CHANGED, loyaltyData);
-}
-
-/**
- * Emit a companion secret revealed event
- */
-export async function emitCompanionSecretRevealed(secretData) {
-  return emit(GAME_EVENTS.COMPANION_SECRET_REVEALED, secretData);
-}
-
-/**
- * Emit a companion thread activated event
- */
-export async function emitCompanionThreadActivated(threadData) {
-  return emit(GAME_EVENTS.COMPANION_THREAD_ACTIVATED, threadData);
-}
-
-/**
- * Emit a game time advanced event
- */
-export async function emitGameTimeAdvanced(timeData) {
-  return emit(GAME_EVENTS.GAME_TIME_ADVANCED, timeData);
 }
 
 // Export the GAME_EVENTS for convenience

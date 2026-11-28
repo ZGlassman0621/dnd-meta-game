@@ -2,7 +2,8 @@
  * Tests for expanded loot systems:
  * 1. Broadened session-end loot (all risk levels)
  * 2. Travel encounter loot generation
- * 3. DM session [LOOT_DROP] marker detection
+ * 3. (removed in l1-l6-cleanup: the legacy [LOOT_DROP] detect-function was
+ *    deleted; LOOT_DROP is covered by the marker pipeline suites)
  * 4. Quest completion rewards
  */
 
@@ -10,8 +11,6 @@ import {
   generateLoot, EQUIPMENT_BY_LEVEL, getLootTableForLevel,
   generateEncounterLoot
 } from '../server/config/rewards.js';
-
-import { detectLootDrop } from '../server/services/dmSessionService.js';
 
 // ============================================================
 // 1. BROADENED SESSION-END LOOT
@@ -185,47 +184,6 @@ function testEncounterLevelScaling() {
 testEncounterLevelScaling();
 
 // ============================================================
-// 3. DM SESSION [LOOT_DROP] MARKER DETECTION
-// ============================================================
-
-console.log('=== Test 3: [LOOT_DROP] Marker Detection ===\n');
-
-function testLootDropDetection() {
-  // Single loot drop
-  const narrative1 = 'You search the bandit\'s body and find a healing potion tucked into his belt. [LOOT_DROP: Item="Potion of Healing" Source="bandit leader\'s belt pouch"] The rest of the camp is silent.';
-  const drops1 = detectLootDrop(narrative1);
-  console.assert(drops1.length === 1, `FAIL: Should detect 1 drop, got ${drops1.length}`);
-  console.assert(drops1[0].item === 'Potion of Healing', `FAIL: Item should be "Potion of Healing", got "${drops1[0].item}"`);
-  console.assert(drops1[0].source === "bandit leader's belt pouch", `FAIL: Source mismatch`);
-
-  // Multiple loot drops
-  const narrative2 = 'Inside the chest you find two items. [LOOT_DROP: Item="Cloak of Protection" Source="hidden chest"] You also notice a wand. [LOOT_DROP: Item="Wand of Magic Missiles" Source="hidden chest"]';
-  const drops2 = detectLootDrop(narrative2);
-  console.assert(drops2.length === 2, `FAIL: Should detect 2 drops, got ${drops2.length}`);
-  console.assert(drops2[0].item === 'Cloak of Protection', 'FAIL: First item wrong');
-  console.assert(drops2[1].item === 'Wand of Magic Missiles', 'FAIL: Second item wrong');
-
-  // No loot drop
-  const narrative3 = 'The room is empty. Nothing of value here.';
-  const drops3 = detectLootDrop(narrative3);
-  console.assert(drops3.length === 0, `FAIL: Should detect 0 drops, got ${drops3.length}`);
-
-  // Null input
-  const drops4 = detectLootDrop(null);
-  console.assert(drops4.length === 0, 'FAIL: Null input should return empty array');
-
-  // No source field
-  const narrative5 = '[LOOT_DROP: Item="Moon-Touched Sword"]';
-  const drops5 = detectLootDrop(narrative5);
-  console.assert(drops5.length === 1, 'FAIL: Should detect drop without source');
-  console.assert(drops5[0].source === 'found', 'FAIL: Missing source should default to "found"');
-
-  console.log('PASS: [LOOT_DROP] marker detection works correctly\n');
-}
-
-testLootDropDetection();
-
-// ============================================================
 // 4. QUEST COMPLETION REWARDS (structural test)
 // ============================================================
 
@@ -262,5 +220,4 @@ console.log('=== All Loot System Tests Complete ===');
 console.log('Tests passed:');
 console.log('  1. Broadened session-end loot (high/medium/low risk)');
 console.log('  2. Travel encounter loot generation');
-console.log('  3. [LOOT_DROP] marker detection');
 console.log('  4. Quest completion reward structure');

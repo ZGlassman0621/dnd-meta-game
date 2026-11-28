@@ -100,17 +100,6 @@ function parseSheet(companion) {
   };
 }
 
-export async function getCompanionSheet(companionId) {
-  const companion = await dbGet(
-    `SELECT companion_ability_scores, skill_proficiencies, companion_level,
-            companion_class, progression_type, archetype_key
-     FROM companions WHERE id = ?`,
-    [companionId]
-  );
-  if (!companion) return null;
-  return parseSheet(companion);
-}
-
 /**
  * Backfill a real sheet for a class-based companion whose sheet is absent
  * or a flat-10 placeholder. Returns the (possibly generated) sheet, or

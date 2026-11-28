@@ -19,10 +19,6 @@ import {
   generateSideQuest
 } from '../server/services/questGenerator.js';
 
-import {
-  detectPromiseMade
-} from '../server/services/dmSessionService.js';
-
 let passed = 0;
 let failed = 0;
 

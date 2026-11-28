@@ -433,7 +433,8 @@ function audiencePromptLabel(row) {
 /**
  * Format an NPC's voice palette (stored as JSON on npcs.voice_palette) as a
  * multi-line prompt block. Returns null if no palette is set or the JSON is
- * malformed. Inlined here rather than imported from npcVoiceService to keep
+ * malformed. The only copy (npcVoiceService.formatVoicePaletteForPrompt was
+ * an uncalled duplicate, deleted in l1-l6-cleanup, v1.0.229). Kept here to keep
  * the prompt builder free of AI-client dependencies.
  *
  * Palette shape:

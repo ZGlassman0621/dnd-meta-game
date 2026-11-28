@@ -25,7 +25,7 @@
  *                                        contradictions across turns
  *   8. scopeOfInstructionApplication   — example-as-hard-fact warning
  *                                        (the most important signal per
- *                                        PHASE_4_OVERVIEW.md §6)
+ *                                        archive/PHASE_4_OVERVIEW.md §6)
  *
  * Per spec §3.3: signals are NOT pass/fail metrics. Each returns a
  * number or distribution; interpretation requires context.
@@ -414,7 +414,7 @@ export async function timeDriftSignal(filter = {}) {
 // 8. Scope-of-instruction-application (§3.5) — most important signal
 // ============================================================
 //
-// Per the example-as-hard-fact warning (PHASE_4_OVERVIEW.md §6): when a
+// Per the example-as-hard-fact warning (archive/PHASE_4_OVERVIEW.md §6): when a
 // prompt restriction targets a failure mode by example, measure whether
 // the AI follows the broad principle (good) or only the narrow example
 // (bad).

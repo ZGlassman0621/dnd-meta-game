@@ -79,9 +79,9 @@ function hydrateThreat(row) {
  * This world-event-tick path remains in place but is unused in production
  * because no codepath creates `world_events` rows with raid-capable
  * `event_type` values (the producer gap surfaced in
- * `triage/kingdom-management-survey.md` §0).
+ * `FORTRESS_DESIGN.md` Appendix A §0, was `triage/kingdom-management-survey.md`).
  *
- * Per spec PHASE_3_7_SPEC.md §1.2 ("Replacing or removing the world-event-
+ * Per spec FORTRESS_DESIGN.md §3 §1.2, was PHASE_3_7_SPEC.md ("Replacing or removing the world-event-
  * tick threat creation path"): removing this path would touch the
  * living-world tick architecture — explicitly out of Phase 3.7 scope.
  * Q2 ruling: keep deprecated, do not delete; if a future ship lands a

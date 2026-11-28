@@ -1,11 +1,13 @@
 /**
- * Tests for combat marker detection and initiative rolling.
+ * Tests for enemy initiative (DEX) estimation. The legacy combat marker
+ * detect-functions were deleted in l1-l6-cleanup (v1.0.229); COMBAT_START /
+ * COMBAT_END are covered by the marker pipeline suites.
  * Run: npm test combat-tracker   — NEVER `node tests/combat-tracker.test.js` directly:
  *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
  *      file, so a bare `node` run writes into the LIVE campaign database.
  */
 
-import { detectCombatStart, detectCombatEnd, estimateEnemyDexMod } from '../server/services/dmSessionService.js';
+import { estimateEnemyDexMod } from '../server/services/dmSessionService.js';
 
 let passed = 0;
 let failed = 0;
@@ -19,55 +21,6 @@ function assert(condition, message) {
     failed++;
   }
 }
-
-// ===== detectCombatStart =====
-console.log('\ndetectCombatStart:');
-
-{
-  const result = detectCombatStart('The goblins leap out! [COMBAT_START: Enemies="Goblin 1, Goblin 2, Goblin Shaman"]');
-  assert(result.detected === true, 'Detects combat start marker');
-  assert(result.enemies.length === 3, 'Parses 3 enemies');
-  assert(result.enemies[0] === 'Goblin 1', 'First enemy is Goblin 1');
-  assert(result.enemies[2] === 'Goblin Shaman', 'Third enemy is Goblin Shaman');
-}
-
-{
-  const result = detectCombatStart('[COMBAT_START: Enemies="Bandit Leader"]');
-  assert(result.detected === true, 'Works with single enemy');
-  assert(result.enemies.length === 1, 'Parses 1 enemy');
-  assert(result.enemies[0] === 'Bandit Leader', 'Enemy is Bandit Leader');
-}
-
-{
-  const result = detectCombatStart('Just a normal narrative with no combat.');
-  assert(result.detected === false, 'Returns false when no marker present');
-}
-
-{
-  const result = detectCombatStart(null);
-  assert(result.detected === false, 'Handles null input');
-}
-
-{
-  const result = detectCombatStart('');
-  assert(result.detected === false, 'Handles empty string');
-}
-
-{
-  const result = detectCombatStart('[combat_start: enemies="Wolf, Dire Wolf"]');
-  assert(result.detected === true, 'Case-insensitive detection');
-  assert(result.enemies.length === 2, 'Parses enemies case-insensitively');
-}
-
-// ===== detectCombatEnd =====
-console.log('\ndetectCombatEnd:');
-
-assert(detectCombatEnd('The last goblin falls. [COMBAT_END]') === true, 'Detects combat end marker');
-assert(detectCombatEnd('[COMBAT_END]') === true, 'Detects bare combat end marker');
-assert(detectCombatEnd('[combat_end]') === true, 'Case-insensitive detection');
-assert(detectCombatEnd('No combat happening here.') === false, 'Returns false when no marker');
-assert(detectCombatEnd(null) === false, 'Handles null input');
-assert(detectCombatEnd('') === false, 'Handles empty string');
 
 // ===== estimateEnemyDexMod =====
 console.log('\nestimateEnemyDexMod:');

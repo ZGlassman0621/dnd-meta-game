@@ -1,5 +1,8 @@
 /**
- * Survival System Tests — hunger, thirst, spoilage, exposure, foraging, marker detection.
+ * Survival System Tests — hunger, thirst, spoilage, exposure, foraging. (Its
+ * legacy EAT / DRINK / FORAGE detect-function tests were deleted with the
+ * functions in l1-l6-cleanup, v1.0.229; those schemas are covered by
+ * sc6-4a-survival-crafting-schemas.)
  */
 
 import {
@@ -9,12 +12,6 @@ import {
   getSurvivalStatus,
   getForageDC
 } from '../server/services/survivalService.js';
-
-import {
-  detectEat,
-  detectDrink,
-  detectForage
-} from '../server/services/dmSessionService.js';
 
 let passed = 0;
 let failed = 0;
@@ -218,73 +215,6 @@ assert(getForageDC('underground cavern') === 25, 'Underground → DC 25');
 assert(getForageDC(null) === 15, 'null → DC 15 (default)');
 assert(getForageDC('') === 15, 'empty string → DC 15 (default)');
 assert(getForageDC('mysterious place') === 15, 'Unknown → DC 15 (default)');
-
-// ============================================================
-// 6. detectEat — marker detection
-// ============================================================
-console.log('\n=== Test 6: detectEat ===\n');
-
-result = detectEat('The character sits down and eats. [EAT: Item="Rations (1 day)"] Delicious.');
-assert(result.length === 1, 'Detects EAT marker (returns array)');
-assert(result[0].item === 'Rations (1 day)', 'Parses item name correctly');
-
-result = detectEat('[EAT: Item="Fresh Bread"]');
-assert(result[0].item === 'Fresh Bread', 'Parses Fresh Bread');
-
-result = detectEat('No eating happens here.');
-assert(result.length === 0, 'Returns empty array when no marker');
-
-result = detectEat(null);
-assert(result.length === 0, 'Returns empty array for null input');
-
-result = detectEat('');
-assert(result.length === 0, 'Returns empty array for empty string');
-
-// ============================================================
-// 7. detectDrink — marker detection
-// ============================================================
-console.log('\n=== Test 7: detectDrink ===\n');
-
-result = detectDrink('You drink deeply from your waterskin. [DRINK: Item="Waterskin"] Refreshing.');
-assert(result.length === 1, 'Detects DRINK marker (returns array)');
-assert(result[0].item === 'Waterskin', 'Parses item name correctly');
-
-result = detectDrink('[DRINK: Item="Ale"]');
-assert(result[0].item === 'Ale', 'Parses Ale');
-
-result = detectDrink('No drinking here.');
-assert(result.length === 0, 'Returns empty array when no marker');
-
-result = detectDrink(null);
-assert(result.length === 0, 'Returns empty array for null input');
-
-result = detectDrink('');
-assert(result.length === 0, 'Returns empty array for empty string');
-
-// ============================================================
-// 8. detectForage — marker detection
-// ============================================================
-console.log('\n=== Test 8: detectForage ===\n');
-
-result = detectForage('You search the area. [FORAGE: Terrain="forest" Result="success" Food=2 Water=1]');
-assert(result !== null, 'Detects FORAGE marker');
-assert(result.terrain === 'forest', 'Parses terrain');
-assert(result.result === 'success', 'Parses result');
-assert(parseInt(result.food) === 2, 'Parses food count');
-assert(parseInt(result.water) === 1, 'Parses water count');
-
-result = detectForage('[FORAGE: Terrain="desert" Result="fail" Food=0 Water=0]');
-assert(result.terrain === 'desert', 'Parses desert terrain');
-assert(result.result === 'fail', 'Parses fail result');
-
-result = detectForage('No foraging today.');
-assert(result === null, 'Returns null when no marker');
-
-result = detectForage(null);
-assert(result === null, 'Returns null for null input');
-
-result = detectForage('');
-assert(result === null, 'Returns null for empty string');
 
 // ============================================================
 // Results

@@ -1,5 +1,8 @@
 /**
- * Weather System Tests — Config tables, weather service functions, and DM marker detection.
+ * Weather System Tests — Config tables and weather service functions. (Its
+ * legacy marker detect-function tests were deleted with the functions in
+ * l1-l6-cleanup, v1.0.229; the WEATHER_CHANGE / SHELTER_FOUND / SWIM
+ * schemas are covered by sc6-4a-survival-crafting-schemas.)
  * Run: npm test weather   — NEVER `node tests/weather.test.js` directly:
  *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
  *      file, so a bare `node` run writes into the LIVE campaign database.
@@ -23,12 +26,6 @@ import {
   checkExposureEffects,
   rollNewWeather
 } from '../server/services/weatherService.js';
-
-import {
-  detectWeatherChange,
-  detectShelterFound,
-  detectSwim
-} from '../server/services/dmSessionService.js';
 
 let passed = 0;
 let failed = 0;
@@ -428,113 +425,6 @@ for (let i = 0; i < 100; i++) {
   }
 }
 assert(noSnowInDesert, '100 desert/summer rolls never produce snow or blizzard');
-
-// ============================================================
-// 14. detectWeatherChange — Marker present and absent
-// ============================================================
-console.log('\n=== Test 14: detectWeatherChange ===\n');
-
-let wc = detectWeatherChange('[WEATHER_CHANGE: Type="thunderstorm" Duration_Hours=6]');
-assert(wc !== null, 'Detects weather change marker');
-assert(wc.type === 'thunderstorm', 'Parses weather type');
-assert(wc.duration_hours === 6, 'Parses duration hours');
-
-// Default duration
-wc = detectWeatherChange('[WEATHER_CHANGE: Type="rain"]');
-assert(wc !== null, 'Detects marker without duration');
-assert(wc.duration_hours === 24, 'Default duration is 24 hours');
-
-// No marker
-wc = detectWeatherChange('The sky darkens but no marker here.');
-assert(wc === null, 'No marker returns null');
-
-// Missing type field
-wc = detectWeatherChange('[WEATHER_CHANGE: Duration_Hours=12]');
-assert(wc === null, 'Missing Type returns null');
-
-// Null input
-wc = detectWeatherChange(null);
-assert(wc === null, 'Null input returns null');
-
-// Empty input
-wc = detectWeatherChange('');
-assert(wc === null, 'Empty input returns null');
-
-// Case insensitive
-wc = detectWeatherChange('[weather_change: Type="snow" Duration_Hours=12]');
-assert(wc !== null, 'Case-insensitive detection');
-assert(wc.type === 'snow', 'Parses type case-insensitively');
-
-// ============================================================
-// 15. detectShelterFound — Marker present and absent
-// ============================================================
-console.log('\n=== Test 15: detectShelterFound ===\n');
-
-let sf = detectShelterFound('[SHELTER_FOUND: Type="cave" Quality="adequate"]');
-assert(sf !== null, 'Detects shelter found marker');
-assert(sf.type === 'cave', 'Parses shelter type');
-assert(sf.quality === 'adequate', 'Parses quality');
-
-// Default quality
-sf = detectShelterFound('[SHELTER_FOUND: Type="building"]');
-assert(sf !== null, 'Detects marker without quality');
-assert(sf.quality === 'adequate', 'Default quality is adequate');
-
-// No marker
-sf = detectShelterFound('You find nothing of interest.');
-assert(sf === null, 'No marker returns null');
-
-// Missing type
-sf = detectShelterFound('[SHELTER_FOUND: Quality="good"]');
-assert(sf === null, 'Missing Type returns null');
-
-// Null input
-sf = detectShelterFound(null);
-assert(sf === null, 'Null input returns null');
-
-// Empty input
-sf = detectShelterFound('');
-assert(sf === null, 'Empty input returns null');
-
-// Case insensitive
-sf = detectShelterFound('[shelter_found: Type="tent"]');
-assert(sf !== null, 'Case-insensitive detection');
-
-// ============================================================
-// 16. detectSwim — Marker present and absent
-// ============================================================
-console.log('\n=== Test 16: detectSwim ===\n');
-
-let swim = detectSwim('[SWIM: Duration="brief"]');
-assert(swim !== null, 'Detects swim marker');
-assert(swim.duration === 'brief', 'Parses duration');
-
-// Extended duration
-swim = detectSwim('[SWIM: Duration="extended"]');
-assert(swim !== null, 'Detects extended swim');
-assert(swim.duration === 'extended', 'Parses extended duration');
-
-// Default duration
-swim = detectSwim('[SWIM: SomeOtherField="value"]');
-assert(swim !== null, 'Detects marker without duration field');
-assert(swim.duration === 'brief', 'Default duration is brief');
-
-// No marker
-swim = detectSwim('The party crosses the bridge over the river.');
-assert(swim === null, 'No marker returns null');
-
-// Null input
-swim = detectSwim(null);
-assert(swim === null, 'Null input returns null');
-
-// Empty input
-swim = detectSwim('');
-assert(swim === null, 'Empty input returns null');
-
-// Case insensitive
-swim = detectSwim('[swim: Duration="prolonged"]');
-assert(swim !== null, 'Case-insensitive detection');
-assert(swim.duration === 'prolonged', 'Parses duration case-insensitively');
 
 // ============================================================
 // Results

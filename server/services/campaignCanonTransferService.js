@@ -3,7 +3,7 @@
  * active-campaign tables when a character submits handoff (transitions
  * from `'ready_for_primary'` to `'active'`).
  *
- * Per PHASE_2_CREATOR_SPEC.md §8.2.2 step 5:
+ * Per archive/PHASE_2_CREATOR_SPEC.md §8.2.2 step 5:
  *   Persist canon_npcs, canon_locations, canon_threads into the
  *   campaign's tables.
  *

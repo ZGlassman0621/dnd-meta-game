@@ -179,7 +179,7 @@ export async function executeTransition(characterId) {
   // extraction pass. The query returns [] today. Future producer work will
   // populate prelude_canon_heirlooms with status='candidate' rows; this
   // line will surface them automatically. Zero candidates is a legitimate
-  // empty state (per spec §8.1.2). See PHASE_2_CREATOR_SPEC.md §8.1.2 +
+  // empty state (per spec §8.1.2). See archive/PHASE_2_CREATOR_SPEC.md §8.1.2 +
   // §5.6.3 annotations for context.
   const heirloomCandidates = await dbAll(
     `SELECT id, name, type, specific_item_ref, description, awakening_hook,
@@ -378,7 +378,7 @@ function buildAcceptedSkillBumps(acceptedEmergences) {
 /**
  * Build the rich handoff payload (schema_version=2 — Phase 2 chunk 5.B).
  *
- * Shape follows PHASE_2_CREATOR_SPEC.md §8.2.1 — the chunk-5 creator's
+ * Shape follows archive/PHASE_2_CREATOR_SPEC.md §8.2.1 — the chunk-5 creator's
  * contract. Top-level fields are flat per spec; a small additional set of
  * helper fields (departure_summary, authority_label, home_region/setting,
  * authority_figure, name_parts, mentor_imprint_id) is included as context

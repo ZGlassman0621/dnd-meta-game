@@ -113,15 +113,6 @@ export async function updateBackstory(id, data) {
   return getBackstoryById(id);
 }
 
-/**
- * Update backstory by companion ID
- */
-export async function updateBackstoryByCompanionId(companionId, data) {
-  const backstory = await getBackstoryByCompanionId(companionId);
-  if (!backstory) return null;
-  return updateBackstory(backstory.id, data);
-}
-
 // ============================================================
 // LOYALTY SYSTEM (Phase 3 SC-2 — migrated to standingScalar)
 // ============================================================
@@ -256,14 +247,6 @@ export async function adjustLoyalty(companionId, change, reason = null) {
 }
 
 /**
- * Get current loyalty level
- */
-export async function getLoyalty(companionId) {
-  const backstory = await getBackstoryByCompanionId(companionId);
-  return backstory ? backstory.loyalty : 50;
-}
-
-/**
  * Get loyalty label. Kept for back-compat (no consumers found in current
  * codebase but exported, so external code or future consumers may use it).
  * Now redundant with `mapToLabel(loyalty, COMPANION_LOYALTY_CONFIG.labelBands)`
@@ -324,28 +307,6 @@ export function formatLoyaltyForPrompt(loyaltyScore, loyaltyEventsJson) {
 // ============================================================
 
 /**
- * Add a secret to a companion
- */
-export async function addSecret(companionId, secret) {
-  const backstory = await getOrCreateBackstory(companionId);
-
-  const secrets = backstory.secrets || [];
-  secrets.push({
-    id: `secret_${Date.now()}`,
-    content: secret.content,
-    loyalty_threshold: secret.loyalty_threshold || 50,
-    revealed: false,
-    revealed_date: null
-  });
-
-  await dbRun(`
-    UPDATE companion_backstories SET secrets = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-  `, [JSON.stringify(secrets), backstory.id]);
-
-  return getBackstoryById(backstory.id);
-}
-
-/**
  * Check and reveal secrets based on loyalty
  */
 export async function checkSecretReveals(backstoryId, currentLoyalty) {
@@ -374,54 +335,9 @@ export async function checkSecretReveals(backstoryId, currentLoyalty) {
   return revealedSecrets;
 }
 
-/**
- * Get revealed secrets
- */
-export async function getRevealedSecrets(companionId) {
-  const backstory = await getBackstoryByCompanionId(companionId);
-  if (!backstory) return [];
-
-  return (backstory.secrets || []).filter(s => s.revealed);
-}
-
-/**
- * Get unrevealed secrets (for internal use/debugging)
- */
-export async function getUnrevealedSecrets(companionId) {
-  const backstory = await getBackstoryByCompanionId(companionId);
-  if (!backstory) return [];
-
-  return (backstory.secrets || []).filter(s => !s.revealed);
-}
-
 // ============================================================
 // UNRESOLVED THREADS SYSTEM
 // ============================================================
-
-/**
- * Add an unresolved thread
- */
-export async function addUnresolvedThread(companionId, thread) {
-  const backstory = await getOrCreateBackstory(companionId);
-
-  const threads = backstory.unresolved_threads || [];
-  threads.push({
-    id: `thread_${Date.now()}`,
-    type: thread.type, // enemy, lost_person, secret, debt, prophecy, inheritance
-    description: thread.description,
-    activation_triggers: thread.activation_triggers || [],
-    intensity: thread.intensity || 5,
-    status: 'dormant',
-    spawned_quest_id: null,
-    created_at: new Date().toISOString()
-  });
-
-  await dbRun(`
-    UPDATE companion_backstories SET unresolved_threads = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-  `, [JSON.stringify(threads), backstory.id]);
-
-  return getBackstoryById(backstory.id);
-}
 
 /**
  * Activate a thread
@@ -436,27 +352,6 @@ export async function activateThread(companionId, threadId) {
   if (thread && thread.status === 'dormant') {
     thread.status = 'activated';
     thread.activated_at = new Date().toISOString();
-
-    await dbRun(`
-      UPDATE companion_backstories SET unresolved_threads = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `, [JSON.stringify(threads), backstory.id]);
-  }
-
-  return getBackstoryById(backstory.id);
-}
-
-/**
- * Link a thread to a spawned quest
- */
-export async function linkThreadToQuest(companionId, threadId, questId) {
-  const backstory = await getBackstoryByCompanionId(companionId);
-  if (!backstory) return null;
-
-  const threads = backstory.unresolved_threads || [];
-  const thread = threads.find(t => t.id === threadId);
-
-  if (thread) {
-    thread.spawned_quest_id = questId;
 
     await dbRun(`
       UPDATE companion_backstories SET unresolved_threads = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
@@ -489,96 +384,11 @@ export async function resolveThread(companionId, threadId, resolution = null) {
   return getBackstoryById(backstory.id);
 }
 
-/**
- * Get dormant threads
- */
-export async function getDormantThreads(companionId) {
-  const backstory = await getBackstoryByCompanionId(companionId);
-  if (!backstory) return [];
-
-  return (backstory.unresolved_threads || []).filter(t => t.status === 'dormant');
-}
-
-/**
- * Get activated threads
- */
-export async function getActivatedThreads(companionId) {
-  const backstory = await getBackstoryByCompanionId(companionId);
-  if (!backstory) return [];
-
-  return (backstory.unresolved_threads || []).filter(t => t.status === 'activated');
-}
-
-/**
- * Check if any thread triggers match given content
- */
-export async function checkThreadTriggers(companionId, context) {
-  const dormantThreads = await getDormantThreads(companionId);
-  const triggered = [];
-
-  for (const thread of dormantThreads) {
-    const triggers = thread.activation_triggers || [];
-
-    for (const trigger of triggers) {
-      const triggerLower = trigger.toLowerCase();
-
-      // Check against content text
-      if (context.content && context.content.toLowerCase().includes(triggerLower)) {
-        triggered.push(thread);
-        break;
-      }
-
-      // Check against tags
-      if (context.tags && context.tags.some(t => t.toLowerCase().includes(triggerLower))) {
-        triggered.push(thread);
-        break;
-      }
-
-      // Check against location name
-      if (context.location_name && context.location_name.toLowerCase().includes(triggerLower)) {
-        triggered.push(thread);
-        break;
-      }
-    }
-  }
-
-  return triggered;
-}
-
-/**
- * Delete a backstory
- */
-export async function deleteBackstory(id) {
-  const result = await dbRun('DELETE FROM companion_backstories WHERE id = ?', [id]);
-  return result.changes > 0;
-}
-
-/**
- * Delete backstory by companion ID
- */
-export async function deleteBackstoryByCompanionId(companionId) {
-  const result = await dbRun('DELETE FROM companion_backstories WHERE companion_id = ?', [companionId]);
-  return result.changes > 0;
-}
-
 // ============================================================
 // MOOD SYSTEM
 // ============================================================
 
 const VALID_MOODS = ['content', 'anxious', 'angry', 'sad', 'fearful', 'excited', 'conflicted', 'grateful', 'resentful', 'exhausted'];
-
-const MOOD_RP_GUIDANCE = {
-  content: 'Roleplay normally based on personality traits',
-  anxious: 'Nervous, second-guessing, seeking reassurance',
-  angry: 'Short-tempered, confrontational, holding a grudge',
-  sad: 'Quiet, withdrawn, mentioning what they lost',
-  fearful: 'Reluctant, cautious, urging retreat',
-  excited: 'Eager, talkative, overconfident',
-  conflicted: 'Hesitant, voicing doubts, asking moral questions',
-  grateful: 'Warm, supportive, going extra mile for the party',
-  resentful: 'Cold, passive-aggressive, bringing up grievances',
-  exhausted: 'Slow, unfocused, asking for rest, making mistakes'
-};
 
 /**
  * Set a companion's mood
@@ -698,13 +508,6 @@ export async function decayMoods(characterId, currentGameDay) {
 // Exported for direct use in tests + future composition. Production
 // callers should use `decayMoods` (the orchestrator).
 export { MOOD_DECAY_CONSUMER };
-
-/**
- * Get RP guidance string for a mood
- */
-export function getMoodRPGuidance(mood) {
-  return MOOD_RP_GUIDANCE[mood] || MOOD_RP_GUIDANCE.content;
-}
 
 // ============================================================
 // HELPER FUNCTIONS

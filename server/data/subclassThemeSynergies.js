@@ -2,7 +2,7 @@
  * Subclass × Theme Synergies Seed Data
  *
  * ~40 resonant pairings across all 12 classes (including custom Keeper class).
- * Sourced from SUBCLASS_THEME_SYNERGIES.md. Passive always-on bonuses when
+ * Sourced from SYNERGIES_DESIGN.md Part 2 (was SUBCLASS_THEME_SYNERGIES.md). Passive always-on bonuses when
  * a character has the matching subclass + theme combination.
  */
 

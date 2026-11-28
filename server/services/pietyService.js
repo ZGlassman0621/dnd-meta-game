@@ -12,9 +12,9 @@
  * registered as the abstraction's `up`-direction handler at module load.
  *
  * The `[PIETY_CHANGE]` marker handler is also registered in this module
- * at import time, replacing `dmSessionService.detectPietyChange`'s call
- * site in routes/dmSession.js (the legacy detect function stays exported
- * per the "deprecate by hiding nav, not deleting code" policy).
+ * at import time, replacing the legacy `detectPietyChange` call site in
+ * routes/dmSession.js (the legacy detect function was deleted in
+ * l1-l6-cleanup, v1.0.229).
  */
 
 import { dbAll, dbGet, dbRun } from '../database.js';
@@ -224,8 +224,8 @@ for (const threshold of PIETY_THRESHOLDS) {
 
 // [PIETY_CHANGE] marker handler. The legacy detect-function call site in
 // routes/dmSession.js (lines ~2000-2011) is removed in this same change;
-// the marker pipeline now owns dispatch. detectPietyChange remains
-// exported in dmSessionService.js for back-compat.
+// the marker pipeline now owns dispatch. The legacy detectPietyChange
+// was deleted in l1-l6-cleanup (v1.0.229).
 //
 // The pipeline's `context` carries `characterId` and `sessionId` (per
 // dmSession.js:1348-1351). `gameDay` is intentionally not in the context

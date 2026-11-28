@@ -156,7 +156,9 @@ export default function PreludeSession({ character, onBack }) {
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}))
         // Prefer the user-friendly `message` field (set on retryable
-        // errors like 503 OVERLOADED) over the short `error` slug.
+        // errors, e.g. the 503 "Local AI not available" that
+        // routes/prelude.js returns when the local model is unreachable
+        // or not installed) over the short `error` slug.
         throw new Error(body.message || body.error || `Server error (${resp.status})`)
       }
       const data = await resp.json()

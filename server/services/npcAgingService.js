@@ -137,7 +137,7 @@ export function checkAbsenceThreshold(rel, daysAbsent) {
 //   - Forget: disposition=0 AND trust_level=0 after first fire. Legacy
 //     had no idempotency → wasted UPDATE on every subsequent tick.
 //     Migration adds the both-zero check as natural idempotency.
-// Both fixes are documented in DECISION_LOG + KNOWN_BUGS.md archive.
+// Both fixes are documented in archive/DECISION_LOG.md + archive/KNOWN_BUGS.md.
 
 const DISPOSITION_DECAY_CONSUMER = registerDecayConsumer({
   name: 'npc_disposition_absence_decay',
@@ -238,7 +238,7 @@ const RELOCATION_THRESHOLD_CONSUMER = registerThresholdConsumer({
   idempotency: {
     // Fix-along-the-way: legacy had no idempotency → compound prefix
     // bug (`Unknown (left Unknown (left X))`). Detecting the prefix
-    // post-fire prevents re-fire. Captured in KNOWN_BUGS.md archive.
+    // post-fire prevents re-fire. Captured in archive/KNOWN_BUGS.md.
     async hasFiredRecently(contextKey) {
       const row = await dbGet(
         `SELECT n.current_location

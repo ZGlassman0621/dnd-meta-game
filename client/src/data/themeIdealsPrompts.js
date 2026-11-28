@@ -1,7 +1,7 @@
 /**
  * Per-theme ideals prompts — clickable starters for Step 7's "Ideals"
  * field (Model A: click drops into textarea, then editable). Per
- * PHASE_2_CREATOR_SPEC.md §7.3.
+ * archive/PHASE_2_CREATOR_SPEC.md §7.3.
  *
  * Each prompt follows the 5e convention: one-word label, period, then a
  * single-sentence elaboration in second-person voice with conviction.

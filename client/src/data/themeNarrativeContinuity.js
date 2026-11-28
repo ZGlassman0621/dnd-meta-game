@@ -1,6 +1,6 @@
 /**
  * Per-theme narrative-continuity copy for Step 4 (Class & Calling) in
- * handoff mode. Per PHASE_2_CREATOR_SPEC.md §5.4.5.
+ * handoff mode. Per archive/PHASE_2_CREATOR_SPEC.md §5.4.5.
  *
  * 19 entries — one per emergence-eligible theme. Knight of the Order
  * and Haunted One are intentionally absent per Decision D (they cannot

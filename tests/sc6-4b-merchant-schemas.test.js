@@ -65,13 +65,13 @@ console.log('\n=== 4 handlers registered (ADD_ITEM is schema-only by design) ===
   assert(!_hasHandler('ADD_ITEM'), 'no handler for ADD_ITEM (orchestrated by MERCHANT_SHOP handler internally)')
 }
 
-console.log('\n=== Legacy detect-functions still exported (deprecate by hiding) ===\n')
+console.log('\n=== Legacy detect-functions deleted (l1-l6-cleanup, v1.0.229): the pipeline is the only parser ===\n')
 {
   for (const fn of [
     'detectMerchantShop', 'detectAddItem', 'detectMerchantRefer',
     'detectMerchantCommission', 'detectLootDrop'
   ]) {
-    assert(typeof dmSessionService[fn] === 'function', `${fn} still exported`)
+    assert(dmSessionService[fn] === undefined, `${fn} no longer exported`)
   }
 }
 

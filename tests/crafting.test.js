@@ -1,15 +1,12 @@
 /**
- * Crafting System Tests — Comprehensive coverage for crafting recipes,
- * crafting-related marker detection, and recipe data integrity.
+ * Crafting System Tests — Comprehensive coverage for crafting recipes and
+ * recipe data integrity. (Its legacy RECIPE_FOUND / MATERIAL_FOUND /
+ * CRAFT_PROGRESS / RECIPE_GIFT detect-function tests were deleted with the
+ * functions in l1-l6-cleanup, v1.0.229; those schemas are covered by
+ * sc6-4a-survival-crafting-schemas.)
  */
 
 import { DEFAULT_RECIPES } from '../server/data/craftingRecipes.js';
-import {
-  detectRecipeFound,
-  detectMaterialFound,
-  detectCraftProgress,
-  detectRecipeGift
-} from '../server/services/dmSessionService.js';
 import { WEATHER_TYPES } from '../server/config/weather.js';
 
 let passed = 0;
@@ -145,112 +142,6 @@ assert(defaultRecipes.length >= 35, `Default recipes (is_default=1) count >= 35 
 assert(defaultRecipes.length <= 55, `Default recipes (is_default=1) count <= 55 (found ${defaultRecipes.length})`);
 assert(discoverableRecipes.length >= 50, `Discoverable recipes (is_default=0) count >= 50 (found ${discoverableRecipes.length})`);
 assert(defaultRecipes.length + discoverableRecipes.length === DEFAULT_RECIPES.length, 'Default + discoverable = total recipes');
-
-// ============================================================
-// 6. detectRecipeFound — with marker
-// ============================================================
-console.log('\n=== Test 6: detectRecipeFound — Marker Detection ===\n');
-
-let recipes = detectRecipeFound('[RECIPE_FOUND: Name="Potion of Healing" Source="ancient journal"]');
-assert(recipes.length === 1, 'Detects single recipe found marker');
-assert(recipes[0].name === 'Potion of Healing', 'Parses recipe name');
-assert(recipes[0].source === 'ancient journal', 'Parses recipe source');
-
-// Multiple markers
-recipes = detectRecipeFound(
-  'You find two recipes: [RECIPE_FOUND: Name="Antitoxin" Source="herbalist notes"] ' +
-  'and [RECIPE_FOUND: Name="Basic Poison" Source="assassin manual"]'
-);
-assert(recipes.length === 2, 'Detects multiple recipe markers');
-assert(recipes[0].name === 'Antitoxin', 'First recipe name correct');
-assert(recipes[1].name === 'Basic Poison', 'Second recipe name correct');
-
-// Default source
-recipes = detectRecipeFound('[RECIPE_FOUND: Name="Craft Torch"]');
-assert(recipes[0].source === 'found', 'Default source is "found"');
-
-// No marker
-recipes = detectRecipeFound('The old wizard shares his knowledge of alchemy.');
-assert(recipes.length === 0, 'No marker returns empty array');
-
-// Null/empty input
-assert(detectRecipeFound(null).length === 0, 'Null input returns empty array');
-assert(detectRecipeFound('').length === 0, 'Empty input returns empty array');
-
-// Missing name
-recipes = detectRecipeFound('[RECIPE_FOUND: Source="old book"]');
-assert(recipes.length === 0, 'Missing Name returns empty array');
-
-// ============================================================
-// 7. detectMaterialFound — with marker
-// ============================================================
-console.log('\n=== Test 7: detectMaterialFound — Marker Detection ===\n');
-
-let materials = detectMaterialFound('[MATERIAL_FOUND: Name="Healing Herbs" Quantity=3 Quality="standard"]');
-assert(materials.length === 1, 'Detects single material found marker');
-assert(materials[0].name === 'Healing Herbs', 'Parses material name');
-assert(materials[0].quantity === 3, 'Parses quantity as number');
-assert(materials[0].quality === 'standard', 'Parses quality');
-
-// Multiple materials
-materials = detectMaterialFound(
-  '[MATERIAL_FOUND: Name="Metal Ingot" Quantity=2 Quality="fine"] ' +
-  '[MATERIAL_FOUND: Name="Leather" Quantity=1]'
-);
-assert(materials.length === 2, 'Detects multiple material markers');
-assert(materials[0].name === 'Metal Ingot', 'First material name correct');
-assert(materials[0].quality === 'fine', 'First material quality correct');
-assert(materials[1].name === 'Leather', 'Second material name correct');
-
-// Defaults
-materials = detectMaterialFound('[MATERIAL_FOUND: Name="Wood"]');
-assert(materials[0].quantity === 1, 'Default quantity is 1');
-assert(materials[0].quality === 'standard', 'Default quality is "standard"');
-
-// No marker
-materials = detectMaterialFound('You gather some sticks and leaves from the forest floor.');
-assert(materials.length === 0, 'No marker returns empty array');
-
-// Null/empty input
-assert(detectMaterialFound(null).length === 0, 'Null input returns empty array');
-assert(detectMaterialFound('').length === 0, 'Empty input returns empty array');
-
-// Missing name
-materials = detectMaterialFound('[MATERIAL_FOUND: Quantity=5 Quality="fine"]');
-assert(materials.length === 0, 'Missing Name returns empty array');
-
-// ============================================================
-// 8. detectCraftProgress — with marker
-// ============================================================
-console.log('\n=== Test 8: detectCraftProgress — Marker Detection ===\n');
-
-let progress = detectCraftProgress('[CRAFT_PROGRESS: Hours=4]');
-assert(progress !== null, 'Detects craft progress marker');
-assert(progress.hours === 4, 'Parses hours as number');
-
-// Fractional hours
-progress = detectCraftProgress('[CRAFT_PROGRESS: Hours=2.5]');
-assert(progress !== null, 'Detects fractional hours');
-assert(progress.hours === 2.5, 'Parses fractional hours correctly');
-
-// No marker
-progress = detectCraftProgress('You spend the afternoon working on your project.');
-assert(progress === null, 'No marker returns null');
-
-// Null/empty input
-assert(detectCraftProgress(null) === null, 'Null input returns null');
-assert(detectCraftProgress('') === null, 'Empty input returns null');
-
-// Invalid hours
-progress = detectCraftProgress('[CRAFT_PROGRESS: Hours=0]');
-assert(progress === null, 'Zero hours returns null');
-
-progress = detectCraftProgress('[CRAFT_PROGRESS: Hours=-2]');
-assert(progress === null, 'Negative hours returns null');
-
-// Missing hours field
-progress = detectCraftProgress('[CRAFT_PROGRESS: Time=4]');
-assert(progress === null, 'Wrong field name returns null');
 
 // ============================================================
 // 9. WEATHER_TYPES — existence check for crafting weather requirements
@@ -405,55 +296,6 @@ for (const recipe of DEFAULT_RECIPES) {
 }
 
 assert(allOutputsHaveName, `All output_item objects have a name field${missingOutputNames.length ? ' — missing: ' + missingOutputNames.join(', ') : ''}`);
-
-// ============================================================
-// 15. detectRecipeGift — radiant recipe marker parsing
-// ============================================================
-console.log('\n=== Test 15: detectRecipeGift — Radiant Recipe Marker Parsing ===\n');
-
-// Full marker
-let gifts = detectRecipeGift('[RECIPE_GIFT: Name="Gerda\'s Mutton Stew" Category="food" Description="A hearty stew" Materials="Raw Meat:1,Herbs:1,Vegetables:1" Tools="Cook\'s Utensils" DC=10 Hours=2 Ability="wisdom" OutputName="Gerda\'s Mutton Stew" OutputDesc="A filling savory stew" GiftedBy="Gerda the Innkeeper"]');
-assert(gifts.length === 1, 'Detects single recipe gift marker');
-assert(gifts[0].name === "Gerda's Mutton Stew", 'Parses recipe name');
-assert(gifts[0].category === 'food', 'Parses recipe category');
-assert(gifts[0].materials.length === 3, 'Parses 3 materials from compact format');
-assert(gifts[0].materials[0].name === 'Raw Meat', 'First material name correct');
-assert(gifts[0].materials[0].quantity === 1, 'First material quantity correct');
-assert(gifts[0].materials[2].name === 'Vegetables', 'Third material name correct');
-assert(gifts[0].tools.length === 1, 'Parses tools array');
-assert(gifts[0].tools[0] === "Cook's Utensils", 'Tool name correct');
-assert(gifts[0].dc === 10, 'Parses DC as number');
-assert(gifts[0].hours === 2, 'Parses hours as number');
-assert(gifts[0].ability === 'wisdom', 'Parses ability');
-assert(gifts[0].giftedBy === 'Gerda the Innkeeper', 'Parses gifted_by');
-
-// Minimal marker (only required fields)
-gifts = detectRecipeGift('[RECIPE_GIFT: Name="Simple Bread" Category="food"]');
-assert(gifts.length === 1, 'Detects minimal marker with only name+category');
-assert(gifts[0].name === 'Simple Bread', 'Minimal marker name correct');
-assert(gifts[0].dc === 10, 'Default DC is 10');
-assert(gifts[0].hours === 4, 'Default hours is 4');
-assert(gifts[0].ability === 'intelligence', 'Default ability is intelligence');
-assert(gifts[0].giftedBy === 'Unknown', 'Default giftedBy is Unknown');
-
-// Tools="none" should be empty array
-gifts = detectRecipeGift('[RECIPE_GIFT: Name="Herbal Salve" Category="alchemical" Tools="none" DC=8]');
-assert(gifts[0].tools.length === 0, 'Tools="none" produces empty array');
-
-// No marker
-gifts = detectRecipeGift('The old chef teaches you a family recipe with a smile.');
-assert(gifts.length === 0, 'No marker returns empty array');
-
-// Null/empty input
-assert(detectRecipeGift(null).length === 0, 'Null input returns empty array');
-assert(detectRecipeGift('').length === 0, 'Empty input returns empty array');
-
-// Missing required fields (name or category)
-gifts = detectRecipeGift('[RECIPE_GIFT: Name="Unnamed"]');
-assert(gifts.length === 0, 'Missing category returns empty array');
-
-gifts = detectRecipeGift('[RECIPE_GIFT: Category="food"]');
-assert(gifts.length === 0, 'Missing name returns empty array');
 
 // ============================================================
 // 16. Ability key mapping — recipes use long keys, DB uses short

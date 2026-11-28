@@ -2,7 +2,7 @@
  * Per-theme starting gold modifiers — applied to class baseline.
  *
  * Stored as decimal multipliers (e.g., +0.50 = +50%). Range: −0.50 (Urchin)
- * to +0.50 (Noble). Per PHASE_2_CREATOR_SPEC.md §7.1.3.
+ * to +0.50 (Noble). Per archive/PHASE_2_CREATOR_SPEC.md §7.1.3.
  *
  * Calculation (per §7.1.4):
  *   final_gold = round(class_baseline_gp × (1 + theme_modifier))

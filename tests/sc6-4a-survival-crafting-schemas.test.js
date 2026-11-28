@@ -3,7 +3,7 @@
  *
  * Covers the 10 markers migrated to the pipeline in v1.0.150:
  *   SHELTER_FOUND, EAT, DRINK, FORAGE, SWIM (schema-only — no handler;
- *   the legacy detectSwim was exported but never invoked)
+ *   the legacy detectSwim was never invoked and is now deleted)
  *   WEATHER_CHANGE, CRAFT_PROGRESS, RECIPE_FOUND, MATERIAL_FOUND, RECIPE_GIFT
  *
  * Validates:
@@ -11,8 +11,7 @@
  *   2. Each schema parses canonical form correctly
  *   3. Each schema rejects malformed shapes with field-targeted errors
  *   4. 9 handlers registered (SWIM excluded by design)
- *   5. Legacy detect-functions still exported (back-compat per
- *      "deprecate by hiding")
+ *   5. Legacy detect-functions deleted (l1-l6-cleanup, v1.0.229)
  *   6. End-to-end: realistic narrative produces expected handlerResults
  *      shape via processResponseMarkers
  */
@@ -64,14 +63,14 @@ console.log('\n=== 9 handlers registered (SWIM is schema-only by design) ===\n')
   assert(!_hasHandler('SWIM'), 'no handler for SWIM (schema-only — legacy detect was never invoked)')
 }
 
-console.log('\n=== Legacy detect-functions still exported (deprecate by hiding) ===\n')
+console.log('\n=== Legacy detect-functions deleted (l1-l6-cleanup, v1.0.229): the pipeline is the only parser ===\n')
 {
   for (const fn of [
     'detectShelterFound', 'detectEat', 'detectDrink', 'detectForage', 'detectSwim',
     'detectWeatherChange', 'detectCraftProgress', 'detectRecipeFound',
     'detectMaterialFound', 'detectRecipeGift'
   ]) {
-    assert(typeof dmSessionService[fn] === 'function', `${fn} still exported`)
+    assert(dmSessionService[fn] === undefined, `${fn} no longer exported`)
   }
 }
 

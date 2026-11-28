@@ -22,7 +22,7 @@
  * Validates:
  *   1. All 6 schemas registered, all 6 handlers wired
  *   2. Per-schema field validation incl. the three NEW schemas
- *   3. Legacy detect-functions still exported
+ *   3. Legacy detect-functions deleted (l1-l6-cleanup); estimateEnemyDexMod stays
  *   4. End-to-end realistic narrative extraction
  *   5. Cross-pipeline isolation with prior SC-6.4 markers
  */
@@ -62,15 +62,15 @@ console.log('\n=== All 6 cluster-5 schemas registered + handlers wired ===\n')
   }
 }
 
-console.log('\n=== Legacy detect-functions still exported (deprecate by hiding) ===\n')
+console.log('\n=== Legacy detect-functions deleted (l1-l6-cleanup, v1.0.229); estimateEnemyDexMod stays ===\n')
 {
   for (const fn of [
     'detectCombatStart', 'detectCombatEnd', 'detectBaseDefenseResult',
-    'detectMythicTrial', 'detectItemAwaken', 'detectMythicSurge',
-    'estimateEnemyDexMod'
+    'detectMythicTrial', 'detectItemAwaken', 'detectMythicSurge'
   ]) {
-    assert(typeof dmSessionService[fn] === 'function', `${fn} still exported`)
+    assert(dmSessionService[fn] === undefined, `${fn} no longer exported`)
   }
+  assert(typeof dmSessionService.estimateEnemyDexMod === 'function', 'estimateEnemyDexMod still exported (live: combatMarkerService.js)')
 }
 
 console.log('\n=== COMBAT_START / COMBAT_END (existing schemas pre-Phase-3) ===\n')

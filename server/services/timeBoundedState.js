@@ -3,7 +3,7 @@
  *
  * A behavioral library for "wait N game-time units, then do X" logic
  * across the codebase. Per Code's Pattern D survey
- * (`triage/pattern-d-survey.md`, 2026-05-04) and PHASE_3_REFACTOR_SPEC §3.3:
+ * (`archive/triage/pattern-d-survey.md`, 2026-05-04) and archive/PHASE_3_REFACTOR_SPEC.md §3.3:
  * 11 existing surfaces share the same underlying primitive —
  * **(start_marker, threshold, current_clock) → status / effect** — but
  * each implements it inline with subtle inconsistencies. This module

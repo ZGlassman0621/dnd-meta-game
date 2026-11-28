@@ -1,7 +1,7 @@
 /**
  * Per-theme flaws prompts — clickable starters for Step 7's "Flaws"
  * field (Model A: click drops into textarea, then editable). Per
- * PHASE_2_CREATOR_SPEC.md §7.5.
+ * archive/PHASE_2_CREATOR_SPEC.md §7.5.
  *
  * Flaws describe the character's failure mode under stress, grief,
  * temptation, or pressure. They should feel like things a *good person*

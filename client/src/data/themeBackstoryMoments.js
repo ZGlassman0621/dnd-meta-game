@@ -1,6 +1,6 @@
 /**
  * Per-theme backstory moments — a curated multi-select list for Step 7's
- * "Backstory" expansion (Model B). Per PHASE_2_CREATOR_SPEC.md §7.6.
+ * "Backstory" expansion (Model B). Per archive/PHASE_2_CREATOR_SPEC.md §7.6.
  *
  * Eight moments per theme × 21 themes = 168 moments total. Each moment is
  * one sentence, past tense, second-person, 8–18 words. Bracketed

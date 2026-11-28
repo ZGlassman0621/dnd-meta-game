@@ -127,23 +127,13 @@ import { getPartyConditions } from '../services/conditionService.js';
 import { ensureCompanionSheet } from '../services/companionSheetService.js';
 import {
   parseNpcJoinMarker, detectDowntime, detectRecruitment,
-  // SC-6.4d (v1.0.153) — combat / mythic / base defense detect-functions
-  // (detectCombatStart / CombatEnd / BaseDefenseResult / MythicTrial /
-  // ItemAwaken / MythicSurge) migrated to handlers in combatMarkerService.js,
-  // mythicService.js, baseThreatService.js. Legacy exports stay per
-  // "deprecate by hiding." estimateEnemyDexMod stays imported by
-  // combatMarkerService.js (utility helper, PARK ENTIRELY per Q6 survey).
-  // SC-6.4a (v1.0.150) — survival + crafting cluster detect-functions
-  // migrated to markerPipeline handlers (survivalService.js,
-  // weatherService.js, craftingService.js). Legacy exports stay.
-  // SC-6.4b (v1.0.151) — merchant cluster detect-functions
-  // (detectMerchantShop / MerchantRefer / AddItem / LootDrop /
-  // MerchantCommission) migrated to handlers in merchantService.js,
-  // merchantOrderService.js, lootDropService.js. Legacy exports stay.
-  // SC-6.4c (v1.0.152) — promise + notoriety cluster detect-functions
-  // (detectPromiseMade / PromiseFulfilled / NotorietyGain / NotorietyLoss)
-  // migrated to handlers in consequenceService.js + notorietyService.js.
-  // Legacy exports stay per "deprecate by hiding."
+  // SC-6.4a–d (v1.0.150–153) moved every marker detect-function to a
+  // markerPipeline handler (combatMarkerService, mythicService,
+  // baseThreatService, survivalService, weatherService, craftingService,
+  // merchantService, merchantOrderService, lootDropService,
+  // consequenceService, notorietyService, pietyService). The 26 legacy
+  // detect-functions were deleted in l1-l6-cleanup (v1.0.229).
+  // estimateEnemyDexMod stays (combatMarkerService.js uses it).
   buildAnalysisPrompt, parseAnalysisResponse,
   calculateHPChange,
   buildNotesExtractionPrompt, appendCampaignNotes,
@@ -3124,7 +3114,7 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
     // use the schema's extractField parser (handles both quoted-space-sep
     // canonical AND comma-sep legacy formats), resolving the parser
     // divergence that caused canonical-format markers to silently fail
-    // pre-SC-6.4c. See KNOWN_BUGS.md Resolved archive.
+    // pre-SC-6.4c. See archive/KNOWN_BUGS.md Resolved archive.
     const PROMISE_KEYS = new Set(['PROMISE_MADE', 'PROMISE_FULFILLED']);
     const NOTORIETY_KEYS = new Set(['NOTORIETY_GAIN', 'NOTORIETY_LOSS']);
     const promiseEvents = [];

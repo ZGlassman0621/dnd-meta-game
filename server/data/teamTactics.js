@@ -1,7 +1,7 @@
 /**
  * Team Tactics Seed Data
  *
- * 20 Pathfinder-style trainable Team Tactics. Sourced from PARTY_SYNERGIES.md
+ * 20 Pathfinder-style trainable Team Tactics. Sourced from SYNERGIES_DESIGN.md Part 1 (was PARTY_SYNERGIES.md)
  * Tier 3 (learned via downtime training). Both characters in a pair must learn
  * the tactic independently — learning is pair-specific.
  *

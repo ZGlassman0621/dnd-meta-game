@@ -4,9 +4,6 @@ import { dbAll, dbGet, dbRun } from '../database.js';
  * Narrative Queue Service - Manage pending narrative events for delivery
  */
 
-// Priority order for sorting (lower index = higher priority)
-const PRIORITY_ORDER = ['urgent', 'high', 'normal', 'low', 'flavor'];
-
 /**
  * Add an event to the narrative queue
  */
@@ -121,62 +118,6 @@ export async function getPendingItemsByPriority(characterId, priority) {
 }
 
 /**
- * Get urgent and high priority items (for immediate attention)
- */
-export async function getUrgentItems(characterId) {
-  const items = await dbAll(`
-    SELECT * FROM narrative_queue
-    WHERE character_id = ? AND status = 'pending' AND priority IN ('urgent', 'high')
-      AND (deliver_after IS NULL OR deliver_after <= CURRENT_TIMESTAMP)
-      AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
-    ORDER BY
-      CASE priority WHEN 'urgent' THEN 0 ELSE 1 END,
-      created_at ASC
-  `, [characterId]);
-
-  return items.map(parseQueueItemJson);
-}
-
-/**
- * Get items by event type
- */
-export async function getItemsByEventType(characterId, eventType) {
-  const items = await dbAll(`
-    SELECT * FROM narrative_queue
-    WHERE character_id = ? AND status = 'pending' AND event_type = ?
-    ORDER BY created_at ASC
-  `, [characterId, eventType]);
-
-  return items.map(parseQueueItemJson);
-}
-
-/**
- * Get items related to a specific quest
- */
-export async function getQuestRelatedItems(questId) {
-  const items = await dbAll(`
-    SELECT * FROM narrative_queue
-    WHERE related_quest_id = ? AND status = 'pending'
-    ORDER BY created_at ASC
-  `, [questId]);
-
-  return items.map(parseQueueItemJson);
-}
-
-/**
- * Get items related to a specific companion
- */
-export async function getCompanionRelatedItems(companionId) {
-  const items = await dbAll(`
-    SELECT * FROM narrative_queue
-    WHERE related_companion_id = ? AND status = 'pending'
-    ORDER BY created_at ASC
-  `, [companionId]);
-
-  return items.map(parseQueueItemJson);
-}
-
-/**
  * Mark an item as delivered
  */
 export async function markDelivered(id, sessionId = null) {
@@ -189,28 +130,6 @@ export async function markDelivered(id, sessionId = null) {
   `, [sessionId, id]);
 
   return getQueueItemById(id);
-}
-
-/**
- * Mark multiple items as delivered
- */
-export async function markMultipleDelivered(ids, sessionId = null) {
-  if (ids.length === 0) return [];
-
-  const placeholders = ids.map(() => '?').join(',');
-  await dbRun(`
-    UPDATE narrative_queue SET
-      status = 'delivered',
-      delivered_at = CURRENT_TIMESTAMP,
-      delivered_in_session_id = ?
-    WHERE id IN (${placeholders})
-  `, [sessionId, ...ids]);
-
-  const items = [];
-  for (const id of ids) {
-    items.push(await getQueueItemById(id));
-  }
-  return items;
 }
 
 /**
@@ -286,98 +205,11 @@ export async function formatForAIContext(characterId, limit = 5) {
 }
 
 /**
- * Update a queue item
- */
-export async function updateQueueItem(id, data) {
-  const item = await getQueueItemById(id);
-  if (!item) return null;
-
-  const updates = { ...item, ...data };
-
-  await dbRun(`
-    UPDATE narrative_queue SET
-      event_type = ?, priority = ?, title = ?, description = ?, context = ?,
-      related_quest_id = ?, related_companion_id = ?, related_npc_id = ?,
-      related_location_id = ?, related_thread_id = ?,
-      deliver_after = ?, expires_at = ?
-    WHERE id = ?
-  `, [
-    updates.event_type, updates.priority, updates.title, updates.description,
-    JSON.stringify(updates.context),
-    updates.related_quest_id, updates.related_companion_id, updates.related_npc_id,
-    updates.related_location_id, updates.related_thread_id,
-    updates.deliver_after, updates.expires_at, id
-  ]);
-
-  return getQueueItemById(id);
-}
-
-/**
  * Delete a queue item
  */
 export async function deleteQueueItem(id) {
   const result = await dbRun('DELETE FROM narrative_queue WHERE id = ?', [id]);
   return result.changes > 0;
-}
-
-/**
- * Delete all delivered items older than a certain date
- */
-export async function cleanupDeliveredItems(olderThanDays = 30) {
-  const result = await dbRun(`
-    DELETE FROM narrative_queue
-    WHERE status = 'delivered'
-      AND delivered_at < datetime('now', '-' || ? || ' days')
-  `, [olderThanDays]);
-
-  return result.changes;
-}
-
-/**
- * Get queue statistics for a character
- */
-export async function getQueueStats(characterId) {
-  const stats = await dbAll(`
-    SELECT
-      status,
-      priority,
-      COUNT(*) as count
-    FROM narrative_queue
-    WHERE character_id = ?
-    GROUP BY status, priority
-  `, [characterId]);
-
-  const result = {
-    pending: { urgent: 0, high: 0, normal: 0, low: 0, flavor: 0, total: 0 },
-    delivered: 0,
-    expired: 0
-  };
-
-  for (const row of stats) {
-    if (row.status === 'pending') {
-      result.pending[row.priority] = row.count;
-      result.pending.total += row.count;
-    } else if (row.status === 'delivered') {
-      result.delivered += row.count;
-    } else if (row.status === 'expired') {
-      result.expired += row.count;
-    }
-  }
-
-  return result;
-}
-
-/**
- * Get delivered items for a specific session
- */
-export async function getSessionDeliveredItems(sessionId) {
-  const items = await dbAll(`
-    SELECT * FROM narrative_queue
-    WHERE delivered_in_session_id = ?
-    ORDER BY delivered_at ASC
-  `, [sessionId]);
-
-  return items.map(parseQueueItemJson);
 }
 
 /**

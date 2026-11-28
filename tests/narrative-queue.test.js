@@ -1,5 +1,5 @@
 /**
- * Tests for narrative queue service: add, retrieve, deliver, expire, format, and stats.
+ * Tests for narrative queue service: add, retrieve, deliver, expire, and format.
  * Run: npm test narrative-queue   — NEVER `node tests/narrative-queue.test.js` directly:
  *      only run-tests.js redirects TURSO_DATABASE_URL to a throwaway
  *      file, so a bare `node` run writes into the LIVE campaign database.
@@ -9,10 +9,10 @@
  * - getPendingItems: priority-ordered retrieval
  * - getNextBatch: limited retrieval by priority
  * - markDelivered: single item delivery tracking
- * - markMultipleDelivered: batch delivery tracking
  * - expireOldItems: expiration of past-due items
  * - formatForAIContext: AI-ready formatting
- * - getQueueStats: aggregate statistics
+ * (markMultipleDelivered and getQueueStats had no caller outside this test;
+ *  both were deleted with their test groups 5 and 8 in l1-l6-cleanup, v1.0.229.)
  * - deliver_after scheduling: future-dated items excluded
  *
  * Uses the same local.db database; all test data prefixed with TEST_ and cleaned up.
@@ -21,8 +21,7 @@
 import { initDatabase, dbRun, dbGet, dbAll } from '../server/database.js';
 import {
   addToQueue, getPendingItems, getNextBatch, markDelivered,
-  markMultipleDelivered, expireOldItems, formatForAIContext,
-  getQueueStats, getDeliveredItems, getQueueItemById
+  expireOldItems, formatForAIContext, getQueueItemById
 } from '../server/services/narrativeQueueService.js';
 
 let passed = 0;
@@ -224,40 +223,6 @@ async function testMarkDelivered() {
 }
 
 // ============================================================
-// TEST GROUP 5: markMultipleDelivered (~3 assertions)
-// ============================================================
-
-async function testMarkMultipleDelivered() {
-  console.log('\n=== Test 5: markMultipleDelivered ===\n');
-
-  const item1 = await addToQueue({
-    character_id: testCharId,
-    event_type: 'companion_reaction',
-    priority: 'normal',
-    title: 'TEST_Batch Deliver 1',
-    description: 'First batch item.'
-  });
-
-  const item2 = await addToQueue({
-    character_id: testCharId,
-    event_type: 'companion_reaction',
-    priority: 'normal',
-    title: 'TEST_Batch Deliver 2',
-    description: 'Second batch item.'
-  });
-
-  const delivered = await markMultipleDelivered([item1.id, item2.id], testSessionId);
-
-  assertEqual(delivered.length, 2, 'Returns 2 delivered items');
-
-  const allDelivered = delivered.every(i => i.status === 'delivered');
-  assert(allDelivered, 'Both items have status delivered');
-
-  const allSameSession = delivered.every(i => i.delivered_in_session_id === testSessionId);
-  assert(allSameSession, 'Both items have the same session_id');
-}
-
-// ============================================================
 // TEST GROUP 6: expireOldItems (~3 assertions)
 // ============================================================
 
@@ -333,26 +298,6 @@ async function testFormatForAIContext() {
 }
 
 // ============================================================
-// TEST GROUP 8: getQueueStats (~3 assertions)
-// ============================================================
-
-async function testGetQueueStats() {
-  console.log('\n=== Test 8: getQueueStats ===\n');
-
-  const stats = await getQueueStats(testCharId);
-
-  assert(typeof stats.pending === 'object' && stats.pending.total !== undefined, 'Returns object with pending.total');
-
-  // Count actual pending items for comparison
-  const actualPending = await getPendingItems(testCharId);
-  assertEqual(stats.pending.total, actualPending.length, 'pending.total matches actual pending count');
-
-  // We delivered items in tests 4 and 5
-  const deliveredItems = await getDeliveredItems(testCharId);
-  assertEqual(stats.delivered, deliveredItems.length, 'delivered count matches delivered items');
-}
-
-// ============================================================
 // TEST GROUP 9: deliver_after scheduling (~1 assertion)
 // ============================================================
 
@@ -410,10 +355,8 @@ async function runAll() {
     await cleanQueue(); await testGetPendingItems();
     await cleanQueue(); await testGetNextBatch();
     await cleanQueue(); await testMarkDelivered();
-    await cleanQueue(); await testMarkMultipleDelivered();
     await cleanQueue(); await testExpireOldItems();
     await cleanQueue(); await testFormatForAIContext();
-    await cleanQueue(); await testGetQueueStats();
     await cleanQueue(); await testDeliverAfterScheduling();
   } catch (err) {
     console.error('\nFATAL ERROR:', err);
