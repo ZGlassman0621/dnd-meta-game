@@ -147,6 +147,9 @@ export async function setPendingDeathSave(sessionId, characterId) {
   const cfg = await readCfg(sessionId);
   if (cfg.pendingDeathSave) return false;
   cfg.pendingDeathSave = { characterId, postedAt: Date.now() };
+  // healers-kit-stabilize (live probe): death saves resuming means the
+  // stable state is gone; the Healer's Kit recovery die no longer applies.
+  delete cfg.pendingRecoveryDie;
   await writeCfg(sessionId, cfg);
   return true;
 }
@@ -302,16 +305,21 @@ export async function activeEnemyCount(sessionId, encounterSeq) {
 }
 
 /** The DM's instruction for one NPC's turn (Q2: the DM chooses). */
-export function npcTurnDirective(entry, state, playerName) {
+export function npcTurnDirective(entry, state, playerName, cue = null) {
   const who = entry.name;
   const player = playerName || 'Player';
   const markerHint = (entry.type === 'companion' || entry.type === 'ally')
-    ? `for an attack emit [ATTACK: Attacker="${who}" Target="<enemy name>"] (the engine rolls and resolves a companion's attack at once)`
+    ? `for an attack emit [ATTACK: Attacker="${who}" Target="<enemy name>"] (the engine rolls and resolves a companion's attack at once); to stabilize an ally at 0 HP with a Healer's Kit (no check), emit [HEALERS_KIT: User="${who}" Target="<ally name>"]`
     : `for an attack emit [ENEMY_ATTACK: Enemy="${who}" Target="${player}"] (or a companion's name as Target); for a spell, [ENEMY_CAST: …]; if ${who} runs off, [ENEMY_FLEE: Enemy="${who}"]; if ${who} gives up, [ENEMY_SURRENDER: Enemy="${who}"]; if ${who}'s side takes a deal, a bribe or a truce the party offered, [COMBAT_SETTLE: Terms="what was agreed"] (every enemy still standing stands down)`;
   return `[SYSTEM — COMBAT TURN (round ${state.round}): It is ${who}'s turn. You control ${who}: choose what ${who} does now — attack, move, cast, flee, talk, anything that fits the fight. ` +
     `Write one to three sentences describing ${who}'s action and ${markerHint}. ` +
     `Describe the attempt only — do NOT say whether it hits or how much damage it does: the engine resolves it and states the result. ` +
-    `Never emit HP_CHANGE for an attack, and never emit TURN_ADVANCE — the engine moves the turn. Act for ${who} only, then stop. Do not describe ${player}'s actions.]`;
+    `Never emit HP_CHANGE for an attack, and never emit TURN_ADVANCE — the engine moves the turn. Act for ${who} only, then stop. Do not describe ${player}'s actions.` +
+    // healers-kit-stabilize (live probe): who is dying now, and the kit's uses — an offer, the DM chooses.
+    ((entry.type === 'companion' || entry.type === 'ally') && cue?.dying?.length
+      ? ` Right now ${cue.dying.join(' and ')} ${cue.dying.length === 1 ? 'is' : 'are'} at 0 HP and DYING (death saves running).${cue.kitUses > 0 ? ` The party carries a Healer's Kit (${cue.kitUses} use${cue.kitUses === 1 ? '' : 's'} left): ${who} can kneel and stabilize ${cue.dying.length === 1 ? 'them' : 'one of them'} this turn with no check — [HEALERS_KIT: User="${who}" Target="${cue.dying[0]}"].` : ''}`
+      : '') +
+    ']';
 }
 
 // ---------------------------------------------------------------------------
@@ -440,7 +448,15 @@ export async function runNpcTurns({ sessionId, encounterSeq, playerTurnDone, pla
       const systemPrompt = `${baseSystemPrompt}\n\n${formatTurnStateBlock(state)}`;
       let raw;
       try {
-        raw = String(await callDm(npcTurnDirective(entry, state, playerName), systemPrompt) || '');
+        let cue = null;
+        if (entry.type === 'companion' || entry.type === 'ally') {
+          try {
+            const sess = await dbGet('SELECT character_id FROM dm_sessions WHERE id = ?', [sessionId]);
+            const { dyingPartyCue } = await import('./healersKitService.js');
+            cue = await dyingPartyCue(sess?.character_id);
+          } catch { cue = null; }
+        }
+        raw = String(await callDm(npcTurnDirective(entry, state, playerName, cue), systemPrompt) || '');
       } catch (e) {
         console.error('[combatLoop] NPC turn call failed:', e.message);
         return { turns, advanced, state, ended: false, stoppedOn: 'dm-call-failed' };

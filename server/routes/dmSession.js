@@ -83,6 +83,8 @@ import '../services/attunementService.js';
 // without this import damage silently never applies.
 import '../services/characterHpService.js';
 import { getHpState, rollDeathSave } from '../services/characterHpService.js';
+// healers-kit-stabilize: registers HEALERS_KIT (2024 PHB Healer's Kit).
+import { healersKitResultText } from '../services/healersKitService.js';
 import { reconcileTurn } from '../services/fictionMarkerReconciliation.js';
 // Structural #9: Fiction-marker reconciliation (strict both directions). Service
 // file deployed separately; import here wires it into the turn pipeline.
@@ -1441,6 +1443,9 @@ function combatResultLines(handlerResults, playerName = null) {
       if (hr.result.pending) continue; // the player's d20 is asked for below
       const m = partyAttackMath(hr.result);
       if (m) { lines.push(`⚙ ${m}`); math.push(m); }
+    } else if (hr.schemaKey === 'HEALERS_KIT') {
+      const t = healersKitResultText(hr.result, playerName);
+      if (t) { lines.push(t.line); notes.push(t.note); }
     }
   }
   return { lines, notes, math };
@@ -1958,8 +1963,10 @@ router.post('/:sessionId/message', requireSessionCampaign, async (req, res) => {
             `CURRENT VITALS (live — overrides the character sheet above)\n` +
             `══════════════════════════════════════════════════════════════\n` +
             `Hit points: ${hp.current_hp}/${hp.max_hp}\n` +
-            (dying
-              ? `THE PLAYER IS AT 0 HP AND DYING. Death saves: ${hp.death_save_successes || 0} success(es), ${hp.death_save_failures || 0} failure(s). The system rolls these — narrate, then stop.\n`
+            (dying && (hp.death_save_successes || 0) >= 3
+              ? `THE PLAYER IS AT 0 HP, STABLE: unconscious, no more death saves.\n`
+              : dying
+              ? `THE PLAYER IS AT 0 HP AND DYING. Death saves:${hp.death_save_successes || 0} success(es), ${hp.death_save_failures || 0} failure(s). The system rolls these — narrate, then stop.\n`
               : '') +
             (hp.is_dead ? `THE PLAYER CHARACTER IS DEAD.\n` : '');
         }

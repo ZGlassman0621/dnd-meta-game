@@ -39,7 +39,8 @@ group('(a) the strip is generated from MARKER_SCHEMAS');
 {
   // 130 since combat resolution (2026-11-23): ENEMY_FLEE, ENEMY_SURRENDER, COMBAT_SETTLE, COMBAT_ESCAPE.
   // 132 since feat-addition-14 (2026-11-24): FEAT_USE, WINNING_WORDS.
-  check(KEYS.length === 132, `MARKER_SCHEMAS has 132 schemas (got ${KEYS.length})`);
+  // 133 since healers-kit-stabilize (2026-11-27): HEALERS_KIT.
+  check(KEYS.length === 133, `MARKER_SCHEMAS has 133 schemas (got ${KEYS.length})`);
   check(JSON.stringify(STRIPPED_MARKER_NAMES) === JSON.stringify(KEYS), 'the stripped names ARE the schema keys, in order, nothing added or missing');
   const src = fs.readFileSync(new URL('../server/services/markerStrip.js', import.meta.url), 'utf8');
   check(src.includes('Object.keys(MARKER_SCHEMAS)'), 'markerStrip derives its names from MARKER_SCHEMAS');

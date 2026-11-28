@@ -178,7 +178,10 @@ async function run() {
 
   const y2 = await sweepDeferredResolutions(campaignId, characterId, Y2);
   assertEqual(y2.ordersReadied, 1, '[year 2] exactly one commission comes due (deadline day 98)');
-  assertEqual(y2.ordersExpired, 1, '[year 2] exactly one ready commission expires (held 40 days)');
+  // healers-kit-stabilize Part 2: orders now time on the absolute day. The first
+  // block's sword was readied by a bare-number sweep (absolute day 100, year one),
+  // so by absolute day 465 it has been held 365 days and expires too.
+  assertEqual(y2.ordersExpired, 2, '[year 2] two ready commissions expire: the cloak (held 40 days) and the year-one sword (held 365 days, absolute 100 → 465)');
   // Two activities are past due on the absolute counter: the first block's
   // not-yet-due one (end day 103) and the Y2 scout (end day 460).
   assertEqual(y2.activitiesResolved, 2, '[year 2] the two companion activities past absolute day 465 resolve (end days 103 and 460)');
@@ -206,8 +209,8 @@ async function run() {
   const y2c = await sweepDeferredResolutions(campaignId, characterId, { day: 496, dayOfYear: 131 });
   const yd3 = await dbGet(`SELECT status FROM merchant_orders WHERE id = ?`, [yDue]);
   assertEqual(yd3.status, 'expired', '[year 2] 31 days after its day-100 ready stamp the commission expires');
-  // The first block's sword was also stamped ready on day 100, so it shares the window.
-  assertEqual(y2c.ordersExpired, 2, '[year 2] the two commissions stamped ready day 100 expire on day 131, no others');
+  // The first block's sword expired at absolute 465 (above): only the dagger is left to expire.
+  assertEqual(y2c.ordersExpired, 1, '[year 2] only the dagger stamped ready day 100 of year two expires on day 131, no others');
   const yl2 = await dbGet(`SELECT status FROM merchant_orders WHERE id = ?`, [yLater]);
   assertEqual(yl2.status, 'pending', '[year 2] the day-150 commission is still being made on day 131');
 

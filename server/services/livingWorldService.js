@@ -225,7 +225,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
       const charRowOrders = await getPrimaryCharacter(campaignId);
       const ordersGameDay = tickClock.dayOfYear;
       if (charRowOrders && ordersGameDay > 0) {
-        const readied = await processDueOrders(ordersGameDay);
+        const readied = await processDueOrders(tickClock);
         for (const o of readied) {
           if (o.character_id !== charRowOrders.id) continue;
           try {
@@ -240,7 +240,7 @@ export async function processLivingWorldTick(campaignId, gameDaysPassed = 1) {
             });
           } catch (e) { /* narrative queue is best-effort */ }
         }
-        const expired = await expireStaleReadyOrders(ordersGameDay);
+        const expired = await expireStaleReadyOrders(tickClock);
         for (const o of expired) {
           if (o.character_id !== charRowOrders.id) continue;
           try {

@@ -1256,6 +1256,18 @@ PERCEPTION_PREROLL: {
     }
   },
 
+  // healers-kit-stabilize (2026-11-27; 2024 PHB Healer's Kit, book rule):
+  // a Utilize action spends one of the party kit's ten uses and stabilizes
+  // a creature at 0 HP with no Medicine check. Handler in
+  // healersKitService.js. User defaults to the player.
+  HEALERS_KIT: {
+    position: 'inline',
+    fields: {
+      User: { type: 'string', required: false },
+      Target: { type: 'string', required: true }
+    }
+  },
+
   // Mechanics hooks, Family 8 — C-kind first slice (design §3.8, D1).
   // Handlers in subclassMarkerService.js, registered at module load.
   // BEND_LUCK: reaction, spend 1 Sorcery Point, roll 1d4 as a bonus or

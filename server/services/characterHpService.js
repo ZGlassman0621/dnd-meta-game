@@ -107,7 +107,8 @@ export async function applyHpChange(characterId, delta, reason = null, { crit = 
       const died = failures >= 3;
       await dbRun(
         `UPDATE characters
-            SET is_unconscious = 1, death_save_failures = ?, death_save_successes = ?, is_dead = ?
+            SET is_unconscious = 1, death_save_failures = ?, death_save_successes = ?, is_dead = ?,
+                stable_recover_at = NULL
           WHERE id = ?`,
         [failures, successes, died ? 1 : 0, characterId]
       );
@@ -119,14 +120,16 @@ export async function applyHpChange(characterId, delta, reason = null, { crit = 
     // Entering the dying state resets the counters — a fresh set of saves.
     await dbRun(
       `UPDATE characters
-          SET is_unconscious = 1, death_save_successes = 0, death_save_failures = 0
+          SET is_unconscious = 1, death_save_successes = 0, death_save_failures = 0,
+              stable_recover_at = NULL
         WHERE id = ?`,
       [characterId]
     );
   } else if (roseAboveZero) {
     await dbRun(
       `UPDATE characters
-          SET is_unconscious = 0, death_save_successes = 0, death_save_failures = 0
+          SET is_unconscious = 0, death_save_successes = 0, death_save_failures = 0,
+              stable_recover_at = NULL
         WHERE id = ?`,
       [characterId]
     );
@@ -182,9 +185,11 @@ export async function applyHpChange(characterId, delta, reason = null, { crit = 
  *   - damage while ALREADY at 0 adds one failed death save, two on a crit,
  *     against the companion's existing counters; three failures is the same
  *     outcome the companion death-save route reports (`dead`).
- * Companions store no stabilised state (the stabilise route only resets the
- * counters), so there is nothing to clear on a stabilised companion; the
- * failure(s) still count. Healing does not come through here.
+ * A companion stabilised by a Healer's Kit (healers-kit-stabilize) holds the
+ * PC's stable state, three successes at 0 HP: damage at 0 clears it (and its
+ * recovery hour), the same as the PC; the failure(s) still count. (The
+ * Medicine stabilise route only resets the counters.) Healing does not come
+ * through here.
  *
  * @param {number} companionId
  * @param {number} amount - Damage, positive.
@@ -213,17 +218,22 @@ export async function applyCompanionDamage(companionId, amount, { crit = false }
   let successes = row.death_save_successes || 0;
   let failures = row.death_save_failures || 0;
   let atZero = null;
+  let clearRecovery = false;
   if (droppedToZero) {
     successes = 0;
     failures = 0;
+    clearRecovery = true;
   } else if (hp === 0 && pastTemp > 0) {
     const added = crit ? 2 : 1;
     failures = Math.min(3, failures + added);
-    atZero = { added, dead: failures >= 3 };
+    const wasStable = successes >= 3;
+    if (wasStable) successes = 0;
+    clearRecovery = true;
+    atZero = { added, dead: failures >= 3, stabilisationCleared: wasStable };
   }
   await dbRun(
     `UPDATE companions
-        SET companion_current_hp = ?, companion_temp_hp = ?, death_save_successes = ?, death_save_failures = ?
+        SET companion_current_hp = ?, companion_temp_hp = ?, death_save_successes = ?, death_save_failures = ?${clearRecovery ? ', stable_recover_at = NULL' : ''}
       WHERE id = ?`,
     [nextHp, nextTemp, successes, failures, companionId]
   );
@@ -233,7 +243,7 @@ export async function applyCompanionDamage(companionId, amount, { crit = false }
     currentHp: nextHp,
     tempHp: nextTemp,
     droppedToZero,
-    ...(atZero ? { deathSaveFailuresAdded: atZero.added, deathSaveFailures: failures, deathSaveSuccesses: successes, crit: !!crit, dead: atZero.dead } : {}),
+    ...(atZero ? { deathSaveFailuresAdded: atZero.added, deathSaveFailures: failures, deathSaveSuccesses: successes, crit: !!crit, dead: atZero.dead, ...(atZero.stabilisationCleared ? { stabilisationCleared: true } : {}) } : {}),
   };
 }
 

@@ -20,6 +20,7 @@ import { applyReportedHitDice, formatHitDiceMath } from './restTimeService.js';
 import {
   applyReportedColdSaves, formatColdSaveMath, formatColdSavePrompt, erodedConModifier,
 } from './coldExposureService.js';
+import { applyReportedRecoveryDie } from './healersKitService.js';
 
 async function readCfg(sessionId) {
   const s = await dbGet('SELECT session_config FROM dm_sessions WHERE id = ?', [sessionId]);
@@ -40,7 +41,7 @@ export function reportedNumberList(action) {
 /** Which out-of-combat asks are waiting, in settlement order. */
 export async function pendingOutOfCombatRolls(sessionId) {
   const cfg = await readCfg(sessionId);
-  return ['pendingHitDice', 'pendingColdSaves'].filter((k) => cfg[k]);
+  return ['pendingHitDice', 'pendingColdSaves', 'pendingRecoveryDie'].filter((k) => cfg[k]);
 }
 
 /**
@@ -79,6 +80,26 @@ export async function settleOutOfCombatRoll(sessionId, action) {
       fact: `[COLD EXPOSURE — system fact: the player rolled ${r.hours.length} hourly Constitution save(s) against the cold; ${fails} failed. Frost ${r.frostBefore} → ${r.frostAfter}.${r.died ? ' THE PLAYER CHARACTER HAS DIED OF THE COLD.' : ''} Narrate it.]`,
     };
   }
+  if (cfg.pendingRecoveryDie) {
+    // healers-kit-stabilize: the player's 1d4 — hours until a
+    // kit-stabilized player character regains 1 HP (2024 PHB).
+    const r = await applyReportedRecoveryDie(sessionId, numbers);
+    if (!r) return null;
+    if (r.error) return { kind: 'recovery_die', error: r.error, line: `⚙ Recovery die not settled: ${r.error}.` };
+    if (r.lapsed) {
+      return { kind: 'recovery_die', result: r, line: `⚙ Recovery die ${r.hours}: you are no longer stable at 0 HP, so it no longer applies.`,
+        fact: `[RECOVERY DIE — system fact: the player rolled ${r.hours}, but they are no longer stable at 0 HP; nothing changes. Narrate on.]` };
+    }
+    const woke = r.recovered?.some((x) => x.kind === 'player');
+    return {
+      kind: 'recovery_die', result: r,
+      line: woke ? `⚙ Recovery die ${r.hours}: those hours have already passed — you regain 1 HP and wake.`
+        : `⚙ Recovery die ${r.hours}: you regain 1 HP after ${r.hours} hour${r.hours === 1 ? '' : 's'} of rest.`,
+      fact: woke
+        ? `[RECOVERY DIE — system fact: the player rolled ${r.hours}; that much time has already passed, so the player character has regained 1 HP and is conscious. Narrate it.]`
+        : `[RECOVERY DIE — system fact: the player rolled ${r.hours}. The player character stays stable and unconscious at 0 HP and regains 1 HP after ${r.hours} hour(s) of game time — the engine applies it when the clock gets there. Narrate on.]`,
+    };
+  }
   return null;
 }
 
@@ -98,6 +119,12 @@ export async function outOfCombatRollPrompts(sessionId) {
       conMod = erodedConModifier(safeParse(pc?.ability_scores, {}) || {}, Number(pc?.frost_exhaustion) || 0);
     } catch { /* the prompt still asks for the dice */ }
     return [formatColdSavePrompt(cfg.pendingColdSaves, conMod)];
+  }
+  if (cfg.pendingRecoveryDie) {
+    // Only while the player is still stable (a hit at 0 HP ends it).
+    const pc = await dbGet('SELECT current_hp, is_dead, death_save_successes FROM characters WHERE id = ?', [cfg.pendingRecoveryDie.characterId]);
+    if (!pc || pc.is_dead || (pc.current_hp || 0) > 0 || (pc.death_save_successes || 0) < 3) return [];
+    return ["🎲 You're stable. Roll a d4 and send the number: that many hours from now you regain 1 HP."];
   }
   return [];
 }

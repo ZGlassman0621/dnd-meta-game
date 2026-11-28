@@ -59,6 +59,7 @@ import {
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { processExposureForSession, processExposure, getColdScene, recoverFrost, formatColdBlock, queuePlayerColdSaves } from './coldExposureService.js';
 import { hasShelter } from './weatherService.js';
+import { processStableRecoveries } from './healersKitService.js'; // healers-kit-stabilize: 1 HP after 1d4 hours
 
 /** Cold hook guard: own switch, checked at call time (never cached). */
 function coldOn() {
@@ -311,7 +312,15 @@ export async function advanceClockForSession({ sessionId = null, characterId = n
     cfg.elapsedHours = (Number(cfg.elapsedHours) || 0) + hours;
     await writeSessionConfig(sessionId, cfg);
   }
-  return { clock, flashback, elapsedHours: sessionId ? cfg.elapsedHours : null };
+  // healers-kit-stabilize (2024 PHB Healer's Kit): a stabilized creature
+  // regains 1 HP after 1d4 hours — fired here, where session time moves.
+  // A flashback does not move the world clock, so nothing fires.
+  let stableRecoveries = [];
+  if (!flashback && hours > 0 && characterId) {
+    try { stableRecoveries = await processStableRecoveries(characterId, clock); }
+    catch (e) { console.error('[restTimeService] stable recovery check failed:', e.message); }
+  }
+  return { clock, flashback, elapsedHours: sessionId ? cfg.elapsedHours : null, stableRecoveries };
 }
 
 /** [TIME_ADVANCE]: move the clock, stash the outcome for next turn. */
@@ -331,7 +340,8 @@ export async function advanceTimeForSession({ sessionId = null, characterId, hou
   const evt = {
     kind: 'time', hours, reason: reason || null, flashback: r.flashback,
     clock: { dayOfYear: r.clock.dayOfYear, year: r.clock.year, hour: r.clock.hour },
-    ...(cold ? { cold } : {})
+    ...(cold ? { cold } : {}),
+    ...(r.stableRecoveries?.length ? { recovered: r.stableRecoveries.map((x) => x.name) } : {})
   };
   await stashTimeEvent(sessionId, evt);
   return evt;
@@ -862,7 +872,8 @@ export async function applyRest({ sessionId = null, characterId, type, actor = n
     kind: 'rest', restType: type, hours, actor: a || 'party',
     results, flashback: clk.flashback,
     clock: { dayOfYear: clk.clock.dayOfYear, year: clk.clock.year, hour: clk.clock.hour },
-    ...(cold ? { cold } : {})
+    ...(cold ? { cold } : {}),
+    ...(clk.stableRecoveries?.length ? { recovered: clk.stableRecoveries.map((x) => x.name) } : {})
   };
   await stashTimeEvent(sessionId, evt);
   return { success: true, event: evt };
@@ -996,12 +1007,19 @@ function clockLine(evt) {
   return `It is now day ${c.dayOfYear} of ${c.year} DR, hour ${c.hour} (${daypart(c.hour ?? 8)}).`;
 }
 
+/** healers-kit-stabilize: who regained 1 HP as the time passed. */
+function recoveredLine(evt) {
+  if (!evt?.recovered?.length) return '';
+  return `Recovered: ${evt.recovered.join(', ')} — stable at 0 HP until now, regains 1 HP and wakes.\n`;
+}
+
 export function formatTimeEventBlock(evt) {
   if (!evt) return '';
   if (evt.kind === 'time') {
     return `\n\n══════════════ TIME PASSED (system — this is fact) ══════════════\n` +
       `${evt.hours} hour${evt.hours === 1 ? '' : 's'} pass${evt.reason ? ` — ${evt.reason}` : ''}. ${clockLine(evt)}\n` +
       (evt.cold ? formatColdBlock(evt.cold) + '\n' : '') +
+      recoveredLine(evt) +
       `══════════════════════════════════════════════════════════════════\n`;
   }
   if (evt.kind === 'rest') {
@@ -1044,6 +1062,7 @@ export function formatTimeEventBlock(evt) {
     }
     return `\n\n══════════════ ${evt.restType === 'long' ? 'LONG' : 'SHORT'} REST (system — this is fact) ══════════════\n` +
       lines.join('\n') + coldText + `\n${evt.hours} hour${evt.hours === 1 ? '' : 's'} pass. ${clockLine(evt)}\n` +
+      recoveredLine(evt) +
       `══════════════════════════════════════════════════════════════════\n`;
   }
   return '';

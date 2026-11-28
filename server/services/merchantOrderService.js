@@ -12,6 +12,35 @@ import { FEATURE_FLAGS } from '../config/featureFlags.js';
 import { registerHandler as registerMarkerHandler } from './markerPipeline.js';
 import { getMerchantInventory, createMerchantOnTheFly } from './merchantService.js';
 import { registerThresholdConsumer } from './timeBoundedState.js';
+import { getClock } from './scheduleService.js';
+
+/**
+ * Commission year-crossing fix (healers-kit-stabilize Part 2, 2026-11-27).
+ * An order's timing runs on the ABSOLUTE day counter (world_clock
+ * current_day): deadline_abs_day / ready_abs_day. The day-of-year columns
+ * (deadline_game_day, ready_game_day) are still written, for the commissions
+ * panel. A row migration 120 could not convert (no year recorded) has NULL
+ * absolute columns and keeps the day-of-year comparison it always had.
+ *
+ * The sweep and the tick pass the clock ({ day, dayOfYear }); a bare number
+ * means both scales are equal (a campaign still in its first year).
+ */
+function clockScales(clockOrDay) {
+  if (typeof clockOrDay === 'number') return { abs: clockOrDay, doy: clockOrDay };
+  const abs = Number(clockOrDay?.day);
+  const doy = Number(clockOrDay?.dayOfYear ?? clockOrDay?.day);
+  return { abs: clockOrDay?.day != null && Number.isFinite(abs) ? abs : null, doy: Number.isFinite(doy) ? doy : null };
+}
+
+/** The absolute day for a day-of-year "now" in the character's campaign
+ *  (placement is always in the current year). Null without a campaign clock. */
+async function absoluteDayFor(characterId, currentGameDay) {
+  const ch = await dbGet('SELECT campaign_id FROM characters WHERE id = ?', [characterId]);
+  if (ch?.campaign_id == null) return null;
+  const clock = await getClock(ch.campaign_id);
+  if (clock?.day == null || clock?.dayOfYear == null) return null;
+  return Number(currentGameDay) + (clock.day - clock.dayOfYear);
+}
 
 const CP_PER_GP = 100;
 const CP_PER_SP = 10;
@@ -49,6 +78,7 @@ export async function placeCommission(args) {
   const {
     merchantId, characterId, itemName, itemSpec = null,
     quotedPriceCp, depositCp, leadTimeDays, currentGameDay = 0,
+    currentAbsDay = null,
     narrativeHook = null
   } = args;
 
@@ -103,17 +133,23 @@ export async function placeCommission(args) {
     );
   }
 
+  // Year-crossing fix: the deadline on the absolute scale, beside the
+  // day-of-year one the panel shows.
+  const absNow = currentAbsDay != null && Number.isFinite(Number(currentAbsDay))
+    ? Number(currentAbsDay)
+    : await absoluteDayFor(characterId, currentGameDay);
   const result = await dbRun(
     `INSERT INTO merchant_orders
      (merchant_id, character_id, item_name, item_spec,
       quoted_price_cp, deposit_paid_cp, balance_cp,
-      commissioned_game_day, deadline_game_day, narrative_hook, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      commissioned_game_day, deadline_game_day, deadline_abs_day, narrative_hook, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
     [
       merchantId, characterId, itemName,
       itemSpec ? JSON.stringify(itemSpec) : null,
       quotedPriceCp, depositCp, quotedPriceCp - depositCp,
       currentGameDay, currentGameDay + leadTimeDays,
+      absNow == null ? null : absNow + leadTimeDays,
       narrativeHook
     ]
   );
@@ -245,14 +281,14 @@ const MERCHANT_ORDER_DUE_THRESHOLD_CONSUMER = registerThresholdConsumer({
   name: 'merchant_order_due',
   threshold: 0,
   handler: async (contextKey) => {
-    const { order, currentGameDay } = contextKey;
+    const { order, currentGameDay, currentAbsDay = null } = contextKey;
     await dbRun(
       `UPDATE merchant_orders
-       SET status = 'ready', ready_game_day = ?, updated_at = CURRENT_TIMESTAMP
+       SET status = 'ready', ready_game_day = ?, ready_abs_day = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND status = 'pending'`,
-      [currentGameDay, order.id]
+      [currentGameDay, currentAbsDay, order.id]
     );
-    return { ...order, status: 'ready', ready_game_day: currentGameDay };
+    return { ...order, status: 'ready', ready_game_day: currentGameDay, ready_abs_day: currentAbsDay };
   },
   idempotency: {
     async hasFiredRecently() { return false; },  // SELECT pre-filters by status='pending'
@@ -260,7 +296,8 @@ const MERCHANT_ORDER_DUE_THRESHOLD_CONSUMER = registerThresholdConsumer({
   },
   repository: {
     async readAnchor(contextKey) {
-      return contextKey.order?.deadline_game_day || null;
+      // Absolute deadline when the row has one; else the legacy day-of-year.
+      return contextKey.order?.deadline_abs_day ?? contextKey.order?.deadline_game_day ?? null;
     }
   }
 });
@@ -284,7 +321,7 @@ const MERCHANT_ORDER_EXPIRE_THRESHOLD_CONSUMER = registerThresholdConsumer({
   },
   repository: {
     async readAnchor(contextKey) {
-      return contextKey.order?.ready_game_day || null;
+      return contextKey.order?.ready_abs_day ?? contextKey.order?.ready_game_day ?? null;
     }
   }
 });
@@ -299,20 +336,25 @@ const MERCHANT_ORDER_EXPIRE_THRESHOLD_CONSUMER = registerThresholdConsumer({
  * MERCHANT_ORDER_DUE_THRESHOLD_CONSUMER. SELECT pre-filter retained as
  * the idempotency strategy.
  */
-export async function processDueOrders(currentGameDay) {
+export async function processDueOrders(clockOrDay) {
+  const { abs, doy } = clockScales(clockOrDay);
+  if (doy == null) return [];
   const due = await dbAll(
     `SELECT o.*, m.merchant_name
      FROM merchant_orders o
      LEFT JOIN merchant_inventories m ON o.merchant_id = m.id
-     WHERE o.status = 'pending' AND o.deadline_game_day <= ?`,
-    [currentGameDay]
+     WHERE o.status = 'pending'
+       AND ((o.deadline_abs_day IS NOT NULL AND ? IS NOT NULL AND o.deadline_abs_day <= ?)
+         OR (o.deadline_abs_day IS NULL AND o.deadline_game_day <= ?))`,
+    [abs, abs, doy]
   );
 
   const becameReady = [];
   for (const order of due) {
+    const now = order.deadline_abs_day != null ? abs : doy;
     const result = await MERCHANT_ORDER_DUE_THRESHOLD_CONSUMER.checkAndFire(
-      { order, currentGameDay },
-      currentGameDay
+      { order, currentGameDay: doy, currentAbsDay: abs },
+      now
     );
     if (result.fired && result.handlerResult) becameReady.push(result.handlerResult);
   }
@@ -335,21 +377,25 @@ export async function processDueOrders(currentGameDay) {
  * needs a different hold time, register a second consumer with that
  * threshold.
  */
-export async function expireStaleReadyOrders(currentGameDay) {
+export async function expireStaleReadyOrders(clockOrDay) {
+  const { abs, doy } = clockScales(clockOrDay);
+  if (doy == null) return [];
   const stale = await dbAll(
     `SELECT o.*, m.merchant_name
      FROM merchant_orders o
      LEFT JOIN merchant_inventories m ON o.merchant_id = m.id
-     WHERE o.status = 'ready' AND o.ready_game_day IS NOT NULL
-       AND (? - o.ready_game_day) > 30`,
-    [currentGameDay]
+     WHERE o.status = 'ready'
+       AND ((o.ready_abs_day IS NOT NULL AND ? IS NOT NULL AND (? - o.ready_abs_day) > 30)
+         OR (o.ready_abs_day IS NULL AND o.ready_game_day IS NOT NULL AND (? - o.ready_game_day) > 30))`,
+    [abs, abs, doy]
   );
 
   const expired = [];
   for (const order of stale) {
+    const now = order.ready_abs_day != null ? abs : doy;
     const result = await MERCHANT_ORDER_EXPIRE_THRESHOLD_CONSUMER.checkAndFire(
-      { order, currentGameDay },
-      currentGameDay
+      { order, currentGameDay: doy, currentAbsDay: abs },
+      now
     );
     if (result.fired && result.handlerResult) expired.push(result.handlerResult);
   }
@@ -390,6 +436,8 @@ registerMarkerHandler('MERCHANT_COMMISSION', async (parsed, context) => {
     [context.characterId]
   );
   if (!character?.campaign_id) return null;
+  // Year-crossing fix: the absolute day, for the deadline the sweep compares.
+  const placeClock = await getClock(character.campaign_id);
 
   let dbMerchant = await getMerchantInventory(character.campaign_id, parsed.Merchant);
   if (!dbMerchant) {
@@ -427,6 +475,7 @@ registerMarkerHandler('MERCHANT_COMMISSION', async (parsed, context) => {
     depositCp,
     leadTimeDays: parsed.Lead_Time_Days,
     currentGameDay: character.game_day || 0,
+    currentAbsDay: placeClock?.day ?? null,
     narrativeHook: parsed.Hook
   });
 

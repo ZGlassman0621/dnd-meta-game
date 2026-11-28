@@ -47,6 +47,10 @@ export async function sweepDeferredResolutions(campaignId, characterId, clock) {
   const gameDay = typeof clock === 'number' ? clock : clock?.day;
   const orderDay = typeof clock === 'number' ? clock : clock?.dayOfYear;
   if (!campaignId || !gameDay || !orderDay) return result;
+  // Commission year-crossing fix (healers-kit-stabilize Part 2): orders time
+  // on the absolute day (deadline_abs_day); rows migration 120 could not
+  // convert keep the day-of-year comparison. Both scales go in.
+  const orderClock = (typeof clock === 'number' ? clock : { day: clock?.day ?? null, dayOfYear: orderDay });
 
   // 1. Companion away-activities past their expected duration. resolveActivity
   // returns the companion to 'active' and queues its own reunion narrative.
@@ -59,7 +63,7 @@ export async function sweepDeferredResolutions(campaignId, characterId, clock) {
   // 2. Merchant commissions past their deadline → ready, with a narrative
   // item so the DM can mention the pickup next session.
   try {
-    const readied = await processDueOrders(orderDay);
+    const readied = await processDueOrders(orderClock);
     for (const o of readied) {
       if (o.character_id !== characterId) continue;
       result.ordersReadied++;
@@ -81,7 +85,7 @@ export async function sweepDeferredResolutions(campaignId, characterId, clock) {
 
   // 3. Ready orders left uncollected too long → expired, with a narrative item.
   try {
-    const expired = await expireStaleReadyOrders(orderDay);
+    const expired = await expireStaleReadyOrders(orderClock);
     for (const o of expired) {
       if (o.character_id !== characterId) continue;
       result.ordersExpired++;

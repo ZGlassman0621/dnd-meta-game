@@ -688,6 +688,8 @@ export function formatCompanionDeathSavesLine(companion) {
   if (hp === undefined || hp === null || hp > 0) return '';
   const s = companion.death_save_successes || 0;
   const f = companion.death_save_failures || 0;
+  // healers-kit-stabilize: three successes at 0 HP is the stable state.
+  if (s >= 3 && f < 3) return '  Stable at 0 HP — unconscious, no death saves';
   const sLabel = s === 1 ? 'success' : 'successes';
   const fLabel = f === 1 ? 'failure' : 'failures';
   // S2 fix-along: three failures is death, not "one more" away from it.
@@ -2142,6 +2144,7 @@ A downed player can still be hit: keep emitting HP_CHANGE for every hit on them
 (an ordinary hit: [HP_CHANGE: delta=-5 reason="the goblin's scimitar"]).
 Each hit while at 0 HP is one failed death save (crit=true makes it two), and
 three failures kill. There is no instant death from a single big hit.
+A Healer's Kit stabilizes a creature at 0 HP with NO Medicine check and spends one of its ten uses — write [HEALERS_KIT: User="Lyra" Target="Player"] (User is whoever kneels with the kit; Target is the one who is down) and the engine resolves it.
 `;
 }
 

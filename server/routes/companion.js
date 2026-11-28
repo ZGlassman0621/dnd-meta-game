@@ -1052,6 +1052,11 @@ router.post('/:id/death-save', async (req, res) => {
     if ((companion.companion_current_hp || 0) > 0) {
       return res.status(400).json({ error: 'Companion is not at 0 HP — no death save needed' });
     }
+    // healers-kit-stabilize: a Healer's Kit leaves the companion stable
+    // (three successes at 0 HP, healersKitService) — no more death saves.
+    if ((companion.death_save_successes || 0) >= 3) {
+      return res.status(400).json({ error: 'Companion is stable — no death save needed' });
+    }
 
     let resolved = outcome;
     let rolledValue = null;
